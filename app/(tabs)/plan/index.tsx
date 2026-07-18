@@ -158,7 +158,7 @@ export default function PlanPage() {
             title="No pets yet"
             body="Add a pet to see its care plan and daily checklist here."
             cta="Add a pet"
-            onCta={() => router.push("/(tabs)/pets")}
+            onCta={() => router.push("/pets")}
           />
         </View>
       </TabScreen>

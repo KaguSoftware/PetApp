@@ -46,7 +46,7 @@ export default function PetCardPage() {
       <PushedScreen title="Pet card">
         <View style={styles.notFound}>
           <Text style={styles.notFoundTitle}>Pet not found</Text>
-          <Pressable onPress={() => router.replace("/")} hitSlop={10}>
+          <Pressable onPress={() => router.replace("/home")} hitSlop={10}>
             <Text style={styles.notFoundLink}>Back home</Text>
           </Pressable>
         </View>

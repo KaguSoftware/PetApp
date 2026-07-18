@@ -3,10 +3,10 @@ import BrandMark from "@/components/BrandMark";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AccentButton, Field } from "@/components/auth-ui";
+import { AccentButton, TextField } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { supabase } from "@/lib/supabase";
-import { colors } from "@/lib/theme";
+import { colors, font } from "@/lib/theme";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -35,7 +35,7 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Care for your pets, together</Text>
         </View>
         <View style={styles.form}>
-          <Field
+          <TextField
             placeholder="Email"
             value={email}
             onChangeText={setEmail}
@@ -44,7 +44,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             textContentType="emailAddress"
           />
-          <Field
+          <TextField
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
@@ -53,7 +53,7 @@ export default function LoginScreen() {
             onSubmitEditing={handleSubmit}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <AccentButton label="Log in" onPress={handleSubmit} loading={loading} disabled={!email || !password} />
+          <AccentButton onPress={handleSubmit} loading={loading} disabled={!email || !password}>Log in</AccentButton>
         </View>
         <View style={styles.footer}>
           <Text style={styles.footerText}>New to PetPal? </Text>
@@ -70,11 +70,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   container: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 },
   header: { alignItems: "center", marginBottom: 40 },
-  brand: { fontSize: 34, fontFamily: "Inter_700Bold", color: colors.label, letterSpacing: -0.5 },
-  subtitle: { marginTop: 6, fontSize: 15, fontFamily: "Inter_400Regular", color: colors.label2 },
+  subtitle: { marginTop: 6, fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   form: { gap: 12 },
-  error: { color: colors.red, fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "center" },
+  error: { color: colors.red, fontSize: 14, fontFamily: font.medium, textAlign: "center" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
-  footerText: { fontSize: 15, fontFamily: "Inter_400Regular", color: colors.label2 },
-  footerLink: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.accent },
+  footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
+  footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent },
 });

@@ -1,10 +1,69 @@
+import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type PressableProps,
+  type StyleProp,
+  type TextInputProps,
+  type ViewStyle,
+} from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { colors, font, radius } from "@/lib/theme";
+
+/**
+ * Press-feedback system. The rule app-wide: cards/buttons/chips SCALE
+ * (springy, subtle — never an opacity blink); list rows use a background
+ * fill highlight (Row below). Bare `opacity` pressed styles are banned.
+ */
+export const PRESS_SCALE = 0.97;
+export const PRESS_SCALE_SMALL = 0.94;
+
+export function PressableScale({
+  scaleTo = PRESS_SCALE,
+  haptic = false,
+  onPress,
+  children,
+  style,
+  ...props
+}: PressableProps & {
+  scaleTo?: number;
+  /** Light impact on press (iOS). */
+  haptic?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const scale = useSharedValue(1);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={[anim, style]}>
+      <Pressable
+        {...props}
+        onPress={(e) => {
+          if (haptic && Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress?.(e);
+        }}
+        onPressIn={(e) => {
+          scale.value = withTiming(scaleTo, { duration: 110, easing: Easing.out(Easing.quad) });
+          props.onPressIn?.(e);
+        }}
+        onPressOut={(e) => {
+          scale.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
+          props.onPressOut?.(e);
+        }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 /* Inset grouped list container (iOS Settings style) */
 export function Group({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -132,6 +191,7 @@ export function AccentButton({
   children,
   onPress,
   disabled = false,
+  loading = false,
   variant = "primary",
   size = "md",
   style,
@@ -139,34 +199,38 @@ export function AccentButton({
   children: React.ReactNode;
   onPress?: () => void;
   disabled?: boolean;
+  /** Shows a spinner (keeps height) and blocks presses — the ONE async-button pattern. */
+  loading?: boolean;
   variant?: "primary" | "tinted" | "gray";
   size?: "md" | "sm";
   style?: StyleProp<ViewStyle>;
 }) {
-  const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const variantStyle = {
     primary: { backgroundColor: colors.accent },
     tinted: { backgroundColor: colors.accentSoft },
     gray: { backgroundColor: colors.fill },
   }[variant];
-  const labelColor = { primary: "#fff", tinted: colors.accent, gray: colors.label }[variant];
+  const labelColor = { primary: colors.white, tinted: colors.accent, gray: colors.label }[variant];
   return (
-    <Animated.View style={[anim, style]}>
-      <Pressable
-        onPress={onPress}
-        disabled={disabled}
-        onPressIn={() => (scale.value = withTiming(0.97, { duration: 110, easing: Easing.out(Easing.quad) }))}
-        onPressOut={() => (scale.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) }))}
-        style={[styles.accentButton, size === "sm" ? styles.accentButtonSm : null, variantStyle, disabled && { opacity: 0.4 }]}
+    <PressableScale
+      onPress={onPress}
+      disabled={disabled || loading}
+      style={style}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+    >
+      <View
+        style={[styles.accentButton, size === "sm" ? styles.accentButtonSm : null, variantStyle, disabled && !loading && { opacity: 0.4 }]}
       >
-        {typeof children === "string" ? (
+        {loading ? (
+          <ActivityIndicator color={labelColor} />
+        ) : typeof children === "string" ? (
           <Text style={[styles.accentButtonLabel, size === "sm" && { fontSize: 15 }, { color: labelColor }]}>{children}</Text>
         ) : (
           children
         )}
-      </Pressable>
-    </Animated.View>
+      </View>
+    </PressableScale>
   );
 }
 
@@ -264,4 +328,206 @@ const styles = StyleSheet.create({
   segmentLabelActive: { color: colors.label },
   coinPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.full, backgroundColor: colors.orangeSoft, paddingHorizontal: 10, paddingVertical: 6 },
   coinPillLabel: { fontSize: 13, fontFamily: font.semibold, color: "#8a5a17", lineHeight: 14 },
+});
+
+/* ---------------------------------------------------------------------------
+ * Sheet & form primitives — the single source of truth. Screens must NOT
+ * declare local sheetTitle/input/fieldLabel/chip/toggle styles.
+ * ------------------------------------------------------------------------- */
+
+export function SheetTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={primStyles.sheetTitle}>{children}</Text>;
+}
+
+export function SheetSubtitle({ children }: { children: React.ReactNode }) {
+  return <Text style={primStyles.sheetSubtitle}>{children}</Text>;
+}
+
+export function FieldLabel({ children }: { children: string }) {
+  return <Text style={primStyles.fieldLabel}>{children}</Text>;
+}
+
+/** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
+export function TextField(props: TextInputProps) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      placeholderTextColor={colors.label3}
+      {...props}
+      onFocus={(e) => {
+        setFocused(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        props.onBlur?.(e);
+      }}
+      style={[primStyles.textField, focused && primStyles.textFieldFocused, props.style]}
+    />
+  );
+}
+
+export function SheetFooter({ children }: { children: React.ReactNode }) {
+  return <View style={primStyles.sheetFooter}>{children}</View>;
+}
+
+/** Centered small-print under buttons/cards — replaces the four local footnote styles. */
+export function Footnote({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <Text style={[primStyles.footnote, style as object]}>{children}</Text>;
+}
+
+/**
+ * The one selectable chip (filters, quick-adds, repeat options, portions…).
+ * 44pt effective target (36pt visual + hitSlop), scale press, accent selected
+ * state. Replaces Pill / filterChip / actionChip / speciesChip / cadencePill.
+ */
+export function SelectableChip({
+  label,
+  selected = false,
+  onPress,
+  disabled = false,
+  leading,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress?: () => void;
+  disabled?: boolean;
+  leading?: React.ReactNode;
+}) {
+  return (
+    <PressableScale
+      scaleTo={PRESS_SCALE_SMALL}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+    >
+      <View style={[primStyles.chipBase, selected ? primStyles.chipSelected : null, disabled && { opacity: 0.4 }]}>
+        {leading}
+        <Text style={[primStyles.chipBaseLabel, selected ? primStyles.chipSelectedLabel : null]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+/** iOS-style switch, accent on-state, animated knob. The whole 51×31 control is pressable. */
+export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label?: string }) {
+  const t = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    t.value = withTiming(on ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
+  }, [on, t]);
+  const trackStyle = useAnimatedStyle(() => ({
+    backgroundColor: t.value > 0.5 ? colors.accent : colors.fill,
+  }));
+  const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: t.value * 20 }] }));
+  return (
+    <Pressable
+      onPress={() => {
+        if (Platform.OS === "ios") Haptics.selectionAsync();
+        onChange(!on);
+      }}
+      hitSlop={10}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+    >
+      <Animated.View style={[primStyles.toggleTrack, trackStyle]}>
+        <Animated.View style={[primStyles.toggleKnob, knobStyle]} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/** Compact pill button for row-trailing actions (Book, Turn off, Edit) — 44pt effective target. */
+export function SmallButton({
+  label,
+  onPress,
+  tone = "accent",
+  disabled = false,
+}: {
+  label: string;
+  onPress?: () => void;
+  tone?: "accent" | "red" | "green" | "gray";
+  disabled?: boolean;
+}) {
+  const bg = { accent: colors.accentSoft, red: colors.redSoft, green: colors.greenSoft, gray: colors.fill }[tone];
+  const fg = { accent: colors.accent, red: colors.red, green: colors.green, gray: colors.label }[tone];
+  return (
+    <PressableScale
+      scaleTo={PRESS_SCALE_SMALL}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+    >
+      <View style={[primStyles.smallButton, { backgroundColor: bg }, disabled && { opacity: 0.4 }]}>
+        <Text style={[primStyles.smallButtonLabel, { color: fg }]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+const primStyles = StyleSheet.create({
+  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label, paddingHorizontal: 4 },
+  sheetSubtitle: { marginTop: 4, fontSize: 13, fontFamily: font.regular, lineHeight: 18, color: colors.label2, paddingHorizontal: 4 },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: font.semibold,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: colors.label2,
+    marginTop: 16,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
+  textField: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: font.medium,
+    color: colors.label,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  textFieldFocused: { borderColor: colors.accent },
+  sheetFooter: { marginTop: 24 },
+  footnote: { marginTop: 10, textAlign: "center", fontSize: 12, fontFamily: font.regular, lineHeight: 17, color: colors.label3 },
+  chipBase: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.fill,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  chipSelected: { backgroundColor: colors.accent },
+  chipBaseLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
+  chipSelectedLabel: { color: colors.white },
+  toggleTrack: { width: 51, height: 31, borderRadius: 16, padding: 2, justifyContent: "center" },
+  toggleKnob: {
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  smallButton: {
+    minHeight: 36,
+    borderRadius: radius.full,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallButtonLabel: { fontSize: 14, fontFamily: font.semibold },
 });

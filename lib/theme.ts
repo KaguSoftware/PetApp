@@ -34,6 +34,19 @@ export const colors = {
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, full: 999 } as const;
 
+/**
+ * Derive an alpha variant of a theme hex color (e.g. withAlpha(colors.label, 0.18)).
+ * Use this instead of hand-typed rgba() literals so every tint traces back to
+ * a named token.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /** Inter is the only UI family; pixel font is reserved for the pet world. */
 export const font = {
   regular: "Inter_400Regular",
@@ -45,7 +58,7 @@ export const font = {
 
 /** Type scale — fixed steps, iOS-adjacent (body 15–17, footnote 13). */
 export const type = {
-  largeTitle: { fontSize: 30, fontFamily: font.bold, letterSpacing: -0.4, color: colors.label },
+  largeTitle: { fontSize: 28, fontFamily: font.bold, letterSpacing: -0.4, color: colors.label },
   title: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label },
   headline: { fontSize: 17, fontFamily: font.semibold, color: colors.label },
   body: { fontSize: 15, fontFamily: font.regular, color: colors.label },

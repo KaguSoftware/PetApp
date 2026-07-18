@@ -216,7 +216,7 @@ export default function PetDetailPage() {
       <PushedScreen title="Pet">
         <View style={styles.notFound}>
           <Text style={styles.notFoundTitle}>Pet not found</Text>
-          <Pressable onPress={() => router.replace("/")} hitSlop={10}>
+          <Pressable onPress={() => router.replace("/home")} hitSlop={10}>
             <Text style={styles.notFoundLink}>Back home</Text>
           </Pressable>
         </View>
@@ -282,7 +282,7 @@ export default function PetDetailPage() {
           <Chip>{`${pet.owned.length} items`}</Chip>
         </View>
         <View style={styles.heroButtons}>
-          <AccentButton variant="tinted" size="sm" style={styles.heroButton} onPress={() => router.push("/(tabs)/pets")}>
+          <AccentButton variant="tinted" size="sm" style={styles.heroButton} onPress={() => router.push("/pets")}>
             <Icon name="sparkles" size={16} color={colors.accent} />
             <Text style={styles.heroButtonLabel}>Dress up</Text>
           </AccentButton>
@@ -601,7 +601,7 @@ export default function PetDetailPage() {
           <SectionHeader
             trailing={
               <Pressable
-                onPress={() => router.push("/(tabs)/plan")}
+                onPress={() => router.push("/plan")}
                 hitSlop={10}
                 style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
               >

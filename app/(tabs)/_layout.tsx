@@ -8,7 +8,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs tabBar={(props) => <IslandTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="home" options={{ title: "Home" }} />
       <Tabs.Screen name="plan" options={{ title: "Care" }} />
       <Tabs.Screen name="logs" options={{ title: "Logs" }} />
       <Tabs.Screen name="pets" options={{ title: "Pets" }} />

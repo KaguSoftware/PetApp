@@ -105,7 +105,7 @@ export default function LogsScreen() {
             title="No pets yet"
             body="Add your first pet to start logging care."
             cta="Add a pet"
-            onCta={() => router.push("/(tabs)/pets")}
+            onCta={() => router.push("/pets")}
           />
         </View>
       </TabScreen>

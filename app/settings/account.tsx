@@ -114,7 +114,7 @@ export default function AccountSettingsPage() {
           title="Replay intro"
           onPress={() => {
             setSeenWelcome(false);
-            router.push("/");
+            router.push("/home");
           }}
           trailing={<Chevron />}
         />

@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import NotificationSync from "@/components/NotificationSync";
+import { nativeHeaderOptions } from "@/components/Screen";
 import Toasts from "@/components/Toasts";
 import { StoreProvider } from "@/lib/store";
 import { PurchasesProvider } from "@/providers/purchases";
@@ -31,9 +32,10 @@ function Root() {
   return (
     <StoreProvider>
       <PurchasesProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
+        <Stack screenOptions={{ ...nativeHeaderOptions, title: "" }}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
         <Toasts />
         <NotificationSync />
