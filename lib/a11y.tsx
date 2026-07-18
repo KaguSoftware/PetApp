@@ -24,6 +24,8 @@ let loadStarted = false;
 function load(): void {
   if (loadStarted) return;
   loadStarted = true;
+  // AsyncStorage touches `window` on web; skip during the Node SSR pass.
+  if (typeof window === "undefined") return;
   AsyncStorage.getItem(KEY)
     .then((raw) => {
       if (!raw) return;
@@ -52,6 +54,7 @@ function getSnapshot(): A11yPrefs {
 function set(next: Partial<A11yPrefs>): void {
   current = { ...current, ...next };
   listeners.forEach((l) => l());
+  if (typeof window === "undefined") return;
   AsyncStorage.setItem(KEY, JSON.stringify(current)).catch(() => {
     // storage unavailable — prefs just won't persist
   });
