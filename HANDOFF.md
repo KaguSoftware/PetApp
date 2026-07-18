@@ -21,7 +21,7 @@ Native rebuild of **PetPal** (family pet-care app: care logging, reminders, heal
 - **Navigation is real system chrome**: tabs are nested native stacks (`app/(tabs)/<tab>/{_layout,index}.tsx`) with UIKit large titles collapsing into a blurred bar (`tabStackScreenOptions` in components/Screen.tsx); pushed screens use the root Stack's native header (back chevron, edge-swipe). Never hand-roll headers/back bars. `TabScreen`/`PushedScreen` wire titles + `trailing`→headerRight and provide the scroll scaffold.
 - **Press feedback**: `PressableScale` (ui.tsx) for cards/buttons/chips (optional `haptic`); shared `Row`'s fill highlight for list rows. Bare `pressed && {opacity}` styles are banned. Touch targets ≥44pt effective.
 - **Primitives** (ui.tsx, single source of truth — no local copies): SheetTitle, SheetSubtitle, FieldLabel, TextField (forwardRef, accent focus ring), SheetFooter, Footnote, SelectableChip, Toggle, SmallButton, AccentButton (`loading` spinner = the async pattern), EditStatSheet/EditTextSheet for stat/text edits.
-- **Colors/fonts**: theme tokens only; derive tints with `withAlpha(colors.x, a)`. Island tab bar has a spring-glide active pill (IslandTabBar.tsx).
+- **Colors/fonts**: theme tokens only; derive tints with `withAlpha(colors.x, a)`. Tab bar is the REAL system UITabBar (expo-router NativeTabs, SF Symbols) — never rebuild it. Press feedback is the standard iOS dim-while-held (PressableScale).
 - **Gotcha**: if typed routes error on valid paths (`/home`), the Metro file-map cache is stale — delete `%LOCALAPPDATA%/Temp/metro-*` and boot `expo start` once.
 
 ## Current status (2026-07-18 — ALL PHASES BUILT + native-feel pass done; on-device verification pending)
@@ -29,7 +29,7 @@ Every phase (1–6) is implemented, committed, and statically verified: `tsc --n
 
 What exists:
 - **Phase 1** auth (login/signup/confirm), session persistence, full store port (`lib/store.tsx`, ~2,200 lines: optimistic writes, rollback, 5s undo, care alerts, streak/coin debounce).
-- **Phase 2** design system (`lib/theme.ts` = exact oklch→sRGB web palette), ui primitives, modal Sheet, TabScreen/PushedScreen scaffolds (large-title → condensed blur), floating **island tab bar**, pixel sprite engine (run-length merged SVG), GeistPixel + Inter fonts.
+- **Phase 2** design system (`lib/theme.ts` = exact oklch→sRGB web palette), ui primitives, modal Sheet, TabScreen/PushedScreen scaffolds (large-title → condensed blur), tab shell, pixel sprite engine (run-length merged SVG), GeistPixel + Inter fonts.
 - **Phase 3** Logs tab (action grid, portion picker, retro logging, vet-visit sheet, +5 coin pop, haptics), Pets tab (arcade stage, Pet3D drag-tilt, cosmetics shop, add-a-pet), StreakCalendarSheet.
 - **Phase 4** Reminders agenda (repeats, roll-forward, stepper date/time pickers), Activity hub (deduped alerts, premium insights, day-grouped feed), local notifications (`lib/notifications.ts` cancel-all+resync ≤60, `NotificationSync` in root layout, tap → /reminders).
 - **Phase 5** Pet detail (identity/weight chart/supplies/meds/vaccinations/vet visits/delete), emergency card with native Share, Care Plan tab (checklist, breed guides, custom plans, premium gate), Home (swipeable hero, meals bar, attention banner), Welcome, settings hub + family/account/general/accessibility, vets marketplace, join landing.
@@ -37,7 +37,7 @@ What exists:
 
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, IslandTabBar, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
 - `app/` — (auth) login/signup; (tabs) index/plan/logs/pets/settings; pushed: activity, reminders, pet/[id](+card), vets, join, settings/{family,account,general,accessibility}.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts`, `lib/a11y.tsx`.
 - `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
