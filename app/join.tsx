@@ -72,14 +72,14 @@ export default function JoinPage() {
             </View>
             <View style={styles.cta}>
               <AccentButton
-                disabled={joining}
+                loading={joining}
                 onPress={async () => {
                   setJoining(true);
                   const ok = await joinHousehold(familyId);
                   if (!ok) setJoining(false);
                 }}
               >
-                {joining ? "Joining…" : "Join household"}
+                Join household
               </AccentButton>
             </View>
           </>

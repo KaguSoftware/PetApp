@@ -1,11 +1,25 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import EmptyState from "@/components/EmptyState";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import {
+  AccentButton,
+  FieldLabel,
+  Group,
+  IconCircle,
+  PRESS_SCALE_SMALL,
+  PressableScale,
+  Row,
+  SectionHeader,
+  SheetFooter,
+  SheetSubtitle,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
-import { cardShadow, colors, font } from "@/lib/theme";
+import { colors, font } from "@/lib/theme";
 
 export default function Meds({ pet }: { pet: Pet }) {
   const { state, addMed, deleteMed, toast } = useStore();
@@ -22,19 +36,31 @@ export default function Meds({ pet }: { pet: Pet }) {
     setFrequency("");
   };
 
+  const valid = name.trim() !== "";
+  const save = () => {
+    if (!valid) return;
+    addMed(pet.id, name.trim(), dosage.trim() || undefined, frequency.trim() || undefined);
+    setAddOpen(false);
+    reset();
+    toast("pill", `${name.trim()} added`, `${pet.name}'s meds list`);
+  };
+
   return (
     <>
       <SectionHeader
         trailing={
-          <Pressable
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
             onPress={() => setAddOpen(true)}
+            accessibilityRole="button"
             accessibilityLabel="Add med"
             hitSlop={10}
-            style={({ pressed }) => [styles.addLink, pressed && { opacity: 0.6 }]}
           >
-            <Icon name="plus" size={14} color={colors.accent} />
-            <Text style={styles.addLinkLabel}>Add med</Text>
-          </Pressable>
+            <View style={styles.addLink}>
+              <Icon name="plus" size={14} color={colors.accent} />
+              <Text style={styles.addLinkLabel}>Add med</Text>
+            </View>
+          </PressableScale>
         }
       >
         Meds
@@ -49,14 +75,17 @@ export default function Meds({ pet }: { pet: Pet }) {
               title={m.name}
               subtitle={[m.dosage, m.frequency].filter(Boolean).join(" · ") || undefined}
               trailing={
-                <Pressable
+                <PressableScale
+                  scaleTo={PRESS_SCALE_SMALL}
                   onPress={() => deleteMed(pet.id, m.id)}
+                  accessibilityRole="button"
                   accessibilityLabel={`Delete ${m.name}`}
                   hitSlop={10}
-                  style={({ pressed }) => [styles.deleteButton, pressed && { backgroundColor: colors.fill }]}
                 >
-                  <Icon name="xmark" size={15} color={colors.label3} />
-                </Pressable>
+                  <View style={styles.deleteButton}>
+                    <Icon name="xmark" size={15} color={colors.label3} />
+                  </View>
+                </PressableScale>
               }
             />
           ))}
@@ -65,13 +94,7 @@ export default function Meds({ pet }: { pet: Pet }) {
           ) : null}
         </Group>
       ) : (
-        <Group>
-          <View style={styles.empty}>
-            <IconCircle icon="pill" tint={colors.label2} bg={colors.fill} size={48} iconSize={22} />
-            <Text style={styles.emptyTitle}>No meds yet</Text>
-            <Text style={styles.emptyBody}>Add {pet.name}&apos;s medications to keep track.</Text>
-          </View>
-        </Group>
+        <EmptyState icon="pill" title="No meds yet" body={`Add ${pet.name}'s medications to keep track.`} />
       )}
 
       <Sheet
@@ -81,49 +104,35 @@ export default function Meds({ pet }: { pet: Pet }) {
           reset();
         }}
       >
-        <Text style={styles.sheetTitle}>New med</Text>
-        <Text style={styles.sheetSubtitle}>For {pet.name}</Text>
+        <SheetTitle>New med</SheetTitle>
+        <SheetSubtitle>For {pet.name}</SheetSubtitle>
 
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Flea treatment"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
-        />
+        <FieldLabel>Name</FieldLabel>
+        <TextField value={name} onChangeText={setName} placeholder="e.g. Flea treatment" returnKeyType="done" onSubmitEditing={save} />
 
-        <Text style={styles.label}>Dosage</Text>
-        <TextInput
+        <FieldLabel>Dosage</FieldLabel>
+        <TextField
           value={dosage}
           onChangeText={setDosage}
           placeholder="e.g. 1 pipette (optional)"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="done"
+          onSubmitEditing={save}
         />
 
-        <Text style={styles.label}>Frequency</Text>
-        <TextInput
+        <FieldLabel>Frequency</FieldLabel>
+        <TextField
           value={frequency}
           onChangeText={setFrequency}
           placeholder="e.g. Monthly (optional)"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="done"
+          onSubmitEditing={save}
         />
 
-        <View style={styles.footer}>
-          <AccentButton
-            disabled={!name.trim()}
-            onPress={() => {
-              addMed(pet.id, name.trim(), dosage.trim() || undefined, frequency.trim() || undefined);
-              setAddOpen(false);
-              reset();
-              toast("pill", `${name.trim()} added`, `${pet.name}'s meds list`);
-            }}
-          >
+        <SheetFooter>
+          <AccentButton disabled={!valid} onPress={save}>
             Add med
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
     </>
   );
@@ -134,29 +143,4 @@ const styles = StyleSheet.create({
   addLinkLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
   deleteButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   lastGiven: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  empty: { alignItems: "center", paddingHorizontal: 24, paddingVertical: 36 },
-  emptyTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  emptyBody: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSubtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  label: {
-    marginTop: 20,
-    marginBottom: 6,
-    fontSize: 13,
-    fontFamily: font.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: colors.label2,
-  },
-  input: {
-    borderRadius: 12,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-    ...cardShadow,
-  },
-  footer: { marginTop: 28 },
 });

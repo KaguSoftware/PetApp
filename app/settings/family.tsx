@@ -1,22 +1,39 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, Share, StyleSheet, Text, TextInput, View, type KeyboardTypeOptions } from "react-native";
+import { Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Chevron, ConfirmRow, Group, IconCircle, Row, SectionHeader, Segmented } from "@/components/ui";
+import {
+  AccentButton,
+  Chevron,
+  ConfirmRow,
+  FieldLabel,
+  Group,
+  IconCircle,
+  PressableScale,
+  PRESS_SCALE_SMALL,
+  Row,
+  SectionHeader,
+  Segmented,
+  SelectableChip,
+  SheetSubtitle,
+  SheetTitle,
+  SmallButton,
+  TextField,
+} from "@/components/ui";
 import { formatAge, formatWeight, isAdminRole, kgToUnit, unitToKg, weightUnitLabel, type Member, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, HIT } from "@/lib/theme";
+import { colors, font, radius } from "@/lib/theme";
 
 // The web builds its invite link as `${window.location.origin}/join?f=<familyId>`;
 // on native the deployed web origin is fixed here. The app itself opens
 // petpal://join?f=<id> (app.json scheme "petpal" → app/join.tsx).
 const WEB_ORIGIN = "https://petpal.app";
 
-/** Labelled text field — the RN counterpart of the web sheet inputs. */
+/** Labelled text field — FieldLabel + TextField primitives plus an optional hint line. */
 function Field({
   label,
   value,
@@ -40,19 +57,87 @@ function Field({
 }) {
   return (
     <View style={style}>
-      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
-      <TextInput
+      <FieldLabel>{label}</FieldLabel>
+      <TextField
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.label3}
         keyboardType={keyboardType}
         secureTextEntry={secure}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        style={styles.input}
       />
       {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+/* -- Local date helpers + stepper (mirrors pet-detail's DateField pattern) -- */
+
+const DATE_FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
+
+function fmtDate(ts: number) {
+  return new Date(ts).toLocaleDateString(undefined, DATE_FMT);
+}
+
+function atNoon(d: Date) {
+  const c = new Date(d);
+  c.setHours(12, 0, 0, 0);
+  return c.getTime();
+}
+
+function shiftDays(ts: number, n: number) {
+  const d = new Date(ts);
+  d.setDate(d.getDate() + n);
+  return atNoon(d);
+}
+
+function shiftMonths(now: number, months: number) {
+  const d = new Date(now);
+  d.setMonth(d.getMonth() + months);
+  return atNoon(d);
+}
+
+function shiftYears(now: number, years: number) {
+  const d = new Date(now);
+  d.setFullYear(d.getFullYear() + years);
+  return atNoon(d);
+}
+
+/** Day stepper + quick chips for the pet's birth date — no raw YYYY-MM-DD typing. */
+function BirthDateField({ value, onChange }: { value: number | null; onChange: (ts: number | null) => void }) {
+  const today = atNoon(new Date());
+  const chips: { label: string; ts: number }[] = [
+    { label: "1 yr ago", ts: shiftYears(today, -1) },
+    { label: "3 yrs ago", ts: shiftYears(today, -3) },
+    { label: "5 yrs ago", ts: shiftYears(today, -5) },
+    { label: "6 mo ago", ts: shiftMonths(today, -6) },
+  ];
+  // Future-date guard: the stepper can never step past today.
+  const step = (n: number) => onChange(Math.min(today, shiftDays(value ?? today, n)));
+  return (
+    <View>
+      <View style={styles.stepperRow}>
+        <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => step(-1)} accessibilityLabel="One day earlier" hitSlop={8}>
+          <View style={styles.stepButton}>
+            <Icon name="chevron-left" size={16} color={colors.accent} />
+          </View>
+        </PressableScale>
+        <Text style={[styles.stepperValue, value == null && { color: colors.label3 }]}>
+          {value != null ? fmtDate(value) : "Not set"}
+        </Text>
+        <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => step(1)} accessibilityLabel="One day later" hitSlop={8}>
+          <View style={styles.stepButton}>
+            <Icon name="chevron-right" size={16} color={colors.accent} />
+          </View>
+        </PressableScale>
+      </View>
+      <View style={styles.chipRow}>
+        {chips.map((c) => (
+          <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
+        ))}
+        <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} />
+      </View>
     </View>
   );
 }
@@ -92,12 +177,14 @@ export default function FamilySettingsPage() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [pwError, setPwError] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
 
   const closeFamilyPw = () => {
     setFamilyPwOpen(false);
     setCurrentPw("");
     setNewPw("");
     setPwError("");
+    setPwBusy(false);
   };
 
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
@@ -107,12 +194,9 @@ export default function FamilySettingsPage() {
   const [editPetWeight, setEditPetWeight] = useState("");
   const [editPetCup, setEditPetCup] = useState("");
   const [editPetSex, setEditPetSex] = useState<"male" | "female" | "unset">("unset");
-  const [editPetBirth, setEditPetBirth] = useState("");
+  const [editPetBirth, setEditPetBirth] = useState<number | null>(null);
   const [editPetChip, setEditPetChip] = useState("");
   const [editPetAllergies, setEditPetAllergies] = useState("");
-
-  const [deletingPet, setDeletingPet] = useState<Pet | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   const openEditPet = (p: Pet) => {
     setEditingPet(p);
@@ -122,7 +206,7 @@ export default function FamilySettingsPage() {
     setEditPetWeight(String(kgToUnit(p.weightKg, state.units)));
     setEditPetCup(String(p.cupGrams));
     setEditPetSex(p.sex ?? "unset");
-    setEditPetBirth(p.birthDate != null ? new Date(p.birthDate).toISOString().slice(0, 10) : "");
+    setEditPetBirth(p.birthDate != null ? atNoon(new Date(p.birthDate)) : null);
     setEditPetChip(p.microchip ?? "");
     setEditPetAllergies(p.allergies ?? "");
   };
@@ -172,20 +256,19 @@ export default function FamilySettingsPage() {
           </View>
           <Text style={styles.lockTitle}>Family section locked</Text>
           <Text style={styles.lockBody}>Enter the family password to manage members, pets, and household settings.</Text>
-          <TextInput
+          <TextField
             secureTextEntry
             autoFocus
             value={unlockInput}
             onChangeText={setUnlockInput}
             onSubmitEditing={submitUnlock}
             placeholder="Family password"
-            placeholderTextColor={colors.label3}
-            style={[styles.input, { marginTop: 16, backgroundColor: colors.fill }]}
+            style={{ marginTop: 16, backgroundColor: colors.fill, alignSelf: "stretch" }}
           />
           {unlockError ? <Text style={styles.errorText}>{unlockError}</Text> : null}
           <View style={{ marginTop: 12, width: "100%" }}>
-            <AccentButton disabled={unlocking || !unlockInput} onPress={submitUnlock}>
-              {unlocking ? "Checking…" : "Unlock"}
+            <AccentButton disabled={!unlockInput} loading={unlocking} onPress={submitUnlock}>
+              Unlock
             </AccentButton>
           </View>
         </View>
@@ -216,54 +299,29 @@ export default function FamilySettingsPage() {
   return (
     <PushedScreen title="Family">
       {/* Members */}
-      <SectionHeader
-        trailing={
-          <Pressable onPress={() => setAddMemberOpen(true)} hitSlop={10}>
-            <Text style={styles.accentAction}>Add member</Text>
-          </Pressable>
-        }
-      >
-        Members
-      </SectionHeader>
+      <SectionHeader trailing={<SmallButton label="Add member" onPress={() => setAddMemberOpen(true)} />}>Members</SectionHeader>
       <Group>
         {state.members.map((m) => {
           const active = m.id === state.currentMemberId;
           return (
-            <View key={m.id} style={styles.memberRow}>
-              <Pressable
-                onPress={() => {
-                  if (!active) {
-                    switchMember(m.id);
-                    toast("person", `Viewing as ${m.name}`, "Actions will be logged as them");
-                  }
-                }}
-                accessibilityLabel={active ? `${m.name}, current member` : `View the demo as ${m.name}`}
-                style={({ pressed }) => [styles.memberMain, pressed && { opacity: 0.6 }]}
-              >
-                <InitialAvatar name={m.name} gradient={m.gradient} size={38} />
-                <View style={styles.memberText}>
-                  <Text numberOfLines={1} style={styles.memberName}>
-                    {m.name}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.memberRole}>
-                    {m.role}
-                  </Text>
+            <Row
+              key={m.id}
+              onPress={() => {
+                if (!active) {
+                  switchMember(m.id);
+                  toast("person", `Viewing as ${m.name}`, "Actions will be logged as them");
+                }
+              }}
+              leading={<InitialAvatar name={m.name} gradient={m.gradient} size={38} />}
+              title={m.name}
+              subtitle={m.role}
+              trailing={
+                <View style={styles.rowActions}>
+                  <SmallButton label="Edit" tone="gray" onPress={() => openEditMember(m)} />
+                  {active ? <Icon name="check" size={18} color={colors.accent} /> : null}
                 </View>
-              </Pressable>
-              <Pressable
-                onPress={() => openEditMember(m)}
-                accessibilityLabel={`Edit ${m.name}`}
-                hitSlop={10}
-                style={({ pressed }) => pressed && { transform: [{ scale: 0.95 }] }}
-              >
-                <Text style={styles.accentAction}>Edit</Text>
-              </Pressable>
-              {active ? (
-                <Icon name="check" size={18} color={colors.accent} />
-              ) : (
-                <Text style={styles.switchHint}>Switch</Text>
-              )}
-            </View>
+              }
+            />
           );
         })}
       </Group>
@@ -307,14 +365,10 @@ export default function FamilySettingsPage() {
               title="Family ID"
               subtitle={state.familyId ? `${state.familyId.slice(0, 8)}…` : "Loading…"}
               trailing={
-                <View style={styles.idActions}>
+                <View style={styles.rowActions}>
                   {/* Native has no clipboard dependency — sharing the raw ID replaces the web's Copy. */}
-                  <Pressable onPress={shareFamilyId} hitSlop={10}>
-                    <Text style={styles.accentAction}>Share</Text>
-                  </Pressable>
-                  <Pressable onPress={shareInvite} hitSlop={10}>
-                    <Text style={styles.accentAction}>Invite</Text>
-                  </Pressable>
+                  <SmallButton label="Share" tone="gray" onPress={shareFamilyId} />
+                  <SmallButton label="Invite" onPress={shareInvite} />
                 </View>
               }
             />
@@ -336,32 +390,14 @@ export default function FamilySettingsPage() {
       <SectionHeader>Pets</SectionHeader>
       <Group>
         {state.pets.map((p) => (
-          <View key={p.id} style={styles.memberRow}>
-            <Pressable
-              onPress={() => openEditPet(p)}
-              accessibilityLabel={`Edit ${p.name}`}
-              style={({ pressed }) => [styles.memberMain, pressed && { opacity: 0.6 }]}
-            >
-              <PetAvatar pet={p} size="sm" />
-              <View style={styles.memberText}>
-                <Text numberOfLines={1} style={styles.memberName}>
-                  {p.name}
-                </Text>
-                <Text numberOfLines={1} style={styles.memberRole}>
-                  {`${p.breed} · ${formatAge(p.ageYears)} · ${formatWeight(p.weightKg, state.units)}`}
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/pet/${p.id}`)}
-              accessibilityLabel={`View ${p.name}'s details`}
-              hitSlop={10}
-              style={({ pressed }) => [styles.viewButton, pressed && { transform: [{ scale: 0.95 }] }]}
-            >
-              <Text style={styles.accentAction}>View</Text>
-              <Icon name="chevron-right" size={15} color={colors.label3} />
-            </Pressable>
-          </View>
+          <Row
+            key={p.id}
+            onPress={() => openEditPet(p)}
+            leading={<PetAvatar pet={p} size="sm" />}
+            title={p.name}
+            subtitle={`${p.breed} · ${formatAge(p.ageYears)} · ${formatWeight(p.weightKg, state.units)}`}
+            trailing={<SmallButton label="View" onPress={() => router.push(`/pet/${p.id}`)} />}
+          />
         ))}
       </Group>
       <Text style={styles.footnote}>Tap a pet to edit it, or View for full details.</Text>
@@ -372,7 +408,7 @@ export default function FamilySettingsPage() {
       <Sheet open={editingPet !== null} onClose={() => setEditingPet(null)}>
         {editingPet && (
           <>
-            <Text style={styles.sheetTitle}>Edit {editingPet.name}</Text>
+            <SheetTitle>Edit {editingPet.name}</SheetTitle>
 
             <Field label="Name" value={editPetName} onChangeText={setEditPetName} />
             <Field label="Breed" value={editPetBreed} onChangeText={setEditPetBreed} />
@@ -388,7 +424,7 @@ export default function FamilySettingsPage() {
               />
             </View>
 
-            <Text style={styles.fieldLabel}>SEX</Text>
+            <FieldLabel>Sex</FieldLabel>
             <Segmented
               options={[
                 { value: "male", label: "Male" },
@@ -400,14 +436,11 @@ export default function FamilySettingsPage() {
             />
             <Text style={styles.fieldHint}>Used for the age-and-sex-specific weight & feeding guide.</Text>
 
-            <Field
-              label="Birth date (optional)"
-              value={editPetBirth}
-              onChangeText={setEditPetBirth}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              hint={editPetBirth ? "With a birth date set, age is calculated automatically." : undefined}
-            />
+            <FieldLabel>Birth date (optional)</FieldLabel>
+            <BirthDateField value={editPetBirth} onChange={setEditPetBirth} />
+            {editPetBirth != null ? (
+              <Text style={styles.fieldHint}>With a birth date set, age is calculated automatically.</Text>
+            ) : null}
 
             <Field
               label="Microchip number (optional)"
@@ -435,13 +468,9 @@ export default function FamilySettingsPage() {
               <AccentButton
                 disabled={!editPetName.trim() || !editPetBreed.trim()}
                 onPress={() => {
-                  const birthTrimmed = editPetBirth.trim();
-                  const birthDate = birthTrimmed ? new Date(`${birthTrimmed}T12:00:00`).getTime() : null;
-                  if (birthTrimmed && (birthDate == null || Number.isNaN(birthDate))) {
-                    toast("alert", "Birth date not recognized", "Use the YYYY-MM-DD format");
-                    return;
-                  }
-                  if (birthDate != null && birthDate > Date.now()) {
+                  // The stepper clamps at today, but quick chips + stale state
+                  // keep the guard worth having.
+                  if (editPetBirth != null && editPetBirth > Date.now()) {
                     toast("alert", "Birth date is in the future", "Pick the actual birth date");
                     return;
                   }
@@ -452,7 +481,7 @@ export default function FamilySettingsPage() {
                     weightKg: unitToKg(Number(editPetWeight) || kgToUnit(editingPet.weightKg, state.units), state.units),
                     cupGrams: Math.round(Number(editPetCup)) || editingPet.cupGrams,
                     sex: editPetSex === "unset" ? null : editPetSex,
-                    birthDate,
+                    birthDate: editPetBirth,
                     microchip: editPetChip.trim() || null,
                     allergies: editPetAllergies.trim() || null,
                   });
@@ -465,12 +494,14 @@ export default function FamilySettingsPage() {
             </View>
 
             <Group style={{ marginTop: 12 }}>
-              <Row
-                destructive
-                title="Delete pet"
-                onPress={() => {
-                  setDeletingPet(editingPet);
-                  setDeleteConfirm("");
+              <ConfirmRow
+                label="Delete pet"
+                confirmLabel={`Tap again — deletes ${editingPet.name} and all history`}
+                onConfirm={() => {
+                  const name = editingPet.name;
+                  deletePet(editingPet.id);
+                  setEditingPet(null);
+                  toast("person", `${name} was removed`, "");
                 }}
               />
             </Group>
@@ -478,68 +509,10 @@ export default function FamilySettingsPage() {
         )}
       </Sheet>
 
-      {/* Delete pet */}
-      <Sheet
-        open={deletingPet !== null}
-        onClose={() => {
-          setDeletingPet(null);
-          setDeleteConfirm("");
-        }}
-      >
-        {deletingPet && (
-          <>
-            <Text style={styles.sheetTitle}>Delete {deletingPet.name}?</Text>
-            <Text style={styles.sheetSub}>
-              This permanently removes {deletingPet.name}, along with its supplies, plan progress, and history. This can&apos;t be undone.
-            </Text>
-
-            <Field
-              label={`Type ${deletingPet.name} to confirm`}
-              value={deleteConfirm}
-              onChangeText={setDeleteConfirm}
-              placeholder={deletingPet.name}
-              autoCapitalize="none"
-            />
-
-            <View style={{ marginTop: 28, gap: 8 }}>
-              <View style={{ borderRadius: radius.md, overflow: "hidden" }}>
-                <Pressable
-                  disabled={deleteConfirm.trim().toLowerCase() !== deletingPet.name.trim().toLowerCase()}
-                  onPress={() => {
-                    const name = deletingPet.name;
-                    deletePet(deletingPet.id);
-                    setDeletingPet(null);
-                    setDeleteConfirm("");
-                    setEditingPet(null);
-                    toast("person", `${name} was removed`, "");
-                  }}
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    deleteConfirm.trim().toLowerCase() !== deletingPet.name.trim().toLowerCase() && { opacity: 0.4 },
-                    pressed && { transform: [{ scale: 0.97 }] },
-                  ]}
-                >
-                  <Text style={styles.deleteButtonLabel}>Delete {deletingPet.name}</Text>
-                </Pressable>
-              </View>
-              <AccentButton
-                variant="gray"
-                onPress={() => {
-                  setDeletingPet(null);
-                  setDeleteConfirm("");
-                }}
-              >
-                Cancel
-              </AccentButton>
-            </View>
-          </>
-        )}
-      </Sheet>
-
       {/* Family password */}
       <Sheet open={familyPwOpen} onClose={closeFamilyPw}>
-        <Text style={styles.sheetTitle}>{state.familyPasswordSet ? "Change family password" : "Set a family password"}</Text>
-        <Text style={styles.sheetSub}>Protects the Family section on shared devices — not a full account login.</Text>
+        <SheetTitle>{state.familyPasswordSet ? "Change family password" : "Set a family password"}</SheetTitle>
+        <SheetSubtitle>Protects the Family section on shared devices — not a full account login.</SheetSubtitle>
 
         {state.familyPasswordSet && <Field label="Current password" value={currentPw} onChangeText={setCurrentPw} secure />}
 
@@ -549,9 +522,12 @@ export default function FamilySettingsPage() {
         <View style={{ marginTop: 28 }}>
           <AccentButton
             disabled={newPw.trim().length < 6 || (state.familyPasswordSet && !currentPw)}
+            loading={pwBusy}
             onPress={async () => {
               setPwError("");
+              setPwBusy(true);
               const ok = await setFamilyPassword(newPw.trim(), currentPw || undefined);
+              setPwBusy(false);
               if (ok) closeFamilyPw();
               else setPwError("That current password isn't right — try again.");
             }}
@@ -578,7 +554,7 @@ export default function FamilySettingsPage() {
 
       {/* Add member */}
       <Sheet open={addMemberOpen} onClose={() => setAddMemberOpen(false)}>
-        <Text style={styles.sheetTitle}>Add a member</Text>
+        <SheetTitle>Add a member</SheetTitle>
 
         <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
         <Field label="Role" value={newMemberRole} onChangeText={setNewMemberRole} />
@@ -593,7 +569,7 @@ export default function FamilySettingsPage() {
               setNewMemberRole("Member");
             }}
           >
-            {hydrated ? "Add to family" : "Loading…"}
+            Add to family
           </AccentButton>
         </View>
       </Sheet>
@@ -602,7 +578,7 @@ export default function FamilySettingsPage() {
       <Sheet open={editingMember !== null} onClose={() => setEditingMember(null)}>
         {editingMember && (
           <>
-            <Text style={styles.sheetTitle}>Edit {editingMember.name}</Text>
+            <SheetTitle>Edit {editingMember.name}</SheetTitle>
 
             <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
             <Field label="Role" value={editMemberRole} onChangeText={setEditMemberRole} />
@@ -646,22 +622,22 @@ export default function FamilySettingsPage() {
           setJoinId("");
         }}
       >
-        <Text style={styles.sheetTitle}>Join a household</Text>
-        <Text style={styles.sheetSub}>
+        <SheetTitle>Join a household</SheetTitle>
+        <SheetSubtitle>
           Paste the Family ID another member shared with you. You&apos;ll be added as a member and switched to it.
-        </Text>
-        <TextInput
+        </SheetSubtitle>
+        <TextField
           value={joinId}
           onChangeText={setJoinId}
           placeholder="Family ID"
-          placeholderTextColor={colors.label3}
           autoCapitalize="none"
           autoCorrect={false}
-          style={[styles.input, { marginTop: 20 }]}
+          style={{ marginTop: 20 }}
         />
         <View style={{ marginTop: 28 }}>
           <AccentButton
-            disabled={!joinId.trim() || joining}
+            disabled={!joinId.trim()}
+            loading={joining}
             onPress={async () => {
               setJoining(true);
               const ok = await joinHousehold(joinId.trim());
@@ -670,7 +646,7 @@ export default function FamilySettingsPage() {
               if (!ok) setJoining(false);
             }}
           >
-            {joining ? "Joining…" : "Join household"}
+            Join household
           </AccentButton>
         </View>
       </Sheet>
@@ -679,15 +655,7 @@ export default function FamilySettingsPage() {
 }
 
 const styles = StyleSheet.create({
-  accentAction: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
-  switchHint: { fontSize: 13, fontFamily: font.medium, color: colors.label3 },
-  memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 10, minHeight: 52 },
-  memberMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12, minHeight: HIT - 12 },
-  memberText: { flex: 1, minWidth: 0, paddingVertical: 2 },
-  memberName: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-  memberRole: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  viewButton: { flexDirection: "row", alignItems: "center", gap: 4 },
-  idActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  rowActions: { flexDirection: "row", alignItems: "center", gap: 12 },
   footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
   lockCard: {
     marginTop: 24,
@@ -708,22 +676,19 @@ const styles = StyleSheet.create({
     color: colors.label2,
     textAlign: "center",
   },
-  errorText: { marginTop: 8, fontSize: 13, fontFamily: font.medium, color: colors.red },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSub: { marginTop: 4, fontSize: 13, fontFamily: font.regular, lineHeight: 18, color: colors.label3 },
-  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.6, color: colors.label2 },
+  errorText: { marginTop: 8, alignSelf: "stretch", textAlign: "left", fontSize: 14, fontFamily: font.medium, color: colors.red },
   fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  input: {
-    width: "100%",
-    borderRadius: radius.sm,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-  },
   twoCol: { flexDirection: "row", gap: 12 },
-  deleteButton: { height: 50, borderRadius: radius.md, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
-  deleteButtonLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.white },
+  stepperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+  },
+  stepButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  stepperValue: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+  chipRow: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

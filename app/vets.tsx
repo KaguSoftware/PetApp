@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Chip, Group, IconCircle, Row } from "@/components/ui";
+import { AccentButton, Chip, Footnote, Group, IconCircle, Row, SheetTitle, SmallButton } from "@/components/ui";
 import { VETS, type Vet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -58,28 +58,21 @@ export default function VetsPage() {
                 </View>
               </View>
               {booked ? (
-                <Pressable
+                <SmallButton
+                  label="Requested"
+                  tone="green"
                   onPress={() => {
                     unbookVetById(v.id);
                     toast("refresh", "Request cancelled", `Cancelled your visit with ${v.name}`);
                   }}
-                  style={({ pressed }) => [styles.bookedButton, pressed && { transform: [{ scale: 0.95 }] }]}
-                >
-                  <Icon name="check" size={14} color={colors.green} />
-                  <Text style={styles.bookedLabel}>Requested</Text>
-                </Pressable>
+                />
               ) : (
-                <Pressable
-                  onPress={() => setSelected(v)}
-                  style={({ pressed }) => [styles.bookButton, pressed && { transform: [{ scale: 0.95 }] }]}
-                >
-                  <Text style={styles.bookLabel}>Book</Text>
-                </Pressable>
+                <SmallButton label="Book" onPress={() => setSelected(v)} />
               )}
             </View>
           );
         })}
-        <Text style={styles.disclosure}>Sponsored clinics pay to appear here — that&apos;s how PetPal stays free.</Text>
+        <Footnote>Sponsored clinics pay to appear here — that&apos;s how PetPal stays free.</Footnote>
       </View>
 
       <Sheet open={selected !== null} onClose={() => setSelected(null)}>
@@ -88,7 +81,7 @@ export default function VetsPage() {
             <View style={styles.sheetHeader}>
               <InitialAvatar name={selected.name.replace("Dr. ", "")} gradient={selected.gradient} size={56} />
               <View style={{ minWidth: 0, flex: 1 }}>
-                <Text style={styles.sheetTitle}>{selected.name}</Text>
+                <SheetTitle>{selected.name}</SheetTitle>
                 <Text style={styles.clinic}>{selected.clinic}</Text>
                 <View style={styles.metaRow}>
                   <Stars rating={selected.rating} />
@@ -125,7 +118,7 @@ export default function VetsPage() {
               >
                 Request appointment
               </AccentButton>
-              <Text style={styles.sheetHint}>Nothing is booked until the clinic confirms your request.</Text>
+              <Footnote>Nothing is booked until the clinic confirms your request.</Footnote>
             </View>
           </>
         )}
@@ -145,7 +138,7 @@ const styles = StyleSheet.create({
     padding: 16,
     ...cardShadow,
   },
-  cardSponsored: { borderWidth: 1, borderColor: "rgba(107, 85, 223, 0.2)" },
+  cardSponsored: { borderWidth: 1, borderColor: withAlpha(colors.accent, 0.2) },
   cardText: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   vetName: { fontSize: 16, fontFamily: font.bold, color: colors.label, flexShrink: 1 },
@@ -154,34 +147,7 @@ const styles = StyleSheet.create({
   clinic: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
   metaRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 4 },
   meta: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  bookedButton: {
-    height: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.greenSoft,
-    paddingHorizontal: 14,
-  },
-  bookedLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.green },
-  bookButton: {
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-    paddingHorizontal: 14,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  bookLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.white },
-  disclosure: { paddingHorizontal: 4, paddingTop: 4, fontSize: 11, fontFamily: font.regular, color: colors.label3, textAlign: "center" },
   sheetHeader: { flexDirection: "row", alignItems: "center", gap: 16, paddingTop: 4 },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
   stars: { flexDirection: "row", alignItems: "center", gap: 2 },
   chipsRow: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  sheetHint: { marginTop: 10, fontSize: 12, fontFamily: font.regular, color: colors.label3, textAlign: "center" },
 });

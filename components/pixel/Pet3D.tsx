@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import type { Pet } from "@/lib/data";
+import { cardShadow, withAlpha } from "@/lib/theme";
 import PixelSprite from "./PixelSprite";
 import { equippedCosmetics } from "./PixelPet";
 import { CAT_BODY_SPRITE, DOG_BODY_SPRITE } from "./petBodySprites";
@@ -24,8 +25,8 @@ const MAX_X = 12; // deg of rotateX tilt
 const MAX_Y = 24; // deg of rotateY spin (web keeps Y at 2x the X range)
 
 /** Matches the web stage's soft plum ground shadow (theme cardShadow hue). */
-const GROUND_SHADOW = "rgba(58, 57, 69, 0.22)";
-const BACK_PLATE = "rgba(74, 71, 112, 0.25)";
+const GROUND_SHADOW = withAlpha(cardShadow.shadowColor, 0.22);
+const BACK_PLATE = withAlpha("#4a4770", 0.25);
 
 export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   const rotX = useSharedValue(0);

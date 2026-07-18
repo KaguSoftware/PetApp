@@ -1,11 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
 import Sheet from "@/components/Sheet";
-import { AccentButton } from "@/components/ui";
+import { AccentButton, Footnote, IconCircle } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { colors, font, radius } from "@/lib/theme";
 import { usePurchases } from "@/providers/purchases";
 
 const PERKS: { icon: IconName; title: string; body: string }[] = [
@@ -38,8 +38,8 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
   return (
     <Sheet open={open} onClose={onClose}>
       <View style={styles.hero}>
-        <LinearGradient colors={["#7e6ef2", "#5747c9"]} style={styles.heroTile}>
-          <Icon name="sparkles" size={32} color="#fff" />
+        <LinearGradient colors={[colors.accent, colors.accentDeep]} style={styles.heroTile}>
+          <Icon name="sparkles" size={32} color={colors.white} />
         </LinearGradient>
         <Text style={styles.title}>PetPal+</Text>
         <Text style={styles.tagline}>A vet in your pocket. We tell you what your pet needs — before you have to think about it.</Text>
@@ -48,9 +48,7 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
       <View style={styles.perks}>
         {PERKS.map((p) => (
           <View key={p.title} style={styles.perk}>
-            <View style={styles.perkIcon}>
-              <Icon name={p.icon} size={17} color={colors.accent} />
-            </View>
+            <IconCircle icon={p.icon} tint={colors.accent} bg={colors.accentSoft} size={32} iconSize={17} />
             <View style={styles.perkText}>
               <Text style={styles.perkTitle}>{p.title}</Text>
               <Text style={styles.perkBody}>{p.body}</Text>
@@ -60,10 +58,10 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
       </View>
 
       <View style={styles.footer}>
-        <AccentButton onPress={handleBuy} disabled={busy}>
-          {busy ? <ActivityIndicator color="#fff" /> : "Try free for 1 month"}
+        <AccentButton onPress={handleBuy} loading={busy}>
+          Try free for 1 month
         </AccentButton>
-        <Text style={styles.legal}>Then $4.99/month. Cancel anytime.{"\n"}Demo — unlocks instantly, no payment.</Text>
+        <Footnote>Then $4.99/month. Cancel anytime.{"\n"}Demo — unlocks instantly, no payment.</Footnote>
       </View>
     </Sheet>
   );
@@ -74,7 +72,7 @@ const styles = StyleSheet.create({
   heroTile: {
     width: 64,
     height: 64,
-    borderRadius: 16,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.accent,
@@ -87,10 +85,8 @@ const styles = StyleSheet.create({
   tagline: { marginTop: 4, maxWidth: 280, fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center", lineHeight: 20 },
   perks: { marginTop: 24, gap: 16 },
   perk: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-  perkIcon: { marginTop: 2, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  perkText: { flex: 1, minWidth: 0 },
+  perkText: { flex: 1, minWidth: 0, marginTop: 2 },
   perkTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   perkBody: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
   footer: { marginTop: 28 },
-  legal: { marginTop: 10, textAlign: "center", fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
 });

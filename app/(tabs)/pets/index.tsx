@@ -1,8 +1,9 @@
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
+import EditStatSheet from "@/components/EditStatSheet";
 import NotificationBell from "@/components/NotificationBell";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
@@ -13,7 +14,24 @@ import PixelSprite from "@/components/pixel/PixelSprite";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Chevron, Chip, CoinPill, Group, Row, SectionHeader, Segmented } from "@/components/ui";
+import {
+  AccentButton,
+  Chevron,
+  Chip,
+  CoinPill,
+  FieldLabel,
+  Group,
+  IconCircle,
+  PRESS_SCALE_SMALL,
+  PressableScale,
+  Row,
+  SectionHeader,
+  Segmented,
+  SheetFooter,
+  SheetSubtitle,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import {
   BREEDS_BY_SPECIES,
   COSMETICS,
@@ -28,7 +46,10 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, HIT, radius } from "@/lib/theme";
+import { cardShadow, colors, font, HIT, radius, withAlpha } from "@/lib/theme";
+
+/** TextField forwards every prop to TextInput; React 19 delivers `ref` as a
+ *  regular prop, so this alias just teaches the types about it. */
 
 /* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
 const MAIN_SLOTS: { slot: CosmeticSlot; label: string; hint: string }[] = [{ slot: "head", label: "Hat", hint: "Hats & headwear" }];
@@ -101,84 +122,38 @@ function ItemCard({
         {c.name}
       </Text>
       {owned ? (
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={onToggle}
-          style={({ pressed }) => [
-            styles.itemButton,
-            { backgroundColor: equipped ? colors.greenSoft : colors.fill },
-            pressed && { transform: [{ scale: 0.95 }] },
-          ]}
+          hitSlop={5}
+          accessibilityRole="button"
+          accessibilityState={{ selected: equipped }}
+          style={{ marginTop: 10 }}
         >
-          {equipped ? <Icon name="check" size={14} color={colors.green} /> : null}
-          <Text style={[styles.itemButtonLabel, { color: equipped ? colors.green : colors.label }]}>
-            {equipped ? "Wearing" : "Put on"}
-          </Text>
-        </Pressable>
+          <View style={[styles.itemButton, { backgroundColor: equipped ? colors.greenSoft : colors.fill }]}>
+            {equipped ? <Icon name="check" size={14} color={colors.green} /> : null}
+            <Text style={[styles.itemButtonLabel, { color: equipped ? colors.green : colors.label }]}>
+              {equipped ? "Wearing" : "Put on"}
+            </Text>
+          </View>
+        </PressableScale>
       ) : (
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           disabled={!affordable}
           onPress={onBuy}
-          style={({ pressed }) => [
-            styles.itemButton,
-            { backgroundColor: affordable ? colors.accentSoft : colors.fill },
-            pressed && { transform: [{ scale: 0.95 }] },
-          ]}
+          hitSlop={5}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !affordable }}
+          style={{ marginTop: 10 }}
         >
-          <PixelSprite sprite={COIN_SPRITE} size={13} />
-          <Text style={[styles.itemButtonLabel, { color: affordable ? colors.accent : colors.label3 }]}>{c.price}</Text>
-        </Pressable>
+          <View style={[styles.itemButton, { backgroundColor: affordable ? colors.accentSoft : colors.fill }]}>
+            <PixelSprite sprite={COIN_SPRITE} size={13} />
+            <Text style={[styles.itemButtonLabel, { color: affordable ? colors.accent : colors.label3 }]}>{c.price}</Text>
+          </View>
+        </PressableScale>
       )}
     </View>
-  );
-}
-
-/** Small tap-to-edit sheet for a single numeric pet stat (weight or age) — the web's EditStatSheet. */
-function StatSheet({
-  open,
-  onClose,
-  title,
-  label,
-  initialValue,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  label: string;
-  initialValue: number | undefined;
-  onSave: (value: number) => void;
-}) {
-  const [value, setValue] = useState(initialValue != null ? String(initialValue) : "");
-  // Re-sync the input whenever the sheet opens (or its target value changes
-  // while open) — adjusting state during render avoids an effect round-trip.
-  const [synced, setSynced] = useState({ open, initialValue });
-  if (open && (synced.open !== open || synced.initialValue !== initialValue)) {
-    setSynced({ open, initialValue });
-    setValue(initialValue != null ? String(initialValue) : "");
-  } else if (!open && synced.open !== open) {
-    setSynced({ open, initialValue });
-  }
-
-  const parsed = Number(value);
-  const valid = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
-
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={styles.sheetTitle}>{title}</Text>
-      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
-      <TextInput value={value} onChangeText={setValue} keyboardType="decimal-pad" style={styles.input} />
-      <View style={{ marginTop: 28 }}>
-        <AccentButton
-          disabled={!valid}
-          onPress={() => {
-            onSave(parsed);
-            onClose();
-          }}
-        >
-          Save
-        </AccentButton>
-      </View>
-    </Sheet>
   );
 }
 
@@ -199,6 +174,7 @@ export default function PetsScreen() {
   const [cupInput, setCupInput] = useState("");
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
+  const breedRef = useRef<TextInput>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
   const bump = useSharedValue(1);
@@ -254,7 +230,6 @@ export default function PetsScreen() {
   const parsedWeightUnit = Number(weightInput);
   const parsedCup = Number(cupInput);
   const addPetValid =
-    hydrated &&
     petName.trim().length > 0 &&
     Number.isFinite(parsedAge) &&
     parsedAge >= 0 &&
@@ -262,13 +237,6 @@ export default function PetsScreen() {
     parsedWeightUnit > 0 &&
     Number.isFinite(parsedCup) &&
     parsedCup > 0;
-
-  const addPetButton = (
-    <Pressable onPress={openAddPet} style={({ pressed }) => [styles.addPetButton, pressed && { transform: [{ scale: 0.92 }] }]}>
-      <Icon name="plus" size={16} color={colors.label2} />
-      <Text style={styles.addPetButtonLabel}>Add pet</Text>
-    </Pressable>
-  );
 
   const addPetSheet = (
     <Sheet
@@ -278,45 +246,44 @@ export default function PetsScreen() {
         resetAddPetForm();
       }}
     >
-      <Text style={styles.sheetTitle}>Add a pet</Text>
+      <SheetTitle>Add a pet</SheetTitle>
 
-      <Text style={styles.fieldLabel}>NAME</Text>
-      <TextInput value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" placeholderTextColor={colors.label3} style={styles.input} />
+      <FieldLabel>Name</FieldLabel>
+      <TextField
+        value={petName}
+        onChangeText={setPetName}
+        placeholder="e.g. Mochi"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => breedRef.current?.focus()}
+      />
 
-      <Text style={styles.fieldLabel}>SPECIES</Text>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        {(
-          [
-            { s: "cat" as const, label: "Cat" },
-            { s: "dog" as const, label: "Dog" },
-          ]
-        ).map((o) => (
-          <Pressable
-            key={o.s}
-            onPress={() => {
-              setSpecies(o.s);
-              setBreed("");
-              setBreedFocus(false);
-              prefillFor(o.s);
-            }}
-            style={({ pressed }) => [styles.speciesChip, species === o.s && { backgroundColor: colors.accent }, pressed && { transform: [{ scale: 0.96 }] }]}
-          >
-            <Text style={[styles.speciesChipLabel, species === o.s && { color: colors.white }]}>{o.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <FieldLabel>Species</FieldLabel>
+      <Segmented
+        options={[
+          { value: "cat", label: "Cat" },
+          { value: "dog", label: "Dog" },
+        ]}
+        value={species}
+        onChange={(s) => {
+          setSpecies(s);
+          setBreed("");
+          setBreedFocus(false);
+          prefillFor(s);
+        }}
+      />
 
-      <Text style={styles.fieldLabel}>BREED</Text>
-      <TextInput
+      <FieldLabel>Breed</FieldLabel>
+      <TextField
+        ref={breedRef}
         value={breed}
         onChangeText={setBreed}
         onFocus={() => setBreedFocus(true)}
         onBlur={() => setBreedFocus(false)}
         placeholder="Start typing a breed…"
-        placeholderTextColor={colors.label3}
         autoComplete="off"
         autoCorrect={false}
-        style={styles.input}
+        returnKeyType="done"
       />
       {breedFocus && breedSuggestions.length > 0 ? (
         <View style={styles.suggestions}>
@@ -342,7 +309,7 @@ export default function PetsScreen() {
         </Text>
       ) : null}
 
-      <Text style={styles.fieldLabel}>SEX</Text>
+      <FieldLabel>Sex</FieldLabel>
       <Segmented
         options={[
           { value: "female", label: "Female" },
@@ -354,19 +321,19 @@ export default function PetsScreen() {
 
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.fieldLabel}>AGE (YEARS)</Text>
-          <TextInput value={ageInput} onChangeText={setAgeInput} keyboardType="decimal-pad" placeholder="1" placeholderTextColor={colors.label3} style={styles.input} />
+          <FieldLabel>Age (years)</FieldLabel>
+          <TextField value={ageInput} onChangeText={setAgeInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="1" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.fieldLabel}>WEIGHT ({weightUnitLabel(state.units).toUpperCase()})</Text>
-          <TextInput value={weightInput} onChangeText={setWeightInput} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.label3} style={styles.input} />
+          <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
+          <TextField value={weightInput} onChangeText={setWeightInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="0" />
         </View>
       </View>
 
-      <Text style={styles.fieldLabel}>CUP SIZE (GRAMS OF FOOD PER CUP)</Text>
-      <TextInput value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" placeholder="60" placeholderTextColor={colors.label3} style={styles.input} />
+      <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
+      <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
 
-      <View style={{ marginTop: 28 }}>
+      <SheetFooter>
         <AccentButton
           disabled={!addPetValid}
           onPress={() => {
@@ -383,24 +350,18 @@ export default function PetsScreen() {
             resetAddPetForm();
           }}
         >
-          {hydrated ? "Add to family" : "Loading…"}
+          Add to family
         </AccentButton>
-      </View>
+      </SheetFooter>
     </Sheet>
   );
 
   if (!pet) {
     return (
-      <TabScreen
-        title="Pets"
-        subtitle="Style your companion"
-        trailing={
-          <>
-            {addPetButton}
-            <NotificationBell />
-          </>
-        }
-      >
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<NotificationBell />}>
+        <View style={{ marginTop: 16 }}>
+          <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
+        </View>
         {addPetSheet}
       </TabScreen>
     );
@@ -426,20 +387,23 @@ export default function PetsScreen() {
       trailing={
         <>
           <CoinPill amount={state.coins} />
-          {addPetButton}
           <NotificationBell />
         </>
       }
     >
       {state.pets.length > 1 ? (
-        <Pressable onPress={() => setPetPickerOpen(true)} style={({ pressed }) => [styles.petSwitcher, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.petSwitcherName}>{pet.name}</Text>
-          <Chevron />
-        </Pressable>
+        <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginBottom: 8 }}>
+          <View style={styles.petSwitcher}>
+            <Text style={styles.petSwitcherName}>{pet.name}</Text>
+            <Chevron />
+          </View>
+        </PressableScale>
       ) : null}
 
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <Text style={[styles.sheetTitle, { marginBottom: 12, paddingHorizontal: 4 }]}>Switch pet</Text>
+        <View style={{ marginBottom: 12 }}>
+          <SheetTitle>Switch pet</SheetTitle>
+        </View>
         <Group>
           {state.pets.map((p) => (
             <Row
@@ -454,21 +418,34 @@ export default function PetsScreen() {
               trailing={p.id === pet.id ? <Icon name="check" size={18} color={colors.accent} /> : undefined}
             />
           ))}
+          <Row
+            onPress={() => {
+              setPetPickerOpen(false);
+              openAddPet();
+            }}
+            leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
+            title="Add a pet"
+          />
         </Group>
       </Sheet>
 
       {/* Dressing stage */}
       <View style={styles.stageCard}>
         {/* 3D toggle */}
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={() => setThreeD((v) => !v)}
+          hitSlop={6}
+          accessibilityRole="button"
           accessibilityLabel="Toggle 3D view"
           accessibilityState={{ selected: threeD }}
-          style={({ pressed }) => [styles.threeDToggle, pressed && { transform: [{ scale: 0.95 }] }]}
+          style={styles.threeDToggleWrap}
         >
-          <Icon name="cube" size={15} color={threeD ? colors.accent : colors.label2} />
-          <Text style={[styles.threeDLabel, threeD && { color: colors.accent }]}>3D</Text>
-        </Pressable>
+          <View style={styles.threeDToggle}>
+            <Icon name="cube" size={15} color={threeD ? colors.accent : colors.label2} />
+            <Text style={[styles.threeDLabel, threeD && { color: colors.accent }]}>3D</Text>
+          </View>
+        </PressableScale>
 
         <ArcadeStage style={styles.stage}>
           <View style={styles.petBox}>
@@ -490,18 +467,18 @@ export default function PetsScreen() {
             {MAIN_SLOTS.map((s) => {
               const equippedId = pet.equipped[s.slot];
               return (
-                <Pressable
+                <PressableScale
                   key={s.slot}
+                  scaleTo={PRESS_SCALE_SMALL}
                   onPress={() => setOpenSheet(s.slot)}
+                  accessibilityRole="button"
                   accessibilityLabel={`${s.label}: ${equippedId ? cosmetic(equippedId)?.name : "empty — tap to add"}`}
-                  style={({ pressed }) => [
-                    styles.slotButton,
-                    threeD ? { left: -8, top: -8 } : { left: "50%", marginLeft: -22, top: -16 },
-                    pressed && { transform: [{ scale: 0.9 }] },
-                  ]}
+                  style={[styles.slotButtonWrap, threeD ? { left: -8, top: -8 } : { left: "50%", marginLeft: -22, top: -16 }]}
                 >
-                  {equippedId ? <PixelCosmetic id={equippedId} size={24} /> : <Icon name="plus" size={19} color={colors.label2} />}
-                </Pressable>
+                  <View style={styles.slotButton}>
+                    {equippedId ? <PixelCosmetic id={equippedId} size={24} /> : <Icon name="plus" size={19} color={colors.label2} />}
+                  </View>
+                </PressableScale>
               );
             })}
           </View>
@@ -511,32 +488,57 @@ export default function PetsScreen() {
           <Text style={styles.petName}>{pet.name}</Text>
           <Text style={styles.petBreed}>{pet.breed}</Text>
           <View style={styles.chipsRow}>
-            <Pressable onPress={() => setEditingStat("age")} hitSlop={6}>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
+              onPress={() => setEditingStat("age")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Age ${formatAge(pet.ageYears)} — tap to edit`}
+            >
               <Chip>{formatAge(pet.ageYears)}</Chip>
-            </Pressable>
-            <Pressable onPress={() => setEditingStat("weight")} hitSlop={6}>
+            </PressableScale>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
+              onPress={() => setEditingStat("weight")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Weight ${formatWeight(pet.weightKg, state.units)} — tap to edit`}
+            >
               <Chip>{formatWeight(pet.weightKg, state.units)}</Chip>
-            </Pressable>
+            </PressableScale>
             <Chip>{pet.owned.length} items</Chip>
           </View>
 
           {/* Other accessories */}
-          <Pressable onPress={() => setOpenSheet("other")} style={({ pressed }) => [styles.otherButton, pressed && { transform: [{ scale: 0.97 }] }]}>
-            <Icon name="bag" size={17} color={colors.label} />
-            <Text style={styles.otherButtonLabel}>Other accessories</Text>
-          </Pressable>
+          <PressableScale onPress={() => setOpenSheet("other")} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
+            <View style={styles.otherButton}>
+              <Icon name="bag" size={17} color={colors.label} />
+              <Text style={styles.otherButtonLabel}>Other accessories</Text>
+            </View>
+          </PressableScale>
         </ArcadeStage>
       </View>
+
+      {/* Add-pet affordance lives in content (header stays CoinPill + bell) */}
+      <Group style={{ marginTop: 16 }}>
+        <Row
+          onPress={openAddPet}
+          leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
+          title="Add another pet"
+          subtitle="Cats & dogs welcome"
+          trailing={<Chevron />}
+        />
+      </Group>
 
       {/* Picker sheet */}
       <Sheet open={openSheet !== null} onClose={() => setOpenSheet(null)}>
         {openSheet === "other" ? (
           <>
             <View style={styles.sheetTitleRow}>
-              <Text style={styles.sheetTitle}>Other accessories</Text>
+              <SheetTitle>Other accessories</SheetTitle>
               <CoinPill amount={state.coins} />
             </View>
-            <Text style={styles.sheetSubtitle}>For {pet.name}</Text>
+            <SheetSubtitle>For {pet.name}</SheetSubtitle>
             {OTHER_SLOTS.map((s) => (
               <View key={s.slot}>
                 <SectionHeader>{s.hint}</SectionHeader>
@@ -551,12 +553,12 @@ export default function PetsScreen() {
         ) : openSheet && mainMeta ? (
           <>
             <View style={styles.sheetTitleRow}>
-              <Text style={styles.sheetTitle}>{mainMeta.hint}</Text>
+              <SheetTitle>{mainMeta.hint}</SheetTitle>
               <CoinPill amount={state.coins} />
             </View>
-            <Text style={styles.sheetSubtitle}>
+            <SheetSubtitle>
               For {pet.name} · {mainMeta.label.toLowerCase()} slot
-            </Text>
+            </SheetSubtitle>
             <View style={[styles.shopGrid, { marginTop: 16, paddingBottom: 8 }]}>
               {COSMETICS.filter((c) => c.slot === openSheet).map((c) => (
                 <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
@@ -580,7 +582,7 @@ export default function PetsScreen() {
 
       {addPetSheet}
 
-      <StatSheet
+      <EditStatSheet
         open={editingStat === "weight"}
         onClose={() => setEditingStat(null)}
         title={`${pet.name}'s weight`}
@@ -592,7 +594,7 @@ export default function PetsScreen() {
           toast("scale", `${pet.name}'s weight updated`, formatWeight(kg, state.units));
         }}
       />
-      <StatSheet
+      <EditStatSheet
         open={editingStat === "age"}
         onClose={() => setEditingStat(null)}
         title={`${pet.name}'s age`}
@@ -608,20 +610,7 @@ export default function PetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  addPetButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.card,
-    paddingLeft: 10,
-    paddingRight: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-  },
-  addPetButtonLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
-  petSwitcher: { marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
+  petSwitcher: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
   petSwitcherName: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   stageCard: {
     marginTop: 8,
@@ -630,19 +619,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...cardShadow,
   },
+  threeDToggleWrap: { position: "absolute", right: 12, top: 12, zIndex: 20 },
   threeDToggle: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    zIndex: 20,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
     borderRadius: radius.full,
     backgroundColor: colors.fill,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    minHeight: 32,
+    minHeight: 36,
   },
   threeDLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.label2, lineHeight: 13 },
   stage: { alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 },
@@ -656,11 +643,10 @@ const styles = StyleSheet.create({
     width: 96,
     height: 12,
     borderRadius: 999,
-    backgroundColor: "rgba(58, 57, 69, 0.18)",
+    backgroundColor: withAlpha(cardShadow.shadowColor, 0.18),
   },
+  slotButtonWrap: { position: "absolute", zIndex: 10 },
   slotButton: {
-    position: "absolute",
-    zIndex: 10,
     width: HIT,
     height: HIT,
     borderRadius: HIT / 2,
@@ -676,7 +662,6 @@ const styles = StyleSheet.create({
   petBreed: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
   chipsRow: { marginTop: 10, flexDirection: "row", gap: 6 },
   otherButton: {
-    marginTop: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -688,8 +673,6 @@ const styles = StyleSheet.create({
   },
   otherButtonLabel: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   sheetTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSubtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   shopGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   itemCard: {
     flexBasis: "47%",
@@ -697,16 +680,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.card,
     padding: 14,
-    shadowColor: "#3a3945",
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    ...cardShadow,
   },
   itemPreview: { aspectRatio: 2, borderRadius: radius.md, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },
   itemName: { marginTop: 10, fontSize: 14, fontFamily: font.semibold, color: colors.label },
   itemButton: {
-    marginTop: 10,
     height: 34,
     flexDirection: "row",
     alignItems: "center",
@@ -715,18 +693,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   itemButtonLabel: { fontSize: 13, fontFamily: font.semibold },
-  speciesChip: {
-    borderRadius: radius.full,
-    backgroundColor: colors.card,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    minHeight: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-  },
-  speciesChipLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
   suggestions: {
     marginTop: 6,
     borderRadius: radius.md,
@@ -739,15 +705,4 @@ const styles = StyleSheet.create({
   suggestionRow: { paddingHorizontal: 16, paddingVertical: 10, minHeight: 40, justifyContent: "center" },
   suggestionLabel: { fontSize: 15, fontFamily: font.medium, color: colors.label },
   breedHint: { marginTop: 6, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
-  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8, color: colors.label2 },
-  input: {
-    width: "100%",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-  },
 });

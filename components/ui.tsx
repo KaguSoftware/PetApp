@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -348,10 +348,11 @@ export function FieldLabel({ children }: { children: string }) {
 }
 
 /** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
-export function TextField(props: TextInputProps) {
+export const TextField = forwardRef<TextInput, TextInputProps>(function TextField(props, ref) {
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
+      ref={ref}
       placeholderTextColor={colors.label3}
       {...props}
       onFocus={(e) => {
@@ -365,7 +366,7 @@ export function TextField(props: TextInputProps) {
       style={[primStyles.textField, focused && primStyles.textFieldFocused, props.style]}
     />
   );
-}
+});
 
 export function SheetFooter({ children }: { children: React.ReactNode }) {
   return <View style={primStyles.sheetFooter}>{children}</View>;

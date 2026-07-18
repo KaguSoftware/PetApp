@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
+import { PRESS_SCALE_SMALL, PressableScale, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { colors, font, radius, withAlpha } from "@/lib/theme";
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTH_NAMES = [
@@ -53,31 +54,37 @@ export default function StreakCalendarSheet({ open, onClose }: { open: boolean; 
     <Sheet open={open} onClose={onClose}>
       <View style={styles.titleRow}>
         <Icon name="flame" size={19} color={colors.orange} />
-        <Text style={styles.title}>{state.streak}-day streak</Text>
+        <SheetTitle>{state.streak}-day streak</SheetTitle>
       </View>
-      <Text style={styles.subtitle}>Days with logged care show up lit — keep it going</Text>
+      <SheetSubtitle>Days with logged care show up lit — keep it going</SheetSubtitle>
 
       <View style={styles.monthRow}>
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={() => setCalendarMonth((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 }))}
+          accessibilityRole="button"
           accessibilityLabel="Previous month"
           hitSlop={8}
-          style={({ pressed }) => [styles.monthButton, pressed && { transform: [{ scale: 0.9 }] }]}
         >
-          <Icon name="chevron-left" size={14} color={colors.label} />
-        </Pressable>
+          <View style={styles.monthButton}>
+            <Icon name="chevron-left" size={14} color={colors.label} />
+          </View>
+        </PressableScale>
         <Text style={styles.monthLabel}>
           {MONTH_NAMES[calendarMonth.m]} {calendarMonth.y}
         </Text>
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={() => setCalendarMonth((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 }))}
+          accessibilityRole="button"
           accessibilityLabel="Next month"
           hitSlop={8}
           disabled={isCurrentMonth}
-          style={({ pressed }) => [styles.monthButton, isCurrentMonth && { opacity: 0.3 }, pressed && { transform: [{ scale: 0.9 }] }]}
         >
-          <Icon name="chevron-right" size={14} color={colors.label} />
-        </Pressable>
+          <View style={[styles.monthButton, isCurrentMonth && { opacity: 0.3 }]}>
+            <Icon name="chevron-right" size={14} color={colors.label} />
+          </View>
+        </PressableScale>
       </View>
 
       <View style={styles.grid}>
@@ -101,7 +108,7 @@ export default function StreakCalendarSheet({ open, onClose }: { open: boolean; 
                   <Text
                     style={[
                       styles.dayLabel,
-                      cell.isToday ? { color: colors.label } : cell.isFuture ? { color: "rgba(136, 136, 145, 0.5)" } : null,
+                      cell.isToday ? { color: colors.label } : cell.isFuture ? { color: withAlpha(colors.label3, 0.5) } : null,
                     ]}
                   >
                     {cell.day}
@@ -120,10 +127,8 @@ export default function StreakCalendarSheet({ open, onClose }: { open: boolean; 
 
 const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  title: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  subtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   monthRow: { marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  monthButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },
+  monthButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },
   monthLabel: { fontSize: 15, fontFamily: font.bold, color: colors.label },
   grid: { marginTop: 16, flexDirection: "row", flexWrap: "wrap", rowGap: 8 },
   cell: { width: CELL_PCT, alignItems: "center", justifyContent: "center" },

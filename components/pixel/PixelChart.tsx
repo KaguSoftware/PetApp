@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
 import { Icon } from "@/components/Icons";
+import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { WeightPoint, formatWeight } from "@/lib/data";
 import { colors, font, radius } from "@/lib/theme";
 
@@ -17,15 +18,12 @@ function spanText(fromTs: number, toTs: number) {
 
 function AddButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityLabel="Add weight"
-      hitSlop={10}
-      style={({ pressed }) => [styles.addButton, pressed && { transform: [{ scale: 0.95 }] }]}
-    >
-      <Icon name="plus" size={11} color={colors.accent} />
-      <Text style={styles.addLabel}>Add</Text>
-    </Pressable>
+    <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={onPress} accessibilityRole="button" accessibilityLabel="Add weight" hitSlop={10}>
+      <View style={styles.addButton}>
+        <Icon name="plus" size={11} color={colors.accent} />
+        <Text style={styles.addLabel}>Add</Text>
+      </View>
+    </PressableScale>
   );
 }
 
@@ -136,24 +134,32 @@ export default function PixelChart({
         </Text>
         {maxStart > 0 ? (
           <View style={styles.navRow}>
-            <Pressable
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
               onPress={() => setStart((s) => Math.max(0, s - 1))}
               disabled={start === 0}
+              accessibilityRole="button"
               accessibilityLabel="Older weight"
+              accessibilityState={{ disabled: start === 0 }}
               hitSlop={10}
-              style={({ pressed }) => [styles.navButton, pressed && { transform: [{ scale: 0.9 }] }, start === 0 && { opacity: 0.3 }]}
             >
-              <Icon name="chevron-left" size={13} color={colors.label2} />
-            </Pressable>
-            <Pressable
+              <View style={[styles.navButton, start === 0 && { opacity: 0.3 }]}>
+                <Icon name="chevron-left" size={13} color={colors.label2} />
+              </View>
+            </PressableScale>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
               onPress={() => setStart((s) => Math.min(maxStart, s + 1))}
               disabled={start === maxStart}
+              accessibilityRole="button"
               accessibilityLabel="Newer weight"
+              accessibilityState={{ disabled: start === maxStart }}
               hitSlop={10}
-              style={({ pressed }) => [styles.navButton, pressed && { transform: [{ scale: 0.9 }] }, start === maxStart && { opacity: 0.3 }]}
             >
-              <Icon name="chevron-right" size={13} color={colors.label2} />
-            </Pressable>
+              <View style={[styles.navButton, start === maxStart && { opacity: 0.3 }]}>
+                <Icon name="chevron-right" size={13} color={colors.label2} />
+              </View>
+            </PressableScale>
           </View>
         ) : null}
       </View>

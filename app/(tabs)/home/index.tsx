@@ -1,76 +1,20 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
+import EditStatSheet from "@/components/EditStatSheet";
 import NotificationBell from "@/components/NotificationBell";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Chevron, Chip, CoinPill, Group, Row } from "@/components/ui";
+import { Chevron, Chip, CoinPill, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitle } from "@/components/ui";
 import { dailyTarget, formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
-
-/** Small tap-to-edit sheet for a single numeric pet stat (weight or age) — the web's EditStatSheet. */
-function EditStatSheet({
-  open,
-  onClose,
-  title,
-  label,
-  initialValue,
-  onSave,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  label: string;
-  initialValue: number | undefined;
-  onSave: (value: number) => void;
-}) {
-  const [value, setValue] = useState(initialValue != null ? String(initialValue) : "");
-  // Re-sync the input whenever the sheet opens (or its target value changes
-  // while open) — adjusting state during render instead of an effect avoids
-  // the extra render pass a `useEffect` + `setState` would trigger.
-  const [synced, setSynced] = useState({ open, initialValue });
-  if (open && (synced.open !== open || synced.initialValue !== initialValue)) {
-    setSynced({ open, initialValue });
-    setValue(initialValue != null ? String(initialValue) : "");
-  } else if (!open && synced.open !== open) {
-    setSynced({ open, initialValue });
-  }
-
-  const parsed = Number(value);
-  const valid = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
-
-  return (
-    <Sheet open={open} onClose={onClose}>
-      <Text style={styles.sheetTitle}>{title}</Text>
-      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
-      <TextInput
-        keyboardType="decimal-pad"
-        value={value}
-        onChangeText={setValue}
-        style={styles.input}
-        placeholderTextColor={colors.label3}
-      />
-      <View style={{ marginTop: 28 }}>
-        <AccentButton
-          disabled={!valid}
-          onPress={() => {
-            onSave(parsed);
-            onClose();
-          }}
-        >
-          Save
-        </AccentButton>
-      </View>
-    </Sheet>
-  );
-}
+import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 
 /** Animated "meals today" progress bar. */
 function MealsBar({ pct }: { pct: number }) {
@@ -92,6 +36,7 @@ export default function Home() {
   const router = useRouter();
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
+  const [petPickerOpen, setPetPickerOpen] = useState(false);
 
   const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
 
@@ -156,6 +101,8 @@ export default function Home() {
   const hour = new Date().getHours();
   const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${me?.name}`;
 
+  const multiPet = state.pets.length > 1;
+
   return (
     <TabScreen
       title="Home"
@@ -170,47 +117,59 @@ export default function Home() {
       {/* Pet hero card */}
       <GestureDetector gesture={swipe}>
         <View style={styles.hero}>
-          <Pressable
-            onPress={() => router.push(`/pet/${pet.id}`)}
-            style={({ pressed }) => [styles.heroTop, pressed && { transform: [{ scale: 0.99 }] }]}
-          >
-            <PetAvatar pet={pet} size="lg" idle />
-            <View style={styles.heroText}>
-              <View style={styles.heroNameRow}>
-                <Text numberOfLines={1} style={styles.heroName}>
-                  {pet.name}
+          <View style={styles.heroTop}>
+            <PressableScale
+              onPress={() => router.push(`/pet/${pet.id}`)}
+              accessibilityLabel={`Open ${pet.name}'s details`}
+              hitSlop={6}
+            >
+              <PetAvatar pet={pet} size="lg" idle />
+            </PressableScale>
+            {/* Visible switch affordance next to the swipe gesture: the name
+                row opens the same switch-pet sheet the other tabs use. */}
+            <PressableScale
+              scaleTo={0.99}
+              onPress={() => (multiPet ? setPetPickerOpen(true) : router.push(`/pet/${pet.id}`))}
+              accessibilityLabel={multiPet ? "Switch pet" : `Open ${pet.name}'s details`}
+              style={styles.heroText}
+            >
+              <View style={styles.heroTextInner}>
+                <View style={styles.heroNameRow}>
+                  <Text numberOfLines={1} style={styles.heroName}>
+                    {pet.name}
+                  </Text>
+                  <Chevron />
+                </View>
+                <Text numberOfLines={1} style={styles.heroBreed}>
+                  {pet.breed}
                 </Text>
-                <Icon name="chevron-right" size={14} color={colors.label3} />
               </View>
-              <Text numberOfLines={1} style={styles.heroBreed}>
-                {pet.breed}
-              </Text>
-            </View>
-          </Pressable>
+            </PressableScale>
+          </View>
 
           <View style={styles.chipsRow}>
-            <Pressable
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
               onPress={() => setEditingStat("age")}
               accessibilityLabel="Edit age"
-              hitSlop={8}
-              style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
+              hitSlop={10}
             >
               <Chip>
                 <Text style={styles.chipText}>{formatAge(pet.ageYears)}</Text>
                 <Icon name="chevron-right" size={9} color={colors.label3} />
               </Chip>
-            </Pressable>
-            <Pressable
+            </PressableScale>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
               onPress={() => setEditingStat("weight")}
               accessibilityLabel="Edit weight"
-              hitSlop={8}
-              style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
+              hitSlop={10}
             >
               <Chip>
                 <Text style={styles.chipText}>{formatWeight(pet.weightKg, state.units)}</Text>
                 <Icon name="chevron-right" size={9} color={colors.label3} />
               </Chip>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <View style={{ marginTop: 16 }}>
@@ -223,16 +182,18 @@ export default function Home() {
             <MealsBar pct={fedPct} />
           </View>
 
-          {state.pets.length > 1 && (
+          {multiPet && (
             <View style={styles.dotsRow}>
               {state.pets.map((p, i) => (
-                <Pressable
+                <PressableScale
                   key={p.id}
+                  scaleTo={PRESS_SCALE_SMALL}
                   onPress={() => setPetIndex(i)}
                   accessibilityLabel={`Show ${p.name}`}
                   hitSlop={10}
-                  style={[styles.petDot, i === petIndex && styles.petDotActive]}
-                />
+                >
+                  <View style={[styles.petDot, i === petIndex && styles.petDotActive]} />
+                </PressableScale>
               ))}
             </View>
           )}
@@ -241,18 +202,17 @@ export default function Home() {
 
       {/* One calm entry point for everything that needs attention */}
       {alertCount > 0 && (
-        <Pressable
-          onPress={() => router.push("/activity")}
-          style={({ pressed }) => [styles.alertBanner, pressed && { transform: [{ scale: 0.98 }] }]}
-        >
-          <View style={styles.alertIcon}>
-            <Icon name="bell" size={16} color={colors.white} />
+        <PressableScale onPress={() => router.push("/activity")} accessibilityRole="button" style={{ marginTop: 12 }}>
+          <View style={styles.alertBanner}>
+            <View style={styles.alertIcon}>
+              <Icon name="bell" size={16} color={colors.white} />
+            </View>
+            <Text style={styles.alertLabel}>
+              {alertCount} thing{alertCount === 1 ? "" : "s"} need{alertCount === 1 ? "s" : ""} attention
+            </Text>
+            <Icon name="chevron-right" size={15} color={withAlpha(colors.red, 0.7)} />
           </View>
-          <Text style={styles.alertLabel}>
-            {alertCount} thing{alertCount === 1 ? "" : "s"} need{alertCount === 1 ? "s" : ""} attention
-          </Text>
-          <Icon name="chevron-right" size={15} color="rgba(226, 50, 66, 0.7)" />
-        </Pressable>
+        </PressableScale>
       )}
 
       {/* Next up */}
@@ -273,6 +233,28 @@ export default function Home() {
           trailing={<Chevron />}
         />
       </Group>
+
+      {/* Switch pet */}
+      <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
+        <View style={{ marginBottom: 12 }}>
+          <SheetTitle>Switch pet</SheetTitle>
+        </View>
+        <Group>
+          {state.pets.map((p, i) => (
+            <Row
+              key={p.id}
+              onPress={() => {
+                setPetIndex(i);
+                setPetPickerOpen(false);
+              }}
+              leading={<PetAvatar pet={p} size="sm" />}
+              title={p.name}
+              subtitle={p.breed}
+              trailing={p.id === pet.id ? <Icon name="check" size={18} color={colors.accent} /> : undefined}
+            />
+          ))}
+        </Group>
+      </Sheet>
 
       <EditStatSheet
         open={editingStat === "weight"}
@@ -318,6 +300,7 @@ const styles = StyleSheet.create({
   hero: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 20, ...cardShadow },
   heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
   heroText: { flex: 1, minWidth: 0 },
+  heroTextInner: { minHeight: 44, justifyContent: "center" },
   heroNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   heroName: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, flexShrink: 1 },
   heroBreed: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
@@ -329,10 +312,9 @@ const styles = StyleSheet.create({
   barTrack: { marginTop: 6, height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 3 },
   dotsRow: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  petDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(28, 28, 35, 0.18)" },
+  petDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: withAlpha(colors.label, 0.18) },
   petDotActive: { width: 20, backgroundColor: colors.label },
   alertBanner: {
-    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -344,16 +326,4 @@ const styles = StyleSheet.create({
   alertIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
   alertLabel: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: font.semibold, color: colors.red },
   nextUpIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.6, color: colors.label2 },
-  input: {
-    width: "100%",
-    borderRadius: radius.sm,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-  },
 });

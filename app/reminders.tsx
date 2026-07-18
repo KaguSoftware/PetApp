@@ -1,14 +1,26 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import {
+  AccentButton,
+  FieldLabel,
+  Group,
+  IconCircle,
+  PressableScale,
+  PRESS_SCALE_SMALL,
+  Row,
+  SectionHeader,
+  SelectableChip,
+  SheetFooter,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import { RepeatKind, Reminder, nextRepeatDue } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 
 const DAY_MS = 86_400_000;
 
@@ -20,51 +32,6 @@ const REPEAT_LABEL: Record<RepeatKind, string> = {
 
 function repeatLabel(kind: RepeatKind, interval?: number) {
   return kind === "every_n_days" ? `every ${Math.max(1, Math.round(interval ?? 1))} days` : REPEAT_LABEL[kind];
-}
-
-/** Small press-scale wrapper — mirrors the web's active:scale-90 buttons. */
-function PressScale({
-  onPress,
-  accessibilityLabel,
-  style,
-  hitSlop = 10,
-  children,
-}: {
-  onPress: () => void;
-  accessibilityLabel?: string;
-  style?: object;
-  hitSlop?: number;
-  children: React.ReactNode;
-}) {
-  const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  return (
-    <Animated.View style={anim}>
-      <Pressable
-        onPress={onPress}
-        accessibilityLabel={accessibilityLabel}
-        hitSlop={hitSlop}
-        onPressIn={() => (scale.value = withTiming(0.9, { duration: 120, easing: Easing.out(Easing.quad) }))}
-        onPressOut={() => (scale.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.quad) }))}
-        style={style}
-      >
-        {children}
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-/** Selectable pill chip — the web's rounded-full accent/card toggle buttons. */
-function Pill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      style={({ pressed }) => [styles.pill, active && styles.pillActive, pressed && { opacity: 0.85 }]}
-    >
-      <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>{label}</Text>
-    </Pressable>
-  );
 }
 
 /** −/+ stepper with a centered value label — the no-dependency date/time picker control. */
@@ -83,26 +50,31 @@ function Stepper({
 }) {
   return (
     <View style={styles.stepper} accessibilityLabel={accessibilityLabel}>
-      <Pressable
+      <PressableScale
+        scaleTo={PRESS_SCALE_SMALL}
         onPress={onDec}
         disabled={decDisabled}
-        hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel} — decrease`}
-        style={({ pressed }) => [styles.stepperButton, decDisabled && { opacity: 0.3 }, pressed && { backgroundColor: colors.fill }]}
+        accessibilityState={{ disabled: decDisabled }}
       >
-        <Text style={styles.stepperSign}>−</Text>
-      </Pressable>
+        <View style={[styles.stepperButton, decDisabled && { opacity: 0.3 }]}>
+          <Text style={styles.stepperSign}>−</Text>
+        </View>
+      </PressableScale>
       <Text numberOfLines={1} style={styles.stepperValue}>
         {label}
       </Text>
-      <Pressable
+      <PressableScale
+        scaleTo={PRESS_SCALE_SMALL}
         onPress={onInc}
-        hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel} — increase`}
-        style={({ pressed }) => [styles.stepperButton, pressed && { backgroundColor: colors.fill }]}
       >
-        <Text style={styles.stepperSign}>+</Text>
-      </Pressable>
+        <View style={styles.stepperButton}>
+          <Text style={styles.stepperSign}>+</Text>
+        </View>
+      </PressableScale>
     </View>
   );
 }
@@ -127,14 +99,17 @@ export default function RemindersScreen() {
   const [intervalDays, setIntervalDays] = useState(3);
 
   const addButton = (
-    <PressScale
+    <PressableScale
+      scaleTo={PRESS_SCALE_SMALL}
       onPress={() => setAddOpen(true)}
+      accessibilityRole="button"
       accessibilityLabel="Add reminder"
       hitSlop={8}
-      style={styles.addButton}
     >
-      <Icon name="plus" size={17} color={colors.white} />
-    </PressScale>
+      <View style={styles.addButton}>
+        <Icon name="plus" size={17} color={colors.white} />
+      </View>
+    </PressableScale>
   );
 
   if (!hydrated) {
@@ -203,7 +178,8 @@ export default function RemindersScreen() {
       <Row
         key={r.id}
         leading={
-          <PressScale
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
             onPress={() => {
               toggleReminder(r.id);
               if (r.repeatKind && !r.done)
@@ -211,12 +187,17 @@ export default function RemindersScreen() {
               else if (!r.done) toast("check", `Done: ${r.title}`, "Marked complete for the family");
               else toast("refresh", `Reopened: ${r.title}`, "Marked as not done");
             }}
+            accessibilityRole="button"
             accessibilityLabel={r.done ? "Mark as not done" : "Mark as done"}
-            hitSlop={12}
-            style={[styles.check, r.done && styles.checkDone]}
+            accessibilityState={{ checked: r.done }}
           >
-            {r.done ? <Icon name="check" size={14} color={colors.white} /> : null}
-          </PressScale>
+            {/* 44pt effective target; the visual circle stays a slim 28pt */}
+            <View style={styles.checkZone}>
+              <View style={[styles.check, r.done && styles.checkDone]}>
+                {r.done ? <Icon name="check" size={14} color={colors.white} /> : null}
+              </View>
+            </View>
+          </PressableScale>
         }
         title={
           <Text numberOfLines={1} style={[styles.rowTitle, r.done ? styles.rowTitleDone : null, isAlert ? { color: colors.red } : null]}>
@@ -239,9 +220,16 @@ export default function RemindersScreen() {
           </View>
         }
         trailing={
-          <PressScale onPress={() => deleteReminder(r.id)} accessibilityLabel={`Delete ${r.title}`} hitSlop={10} style={styles.delete}>
-            <Icon name="xmark" size={15} color={colors.label3} />
-          </PressScale>
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            onPress={() => deleteReminder(r.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${r.title}`}
+          >
+            <View style={styles.deleteZone}>
+              <Icon name="xmark" size={15} color={colors.label3} />
+            </View>
+          </PressableScale>
         }
       />
     );
@@ -277,25 +265,19 @@ export default function RemindersScreen() {
       ) : null}
 
       <Sheet open={addOpen} onClose={closeSheet}>
-        <Text style={styles.sheetTitle}>New reminder</Text>
+        <SheetTitle>New reminder</SheetTitle>
 
-        <Text style={styles.fieldLabel}>TASK</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="e.g. Buy litter, flea treatment…"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
-        />
+        <FieldLabel>Task</FieldLabel>
+        <TextField value={title} onChangeText={setTitle} placeholder="e.g. Buy litter, flea treatment…" />
 
-        <Text style={styles.fieldLabel}>PET</Text>
+        <FieldLabel>Pet</FieldLabel>
         <View style={styles.chipRow}>
           {state.pets.map((p) => (
-            <Pill key={p.id} label={p.name} active={activePetId === p.id} onPress={() => setPetId(p.id)} />
+            <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
           ))}
         </View>
 
-        <Text style={styles.fieldLabel}>DUE</Text>
+        <FieldLabel>Due</FieldLabel>
         <View style={styles.chipRow}>
           {[
             { d: 0, label: "Today" },
@@ -303,17 +285,17 @@ export default function RemindersScreen() {
             { d: 3, label: "In 3 days" },
             { d: 7, label: "Next week" },
           ].map((o) => (
-            <Pill
+            <SelectableChip
               key={o.d}
               label={o.label}
-              active={!pickDate && days === o.d}
+              selected={!pickDate && days === o.d}
               onPress={() => {
                 setDays(o.d);
                 setPickDate(false);
               }}
             />
           ))}
-          <Pill label="Pick date…" active={pickDate} onPress={() => setPickDate(true)} />
+          <SelectableChip label="Pick date…" selected={pickDate} onPress={() => setPickDate(true)} />
         </View>
         {pickDate ? (
           <View style={styles.pickerRow}>
@@ -333,7 +315,7 @@ export default function RemindersScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.fieldLabel}>REPEAT</Text>
+        <FieldLabel>Repeat</FieldLabel>
         <View style={styles.chipRow}>
           {(
             [
@@ -343,7 +325,7 @@ export default function RemindersScreen() {
               { value: "every_n_days", label: "Every… days" },
             ] as { value: "none" | RepeatKind; label: string }[]
           ).map((o) => (
-            <Pill key={o.value} label={o.label} active={repeat === o.value} onPress={() => setRepeat(o.value)} />
+            <SelectableChip key={o.value} label={o.label} selected={repeat === o.value} onPress={() => setRepeat(o.value)} />
           ))}
           {repeat === "every_n_days" ? (
             <Stepper
@@ -356,7 +338,7 @@ export default function RemindersScreen() {
           ) : null}
         </View>
 
-        <View style={{ marginTop: 28 }}>
+        <SheetFooter>
           <AccentButton
             disabled={!title.trim() || !activePetId || (repeat === "every_n_days" && intervalDays < 1)}
             onPress={() => {
@@ -381,7 +363,7 @@ export default function RemindersScreen() {
           >
             Add reminder
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
     </PushedScreen>
   );
@@ -389,9 +371,10 @@ export default function RemindersScreen() {
 
 const styles = StyleSheet.create({
   addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    // 36pt visual + hitSlop 8 → 44pt effective target in the native header
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
@@ -401,12 +384,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  checkZone: {
+    width: 44,
+    height: 44,
+    marginVertical: -8,
+    marginLeft: -8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   check: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "rgba(28, 28, 35, 0.25)",
+    borderColor: withAlpha(colors.label, 0.25),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -415,49 +406,29 @@ const styles = StyleSheet.create({
   rowTitleDone: { color: colors.label3, textDecorationLine: "line-through" },
   subtitleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
   rowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, flexShrink: 1 },
-  delete: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  deleteZone: {
+    width: 44,
+    height: 44,
+    marginVertical: -8,
+    marginRight: -10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emptyWrap: { alignItems: "center", paddingHorizontal: 24, paddingVertical: 36 },
   emptyTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
   emptyBody: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8, color: colors.label2 },
-  input: {
-    borderRadius: radius.sm,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-    minHeight: 48,
-    ...cardShadow,
-  },
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  pill: {
-    borderRadius: radius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    minHeight: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.card,
-    ...cardShadow,
-  },
-  pillActive: { backgroundColor: colors.accent },
-  pillLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
-  pillLabelActive: { color: colors.white },
   pickerRow: { marginTop: 10, flexDirection: "row", gap: 8 },
   stepper: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: radius.sm,
     backgroundColor: colors.card,
-    paddingHorizontal: 4,
     minHeight: 44,
     flexShrink: 1,
     ...cardShadow,
   },
-  stepperButton: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  stepperButton: { width: 44, height: 44, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
   stepperSign: { fontSize: 20, fontFamily: font.semibold, color: colors.accent, lineHeight: 22 },
   stepperValue: {
     minWidth: 56,

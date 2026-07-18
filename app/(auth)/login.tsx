@@ -72,8 +72,9 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", marginBottom: 40 },
   subtitle: { marginTop: 6, fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   form: { gap: 12 },
-  error: { color: colors.red, fontSize: 14, fontFamily: font.medium, textAlign: "center" },
-  footer: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
+  error: { color: colors.red, fontSize: 14, fontFamily: font.medium, textAlign: "left", paddingHorizontal: 4 },
+  footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 12 },
   footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
-  footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent },
+  // Padding lifts the link's tap target to >=44pt without shifting the baseline row.
+  footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent, paddingVertical: 14, paddingHorizontal: 8 },
 });

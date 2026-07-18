@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import EmptyState from "@/components/EmptyState";
 import PageLoading from "@/components/PageLoading";
@@ -8,7 +8,18 @@ import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import Sheet from "@/components/Sheet";
 import { PushedScreen } from "@/components/Screen";
 import { ACTION_ICON, Icon } from "@/components/Icons";
-import { AccentButton, Chevron, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import {
+  AccentButton,
+  Chevron,
+  Footnote,
+  Group,
+  IconCircle,
+  PressableScale,
+  Row,
+  SectionHeader,
+  SelectableChip,
+  SmallButton,
+} from "@/components/ui";
 import { ACTIONS, Activity, VET, VETS } from "@/lib/data";
 import { dueLabel, timeAgo, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
@@ -99,19 +110,7 @@ export default function ActivityScreen() {
                         </Text>
                       }
                       subtitle={dueLabel(r.due)}
-                      trailing={
-                        alertVet ? (
-                          <Pressable
-                            onPress={() => router.push("/vets")}
-                            accessibilityLabel={`Book vet for ${pet.name}`}
-                            hitSlop={6}
-                            style={({ pressed }) => [styles.bookVetButton, pressed && { transform: [{ scale: 0.95 }] }]}
-                          >
-                            <Icon name="cross" size={14} color={colors.white} />
-                            <Text style={styles.bookVetLabel}>Book vet</Text>
-                          </Pressable>
-                        ) : undefined
-                      }
+                      trailing={alertVet ? <SmallButton label="Book vet" tone="red" onPress={() => router.push("/vets")} /> : undefined}
                     />
                   );
                 })}
@@ -151,17 +150,16 @@ export default function ActivityScreen() {
       ) : (
         <>
           <SectionHeader>Health</SectionHeader>
-          <Pressable
-            onPress={() => setPaywallOpen(true)}
-            style={({ pressed }) => [styles.upsellCard, pressed && { transform: [{ scale: 0.98 }] }]}
-          >
-            <IconCircle icon="lock" tint={colors.label2} bg={colors.fill} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.upsellTitle}>Health insights live here</Text>
-              <Text style={styles.upsellBody}>PetPal+ watches the calendar and flags upcoming vet visits and treatments.</Text>
+          <PressableScale onPress={() => setPaywallOpen(true)} accessibilityRole="button">
+            <View style={styles.upsellCard}>
+              <IconCircle icon="lock" tint={colors.label2} bg={colors.fill} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.upsellTitle}>Health insights live here</Text>
+                <Text style={styles.upsellBody}>PetPal+ watches the calendar and flags upcoming vet visits and treatments.</Text>
+              </View>
+              <Chevron />
             </View>
-            <Chevron />
-          </Pressable>
+          </PressableScale>
         </>
       )}
 
@@ -189,19 +187,16 @@ export default function ActivityScreen() {
         <View style={styles.filterRow}>
           {[null, ...state.pets.map((p) => p.id)].map((id) => {
             const p = id ? petById(id) : null;
-            const active = filterPetId === id;
             return (
-              <Pressable
+              <SelectableChip
                 key={id ?? "all"}
+                label={p ? p.name : "All"}
+                selected={filterPetId === id}
                 onPress={() => {
                   setFilterPetId(id);
                   setVisible(40);
                 }}
-                hitSlop={6}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-              >
-                <Text style={[styles.filterChipLabel, active && styles.filterChipLabelActive]}>{p ? p.name : "All"}</Text>
-              </Pressable>
+              />
             );
           })}
         </View>
@@ -281,7 +276,7 @@ export default function ActivityScreen() {
           >
             Request appointment
           </AccentButton>
-          <Text style={styles.sheetFootnote}>Demo — no real booking is made.</Text>
+          <Footnote>Demo — no real booking is made.</Footnote>
         </View>
       </Sheet>
 
@@ -294,16 +289,6 @@ const styles = StyleSheet.create({
   alertPetHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   alertPetName: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   alertTitle: { fontSize: 16, fontFamily: font.medium, color: colors.red },
-  bookVetButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.red,
-    paddingHorizontal: 12,
-  },
-  bookVetLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.white },
   insightCard: {
     borderRadius: radius.md,
     backgroundColor: colors.card,
@@ -339,25 +324,12 @@ const styles = StyleSheet.create({
   upsellTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   upsellBody: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
   filterRow: { marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  filterChip: {
-    borderRadius: radius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    minHeight: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.card,
-    ...cardShadow,
-  },
-  filterChipActive: { backgroundColor: colors.accent },
-  filterChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
-  filterChipLabelActive: { color: colors.white },
+  // Feed text — one 15pt body size across title/name/verb (footnote 13 via Row subtitle)
   feedTitle: { fontSize: 15, color: colors.label },
-  feedName: { fontFamily: font.semibold, color: colors.label },
-  feedVerb: { fontFamily: font.regular, color: colors.label2 },
+  feedName: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
+  feedVerb: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   vetHead: { flexDirection: "row", alignItems: "center", gap: 16, paddingTop: 4 },
   vetName: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
   vetClinic: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
   vetMetaRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 4 },
-  sheetFootnote: { marginTop: 10, textAlign: "center", fontSize: 12, fontFamily: font.regular, color: colors.label3 },
 });

@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
 import Sheet from "@/components/Sheet";
-import { AccentButton } from "@/components/ui";
-import { cardShadow, colors, font } from "@/lib/theme";
+import { AccentButton, FieldLabel, SheetFooter, SheetTitle, TextField } from "@/components/ui";
 
 /** Small tap-to-edit sheet for a single numeric pet stat (weight or age). */
 export default function EditStatSheet({
@@ -35,55 +33,31 @@ export default function EditStatSheet({
   const parsed = Number(value);
   const valid = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
 
+  const save = () => {
+    if (!valid) return;
+    onSave(parsed);
+    onClose();
+  };
+
   return (
     <Sheet open={open} onClose={onClose}>
-      <Text style={styles.title}>{title}</Text>
+      <SheetTitle>{title}</SheetTitle>
 
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
+      <FieldLabel>{label}</FieldLabel>
+      <TextField
         keyboardType="decimal-pad"
         inputMode="decimal"
         value={value}
         onChangeText={setValue}
-        style={styles.input}
-        placeholderTextColor={colors.label3}
+        returnKeyType="done"
+        onSubmitEditing={save}
       />
 
-      <View style={styles.footer}>
-        <AccentButton
-          disabled={!valid}
-          onPress={() => {
-            onSave(parsed);
-            onClose();
-          }}
-        >
+      <SheetFooter>
+        <AccentButton disabled={!valid} onPress={save}>
           Save
         </AccentButton>
-      </View>
+      </SheetFooter>
     </Sheet>
   );
 }
-
-const styles = StyleSheet.create({
-  title: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  label: {
-    marginTop: 20,
-    marginBottom: 6,
-    fontSize: 13,
-    fontFamily: font.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: colors.label2,
-  },
-  input: {
-    borderRadius: 12,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-    ...cardShadow,
-  },
-  footer: { marginTop: 28 },
-});

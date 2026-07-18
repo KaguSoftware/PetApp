@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
 import EmptyState from "@/components/EmptyState";
@@ -12,7 +12,7 @@ import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
-import { AccentButton, Chevron, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader, SheetTitle } from "@/components/ui";
 import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
@@ -152,7 +152,7 @@ export default function PlanPage() {
   if (!pet) {
     return (
       <TabScreen title="Care Plan" trailing={<NotificationBell />}>
-        <View style={{ marginTop: 12 }}>
+        <View style={{ marginTop: 16 }}>
           <EmptyState
             icon="paw"
             title="No pets yet"
@@ -208,19 +208,16 @@ export default function PlanPage() {
   return (
     <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<NotificationBell />}>
       {state.pets.length > 1 ? (
-        <Pressable
-          onPress={() => setPetPickerOpen(true)}
-          accessibilityLabel="Switch pet"
-          hitSlop={8}
-          style={({ pressed }) => [styles.petSwitcher, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={styles.petSwitcherLabel}>{pet.name}</Text>
-          <Chevron />
-        </Pressable>
+        <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Switch pet" hitSlop={8}>
+          <View style={styles.petSwitcher}>
+            <Text style={styles.petSwitcherLabel}>{pet.name}</Text>
+            <Chevron />
+          </View>
+        </PressableScale>
       ) : null}
 
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <Text style={styles.sheetTitle}>Switch pet</Text>
+        <SheetTitle>Switch pet</SheetTitle>
         <Group style={{ marginTop: 12 }}>
           {state.pets.map((p) => (
             <Row
@@ -263,7 +260,7 @@ export default function PlanPage() {
                     leading={
                       complete ? (
                         <View style={styles.doneCircle}>
-                          <Icon name="check" size={18} color="#fff" />
+                          <Icon name="check" size={18} color={colors.white} />
                         </View>
                       ) : (
                         <IconCircle icon={ai.icon} tint={ai.tint} bg={ai.bg} />
@@ -310,16 +307,19 @@ export default function PlanPage() {
             </>
           ) : null}
 
-          <Pressable
+          <PressableScale
             onPress={() => setGuideOpen((v) => !v)}
             hitSlop={4}
-            style={({ pressed }) => [styles.guideToggle, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: guideOpen }}
           >
-            <SectionHeader style={{ marginTop: 0, marginBottom: 0, flex: 1 }}>Tap for full {pet.breed} guide</SectionHeader>
-            <View style={guideOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-              <Chevron />
+            <View style={styles.guideToggle}>
+              <SectionHeader style={{ marginTop: 0, marginBottom: 0, flex: 1 }}>Tap for full {pet.breed} guide</SectionHeader>
+              <View style={guideOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
+                <Chevron />
+              </View>
             </View>
-          </Pressable>
+          </PressableScale>
           {guideOpen ? <Text style={styles.sectionHint}>{plan.intro}</Text> : null}
           {GUIDE_GROUPS.map((group) => {
             const items = plan.items.filter((item) => (GUIDE_GROUP_BY_TITLE[item.title] ?? "vet") === group.key);
@@ -327,15 +327,18 @@ export default function PlanPage() {
             const isGroupOpen = openGroups.has(group.key);
             return (
               <View key={group.key} style={{ marginTop: 8 }}>
-                <Pressable
+                <PressableScale
                   onPress={() => toggleGroup(group.key)}
-                  style={({ pressed }) => [styles.groupToggle, pressed && { backgroundColor: colors.fill }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isGroupOpen }}
                 >
-                  <Text style={styles.groupToggleLabel}>{group.label}</Text>
-                  <View style={isGroupOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-                    <Chevron />
+                  <View style={styles.groupToggle}>
+                    <Text style={styles.groupToggleLabel}>{group.label}</Text>
+                    <View style={isGroupOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
+                      <Chevron />
+                    </View>
                   </View>
-                </Pressable>
+                </PressableScale>
                 {isGroupOpen ? (
                   <Group style={{ marginTop: 8 }}>
                     {items.map((item) => {
@@ -344,19 +347,23 @@ export default function PlanPage() {
                       const isOpen = openItems.has(item.title);
                       return (
                         <View key={item.title} style={styles.guideItem}>
-                          <Pressable
+                          <PressableScale
                             onPress={() => toggleItem(item.title)}
-                            style={({ pressed }) => [styles.guideItemHead, pressed && { opacity: 0.7 }]}
+                            hitSlop={6}
+                            accessibilityRole="button"
+                            accessibilityState={{ expanded: isOpen }}
                           >
-                            <IconCircle icon={icon} tint={ai?.tint ?? colors.label2} bg={ai?.bg ?? colors.fill} size={32} iconSize={16} />
-                            <Text style={styles.guideItemTitle}>{item.title}</Text>
-                            <View style={styles.cadencePill}>
-                              <Text style={styles.cadencePillLabel}>{item.cadence}</Text>
+                            <View style={styles.guideItemHead}>
+                              <IconCircle icon={icon} tint={ai?.tint ?? colors.label2} bg={ai?.bg ?? colors.fill} size={32} iconSize={16} />
+                              <Text style={styles.guideItemTitle}>{item.title}</Text>
+                              <Chip style={{ backgroundColor: colors.accentSoft }}>
+                                <Text style={styles.cadencePillLabel}>{item.cadence}</Text>
+                              </Chip>
+                              <View style={isOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
+                                <Chevron />
+                              </View>
                             </View>
-                            <View style={isOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-                              <Chevron />
-                            </View>
-                          </Pressable>
+                          </PressableScale>
                           {isOpen ? <Text style={styles.guideItemDetail}>{item.detail}</Text> : null}
                         </View>
                       );
@@ -407,9 +414,9 @@ export default function PlanPage() {
                   title={f.title}
                   subtitle={f.detail}
                   trailing={
-                    <View style={styles.cadencePill}>
+                    <Chip style={{ backgroundColor: colors.accentSoft }}>
                       <Text style={styles.cadencePillLabel}>{cadence}</Text>
-                    </View>
+                    </Chip>
                   }
                 />
               );
@@ -511,7 +518,6 @@ const styles = StyleSheet.create({
   lockedCta: { marginTop: 28, width: "100%" },
   petSwitcher: { marginTop: 4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44 },
   petSwitcherLabel: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label, paddingHorizontal: 4 },
   doneCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label3 },
   sectionHint: { marginBottom: 12, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
@@ -537,7 +543,6 @@ const styles = StyleSheet.create({
   guideItem: { paddingHorizontal: 16, paddingVertical: 14 },
   guideItemHead: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 },
   guideItemTitle: { flex: 1, fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  cadencePill: { borderRadius: radius.full, backgroundColor: colors.accentSoft, paddingHorizontal: 10, paddingVertical: 4 },
   cadencePillLabel: { fontSize: 11, fontFamily: font.semibold, color: colors.accent },
   guideItemDetail: { marginTop: 8, paddingLeft: 44, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
   targetValue: { fontSize: 13, fontFamily: font.semibold, color: colors.label },

@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
 import Meds from "@/components/Meds";
@@ -10,7 +10,25 @@ import PixelChart from "@/components/pixel/PixelChart";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon } from "@/components/Icons";
-import { AccentButton, Chip, ConfirmRow, Group, IconCircle, Row, SectionHeader, Segmented } from "@/components/ui";
+import {
+  AccentButton,
+  Chip,
+  ConfirmRow,
+  FieldLabel,
+  Footnote,
+  Group,
+  IconCircle,
+  PRESS_SCALE_SMALL,
+  PressableScale,
+  Row,
+  SectionHeader,
+  Segmented,
+  SelectableChip,
+  SheetFooter,
+  SheetSubtitle,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import {
   ACTIONS,
   CARE_PLANS,
@@ -98,49 +116,37 @@ function DateField({
   return (
     <View>
       <View style={dfStyles.stepperRow}>
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={() => onChange(shiftDays(value ?? today, -1))}
+          accessibilityRole="button"
           accessibilityLabel="One day earlier"
           hitSlop={8}
-          style={({ pressed }) => [dfStyles.stepButton, pressed && { backgroundColor: colors.fill }]}
         >
-          <Icon name="chevron-left" size={16} color={colors.accent} />
-        </Pressable>
+          <View style={dfStyles.stepButton}>
+            <Icon name="chevron-left" size={16} color={colors.accent} />
+          </View>
+        </PressableScale>
         <Text style={[dfStyles.valueLabel, value == null && { color: colors.label3 }]}>
           {value != null ? fmtDate(value) : "Not set"}
         </Text>
-        <Pressable
+        <PressableScale
+          scaleTo={PRESS_SCALE_SMALL}
           onPress={() => onChange(shiftDays(value ?? today, 1))}
+          accessibilityRole="button"
           accessibilityLabel="One day later"
           hitSlop={8}
-          style={({ pressed }) => [dfStyles.stepButton, pressed && { backgroundColor: colors.fill }]}
         >
-          <Icon name="chevron-right" size={16} color={colors.accent} />
-        </Pressable>
+          <View style={dfStyles.stepButton}>
+            <Icon name="chevron-right" size={16} color={colors.accent} />
+          </View>
+        </PressableScale>
       </View>
       <View style={dfStyles.chipRow}>
-        {chips.map((c) => {
-          const active = value === c.ts;
-          return (
-            <Pressable
-              key={c.label}
-              onPress={() => onChange(c.ts)}
-              hitSlop={6}
-              style={({ pressed }) => [dfStyles.chip, active && dfStyles.chipActive, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={[dfStyles.chipLabel, active && dfStyles.chipLabelActive]}>{c.label}</Text>
-            </Pressable>
-          );
-        })}
-        {allowClear ? (
-          <Pressable
-            onPress={() => onChange(null)}
-            hitSlop={6}
-            style={({ pressed }) => [dfStyles.chip, value == null && dfStyles.chipActive, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={[dfStyles.chipLabel, value == null && dfStyles.chipLabelActive]}>None</Text>
-          </Pressable>
-        ) : null}
+        {chips.map((c) => (
+          <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
+        ))}
+        {allowClear ? <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} /> : null}
       </View>
     </View>
   );
@@ -151,19 +157,15 @@ const dfStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: colors.card,
     paddingHorizontal: 6,
     paddingVertical: 5,
     ...cardShadow,
   },
-  stepButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  stepButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   valueLabel: { flex: 1, textAlign: "center", fontSize: 16, fontFamily: font.medium, color: colors.label },
   chipRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: { borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 11, paddingVertical: 6 },
-  chipActive: { backgroundColor: colors.accentSoft },
-  chipLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.label2 },
-  chipLabelActive: { color: colors.accent },
 });
 
 export default function PetDetailPage() {
@@ -216,9 +218,9 @@ export default function PetDetailPage() {
       <PushedScreen title="Pet">
         <View style={styles.notFound}>
           <Text style={styles.notFoundTitle}>Pet not found</Text>
-          <Pressable onPress={() => router.replace("/home")} hitSlop={10}>
+          <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => router.replace("/home")} accessibilityRole="button" hitSlop={10}>
             <Text style={styles.notFoundLink}>Back home</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </PushedScreen>
     );
@@ -250,7 +252,9 @@ export default function PetDetailPage() {
         <Text style={styles.heroName}>{pet.name}</Text>
         <Text style={styles.heroBreed}>{pet.breed}</Text>
         <View style={styles.chipRow}>
-          <Pressable
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            accessibilityRole="button"
             accessibilityLabel="Edit age"
             hitSlop={8}
             onPress={() => {
@@ -260,24 +264,24 @@ export default function PetDetailPage() {
                 setBirthdayOpen(true);
               } else setEditing("age");
             }}
-            style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
           >
             <Chip>
               <Text style={styles.chipText}>{formatAge(pet.ageYears)}</Text>
               <Icon name="chevron-right" size={9} color={colors.label3} />
             </Chip>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            accessibilityRole="button"
             accessibilityLabel="Edit weight"
             hitSlop={8}
             onPress={() => setEditing("weight")}
-            style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
           >
             <Chip>
               <Text style={styles.chipText}>{formatWeight(pet.weightKg, state.units)}</Text>
               <Icon name="chevron-right" size={9} color={colors.label3} />
             </Chip>
-          </Pressable>
+          </PressableScale>
           {pet.sex ? <Chip>{pet.sex === "male" ? "Male" : "Female"}</Chip> : null}
           <Chip>{`${pet.owned.length} items`}</Chip>
         </View>
@@ -319,12 +323,19 @@ export default function PetDetailPage() {
             </View>
           </View>
         ) : null}
-        <Pressable onPress={() => setHistoryOpen((v) => !v)} style={styles.historyToggle} hitSlop={4}>
-          <Text style={styles.historyToggleLabel}>History · {pet.weights.length} entries</Text>
-          <View style={historyOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-            <Icon name="chevron-right" size={13} color={colors.label3} />
+        <PressableScale
+          onPress={() => setHistoryOpen((v) => !v)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: historyOpen }}
+        >
+          <View style={styles.historyToggle}>
+            <Text style={styles.historyToggleLabel}>History · {pet.weights.length} entries</Text>
+            <View style={historyOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
+              <Icon name="chevron-right" size={13} color={colors.label3} />
+            </View>
           </View>
-        </Pressable>
+        </PressableScale>
         {historyOpen ? (
           <View style={{ marginTop: 4 }}>
             {[...pet.weights]
@@ -335,29 +346,35 @@ export default function PetDetailPage() {
                   <Text style={styles.historyDate}>{fmtDate(w.ts)}</Text>
                   <View style={styles.historyRight}>
                     <Text style={styles.historyWeight}>{formatWeight(w.kg, state.units)}</Text>
-                    <Pressable
+                    <PressableScale
+                      scaleTo={PRESS_SCALE_SMALL}
                       onPress={() => deleteWeight(pet.id, w.id)}
+                      accessibilityRole="button"
                       accessibilityLabel={`Delete weight entry from ${fmtDate(w.ts)}`}
                       hitSlop={10}
-                      style={({ pressed }) => [styles.smallDelete, pressed && { backgroundColor: colors.fill }]}
                     >
-                      <Icon name="xmark" size={13} color={colors.label3} />
-                    </Pressable>
+                      <View style={styles.smallDelete}>
+                        <Icon name="xmark" size={13} color={colors.label3} />
+                      </View>
+                    </PressableScale>
                   </View>
                 </View>
               ))}
-            <Pressable
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
               onPress={() => {
                 setBfWeight("");
                 setBfDate(null);
                 setBackfillOpen(true);
               }}
-              hitSlop={6}
-              style={({ pressed }) => [styles.backfillLink, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              hitSlop={10}
             >
-              <Icon name="plus" size={13} color={colors.accent} />
-              <Text style={styles.backfillLabel}>Add for a past date</Text>
-            </Pressable>
+              <View style={styles.backfillLink}>
+                <Icon name="plus" size={13} color={colors.accent} />
+                <Text style={styles.backfillLabel}>Add for a past date</Text>
+              </View>
+            </PressableScale>
           </View>
         ) : null}
       </View>
@@ -438,17 +455,21 @@ export default function PetDetailPage() {
               }
               trailing={
                 s.level < 100 ? (
-                  <Pressable
+                  <PressableScale
+                    scaleTo={PRESS_SCALE_SMALL}
                     onPress={() => {
                       restockSupply(pet.id, s.id);
                       toast("box", `${s.name} restocked`, "Back to 100%");
                     }}
-                    hitSlop={8}
-                    style={({ pressed }) => [styles.restockButton, pressed && { transform: [{ scale: 0.95 }] }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Restock ${s.name}`}
+                    hitSlop={10}
                   >
-                    <Icon name="refresh" size={12} color={colors.accent} />
-                    <Text style={styles.restockLabel}>Restock</Text>
-                  </Pressable>
+                    <View style={styles.restockButton}>
+                      <Icon name="refresh" size={12} color={colors.accent} />
+                      <Text style={styles.restockLabel}>Restock</Text>
+                    </View>
+                  </PressableScale>
                 ) : (
                   <Text style={styles.fullLabel}>Full</Text>
                 )
@@ -464,18 +485,20 @@ export default function PetDetailPage() {
       {/* Vaccinations */}
       <SectionHeader
         trailing={
-          <Pressable
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
             onPress={() => {
               setVaccName("");
               setVaccGiven(null);
               setVaccNext(null);
               setVaccOpen(true);
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Add vaccination"
             hitSlop={10}
-            style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
           >
             <Text style={styles.headerLink}>Add</Text>
-          </Pressable>
+          </PressableScale>
         }
       >
         Vaccinations
@@ -504,14 +527,17 @@ export default function PetDetailPage() {
                   </Text>
                 }
                 trailing={
-                  <Pressable
+                  <PressableScale
+                    scaleTo={PRESS_SCALE_SMALL}
                     onPress={() => deleteVaccination(pet.id, v.id)}
+                    accessibilityRole="button"
                     accessibilityLabel={`Delete ${v.name}`}
                     hitSlop={10}
-                    style={({ pressed }) => [styles.smallDelete, pressed && { backgroundColor: colors.fill }]}
                   >
-                    <Icon name="xmark" size={15} color={colors.label3} />
-                  </Pressable>
+                    <View style={styles.smallDelete}>
+                      <Icon name="xmark" size={15} color={colors.label3} />
+                    </View>
+                  </PressableScale>
                 }
               />
             );
@@ -522,18 +548,20 @@ export default function PetDetailPage() {
       {/* Vet visits */}
       <SectionHeader
         trailing={
-          <Pressable
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
             onPress={() => {
               setVisitDate(null);
               setVisitVet("");
               setVisitReason("");
               setVisitOpen(true);
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Log a vet visit"
             hitSlop={10}
-            style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
           >
             <Text style={styles.headerLink}>Log visit</Text>
-          </Pressable>
+          </PressableScale>
         }
       >
         Vet visits
@@ -553,14 +581,17 @@ export default function PetDetailPage() {
               title={v.reason || "Vet visit"}
               subtitle={`${v.vetName ? `${v.vetName} · ` : ""}${fmtDate(v.ts)}`}
               trailing={
-                <Pressable
+                <PressableScale
+                  scaleTo={PRESS_SCALE_SMALL}
                   onPress={() => deleteVetVisit(pet.id, v.id)}
+                  accessibilityRole="button"
                   accessibilityLabel="Delete vet visit"
                   hitSlop={10}
-                  style={({ pressed }) => [styles.smallDelete, pressed && { backgroundColor: colors.fill }]}
                 >
-                  <Icon name="xmark" size={15} color={colors.label3} />
-                </Pressable>
+                  <View style={styles.smallDelete}>
+                    <Icon name="xmark" size={15} color={colors.label3} />
+                  </View>
+                </PressableScale>
               }
             />
           ))
@@ -600,13 +631,15 @@ export default function PetDetailPage() {
         <>
           <SectionHeader
             trailing={
-              <Pressable
+              <PressableScale
+                scaleTo={PRESS_SCALE_SMALL}
                 onPress={() => router.push("/plan")}
+                accessibilityRole="button"
+                accessibilityLabel="Open full care plan"
                 hitSlop={10}
-                style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
               >
                 <Text style={styles.headerLink}>Full plan</Text>
-              </Pressable>
+              </PressableScale>
             }
           >
             Care plan
@@ -630,9 +663,15 @@ export default function PetDetailPage() {
       {/* Recent activity */}
       <SectionHeader
         trailing={
-          <Pressable onPress={() => router.push("/activity")} hitSlop={10} style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}>
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            onPress={() => router.push("/activity")}
+            accessibilityRole="button"
+            accessibilityLabel="All activity"
+            hitSlop={10}
+          >
             <Text style={styles.headerLink}>All</Text>
-          </Pressable>
+          </PressableScale>
         }
       >
         Recent activity
@@ -750,8 +789,8 @@ export default function PetDetailPage() {
       />
 
       <Sheet open={sexOpen} onClose={() => setSexOpen(false)}>
-        <Text style={styles.sheetTitle}>{pet.name}&apos;s sex</Text>
-        <Text style={styles.sheetSubtitle}>Used for the age-and-sex-specific weight &amp; feeding guide</Text>
+        <SheetTitle>{pet.name}&apos;s sex</SheetTitle>
+        <SheetSubtitle>Used for the age-and-sex-specific weight &amp; feeding guide</SheetSubtitle>
         <View style={{ marginTop: 20 }}>
           <Segmented
             options={[
@@ -763,7 +802,7 @@ export default function PetDetailPage() {
             onChange={setSexVal}
           />
         </View>
-        <View style={styles.sheetFooter}>
+        <SheetFooter>
           <AccentButton
             onPress={() => {
               editPet(pet.id, { ...basePatch, sex: sexVal === "unset" ? null : sexVal });
@@ -773,30 +812,24 @@ export default function PetDetailPage() {
           >
             Save
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
 
       <Sheet open={vaccOpen} onClose={() => setVaccOpen(false)}>
-        <Text style={styles.sheetTitle}>Add vaccination</Text>
-        <Text style={styles.sheetSubtitle}>For {pet.name} — from the vaccine booklet or vet record</Text>
+        <SheetTitle>Add vaccination</SheetTitle>
+        <SheetSubtitle>For {pet.name} — from the vaccine booklet or vet record</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>Vaccine</Text>
-        <TextInput
-          value={vaccName}
-          onChangeText={setVaccName}
-          placeholder="e.g. Rabies, FVRCP, DHPP…"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
-        />
+        <FieldLabel>Vaccine</FieldLabel>
+        <TextField value={vaccName} onChangeText={setVaccName} placeholder="e.g. Rabies, FVRCP, DHPP…" returnKeyType="done" />
 
-        <Text style={styles.fieldLabel}>Date given</Text>
+        <FieldLabel>Date given</FieldLabel>
         <DateField value={vaccGiven} onChange={setVaccGiven} mode="past" />
 
-        <Text style={styles.fieldLabel}>Next due (optional)</Text>
+        <FieldLabel>Next due (optional)</FieldLabel>
         <DateField value={vaccNext} onChange={setVaccNext} mode="future" allowClear />
-        <Text style={styles.fieldHint}>With a next-due date, a reminder is created for the family automatically.</Text>
+        <Footnote>With a next-due date, a reminder is created for the family automatically.</Footnote>
 
-        <View style={styles.sheetFooter}>
+        <SheetFooter>
           <AccentButton
             disabled={!vaccName.trim() || vaccGiven == null}
             onPress={() => {
@@ -813,35 +846,33 @@ export default function PetDetailPage() {
           >
             Save vaccination
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
 
       <Sheet open={visitOpen} onClose={() => setVisitOpen(false)}>
-        <Text style={styles.sheetTitle}>Log a vet visit</Text>
-        <Text style={styles.sheetSubtitle}>Builds {pet.name}&apos;s health history</Text>
+        <SheetTitle>Log a vet visit</SheetTitle>
+        <SheetSubtitle>Builds {pet.name}&apos;s health history</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>Date</Text>
+        <FieldLabel>Date</FieldLabel>
         <DateField value={visitDate} onChange={setVisitDate} mode="past" />
 
-        <Text style={styles.fieldLabel}>Reason (optional)</Text>
-        <TextInput
+        <FieldLabel>Reason (optional)</FieldLabel>
+        <TextField
           value={visitReason}
           onChangeText={setVisitReason}
           placeholder="e.g. Annual checkup, limping, dental…"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="done"
         />
 
-        <Text style={styles.fieldLabel}>Vet or clinic (optional)</Text>
-        <TextInput
+        <FieldLabel>Vet or clinic (optional)</FieldLabel>
+        <TextField
           value={visitVet}
           onChangeText={setVisitVet}
           placeholder="e.g. Dr. Weber, Happy Paws Clinic"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="done"
         />
 
-        <View style={styles.sheetFooter}>
+        <SheetFooter>
           <AccentButton
             disabled={visitDate == null}
             onPress={() => {
@@ -857,17 +888,17 @@ export default function PetDetailPage() {
           >
             Save visit
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
 
       <Sheet open={birthdayOpen} onClose={() => setBirthdayOpen(false)}>
-        <Text style={styles.sheetTitle}>{pet.name}&apos;s birth date</Text>
-        <Text style={styles.sheetSubtitle}>Age updates automatically from now on</Text>
+        <SheetTitle>{pet.name}&apos;s birth date</SheetTitle>
+        <SheetSubtitle>Age updates automatically from now on</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>Born</Text>
+        <FieldLabel>Born</FieldLabel>
         <DateField value={birthdayTs} onChange={setBirthdayTs} mode="past" />
 
-        <View style={styles.sheetFooter}>
+        <SheetFooter>
           <AccentButton
             disabled={birthdayTs == null}
             onPress={() => {
@@ -883,26 +914,26 @@ export default function PetDetailPage() {
           >
             Save
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
 
       <Sheet open={backfillOpen} onClose={() => setBackfillOpen(false)}>
-        <Text style={styles.sheetTitle}>Past weight entry</Text>
-        <Text style={styles.sheetSubtitle}>For {pet.name} — from an old vet note or memory</Text>
+        <SheetTitle>Past weight entry</SheetTitle>
+        <SheetSubtitle>For {pet.name} — from an old vet note or memory</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>Weight ({weightUnitLabel(state.units)})</Text>
-        <TextInput
+        <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
+        <TextField
           keyboardType="decimal-pad"
           inputMode="decimal"
           value={bfWeight}
           onChangeText={setBfWeight}
-          style={styles.input}
+          returnKeyType="done"
         />
 
-        <Text style={styles.fieldLabel}>Date</Text>
+        <FieldLabel>Date</FieldLabel>
         <DateField value={bfDate} onChange={setBfDate} mode="past" />
 
-        <View style={styles.sheetFooter}>
+        <SheetFooter>
           <AccentButton
             disabled={bfDate == null || bfWeight.trim() === "" || !Number.isFinite(Number(bfWeight)) || Number(bfWeight) <= 0}
             onPress={() => {
@@ -919,7 +950,7 @@ export default function PetDetailPage() {
           >
             Add entry
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
     </PushedScreen>
   );
@@ -999,27 +1030,4 @@ const styles = StyleSheet.create({
   activityTitle: { fontSize: 16 },
   activityWho: { fontFamily: font.semibold, color: colors.label },
   activityVerb: { fontFamily: font.regular, color: colors.label2 },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSubtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  fieldLabel: {
-    marginTop: 20,
-    marginBottom: 6,
-    fontSize: 13,
-    fontFamily: font.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: colors.label2,
-  },
-  fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  input: {
-    borderRadius: 12,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-    ...cardShadow,
-  },
-  sheetFooter: { marginTop: 28 },
 });

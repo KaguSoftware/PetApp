@@ -1,15 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Share, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { AccentButton } from "@/components/ui";
+import { AccentButton, Footnote, PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { VET, VETS, formatAge, formatWeight, isAdminRole, nextAnniversary, nextBirthday } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, floatShadow, font, radius } from "@/lib/theme";
+import { colors, floatShadow, font, radius, withAlpha } from "@/lib/theme";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
 
@@ -46,9 +46,9 @@ export default function PetCardPage() {
       <PushedScreen title="Pet card">
         <View style={styles.notFound}>
           <Text style={styles.notFoundTitle}>Pet not found</Text>
-          <Pressable onPress={() => router.replace("/home")} hitSlop={10}>
+          <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => router.replace("/home")} accessibilityRole="button" hitSlop={10}>
             <Text style={styles.notFoundLink}>Back home</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </PushedScreen>
     );
@@ -86,19 +86,16 @@ export default function PetCardPage() {
     <PushedScreen
       title="Pet card"
       trailing={
-        <Pressable
-          onPress={share}
-          accessibilityLabel="Share card"
-          hitSlop={8}
-          style={({ pressed }) => [styles.shareButton, pressed && { transform: [{ scale: 0.9 }] }]}
-        >
-          <Icon name="share" size={16} color={colors.accent} />
-        </Pressable>
+        <PressableScale scaleTo={PRESS_SCALE_SMALL} haptic onPress={share} accessibilityRole="button" accessibilityLabel="Share card" hitSlop={8}>
+          <View style={styles.shareButton}>
+            <Icon name="share" size={16} color={colors.accent} />
+          </View>
+        </PressableScale>
       }
     >
       <View style={styles.card}>
         <LinearGradient
-          colors={[`${pet.gradient[0]}22`, `${pet.gradient[1]}11`]}
+          colors={[withAlpha(pet.gradient[0], 0.13), withAlpha(pet.gradient[1], 0.07)]}
           start={{ x: 0.1, y: 0 }}
           end={{ x: 0.9, y: 1 }}
           style={styles.cardHero}
@@ -162,16 +159,16 @@ export default function PetCardPage() {
 
       <View style={styles.actions}>
         <AccentButton onPress={share}>
-          <Icon name="share" size={17} color="#fff" />
+          <Icon name="share" size={17} color={colors.white} />
           <Text style={styles.shareLabel}>Share</Text>
         </AccentButton>
         <AccentButton variant="gray" onPress={() => setVariant((v) => (v === "emergency" ? "profile" : "emergency"))}>
           {variant === "emergency" ? "Show profile card" : "Show emergency card"}
         </AccentButton>
-        <Text style={styles.footnote}>
+        <Footnote style={{ paddingHorizontal: 8 }}>
           The emergency card is what you&apos;d hand a sitter or post if {pet.name} ever went missing — keep the microchip and allergy
           info up to date in Settings ▸ Family.
-        </Text>
+        </Footnote>
       </View>
       <View style={{ height: 16 }} />
     </PushedScreen>
@@ -215,6 +212,5 @@ const styles = StyleSheet.create({
   allergyLabel: { fontSize: 12, fontFamily: font.semibold, textTransform: "uppercase", letterSpacing: 0.6, color: colors.red },
   allergyValue: { marginTop: 1, fontSize: 14, fontFamily: font.semibold, color: colors.label, lineHeight: 19 },
   actions: { marginTop: 16, gap: 10 },
-  shareLabel: { fontSize: 17, fontFamily: font.semibold, color: "#fff" },
-  footnote: { paddingHorizontal: 8, textAlign: "center", fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 18 },
+  shareLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.white },
 });

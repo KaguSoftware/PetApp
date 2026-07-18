@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
-import { AccentButton, Segmented } from "@/components/ui";
+import { AccentButton, Segmented, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { PORTIONS, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { colors, font } from "@/lib/theme";
@@ -40,10 +40,10 @@ export default function FeedPortionSheet({
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <Text style={styles.title}>How much food?</Text>
-      <Text style={styles.subtitle}>
+      <SheetTitle>How much food?</SheetTitle>
+      <SheetSubtitle>
         For {pet.name} · {pet.cupGrams} g per full cup
-      </Text>
+      </SheetSubtitle>
       <View style={{ marginTop: 20 }}>
         <Segmented options={PORTIONS} value={fraction} onChange={setFraction} />
       </View>
@@ -53,9 +53,9 @@ export default function FeedPortionSheet({
       {treatsSupply ? (
         <View style={styles.treatBlock}>
           <Text style={styles.treatTitle}>Give a treat instead?</Text>
-          <Text style={styles.subtitle}>
+          <SheetSubtitle>
             {treatsSupply.name} · {treatsSupply.level}% left
-          </Text>
+          </SheetSubtitle>
           <View style={{ marginTop: 12 }}>
             <AccentButton variant="tinted" onPress={confirmTreat}>
               Give treat
@@ -68,8 +68,6 @@ export default function FeedPortionSheet({
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  subtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   treatBlock: { marginTop: 24, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, paddingTop: 20 },
-  treatTitle: { fontSize: 15, fontFamily: font.bold, color: colors.label },
+  treatTitle: { fontSize: 15, fontFamily: font.bold, color: colors.label, paddingHorizontal: 4 },
 });

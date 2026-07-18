@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, type IconName } from "@/components/Icons";
 import { InitialAvatar } from "@/components/PetAvatar";
 import PixelPet from "@/components/pixel/PixelPet";
-import { AccentButton } from "@/components/ui";
+import { AccentButton, PressableScale } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, HIT } from "@/lib/theme";
+import { colors, font, radius, withAlpha, HIT } from "@/lib/theme";
 
 const FEATURES: { icon: IconName; title: string; body: string }[] = [
   { icon: "bell", title: "Log care together", body: "Feed, walk, clean — everyone in the family gets notified instantly." },
@@ -101,9 +101,11 @@ export default function Welcome() {
             {step < 2 ? "Next" : "Start exploring"}
           </AccentButton>
           {step < 2 ? (
-            <Pressable onPress={finish} style={({ pressed }) => [styles.skip, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.skipLabel}>Skip</Text>
-            </Pressable>
+            <PressableScale onPress={finish} accessibilityRole="button">
+              <View style={styles.skip}>
+                <Text style={styles.skipLabel}>Skip</Text>
+              </View>
+            </PressableScale>
           ) : null}
         </View>
       </View>
@@ -160,7 +162,7 @@ const styles = StyleSheet.create({
   stepHint: { marginTop: 20, fontSize: 13, fontFamily: font.regular, color: colors.label3, textAlign: "center" },
   controls: { paddingHorizontal: 28 },
   dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 16 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(28, 28, 35, 0.18)" },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: withAlpha(colors.label, 0.18) },
   dotActive: { width: 20, backgroundColor: colors.accent },
   skip: { marginTop: 4, minHeight: HIT, alignItems: "center", justifyContent: "center" },
   skipLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },

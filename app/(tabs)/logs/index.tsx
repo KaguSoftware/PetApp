@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
@@ -11,10 +11,28 @@ import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon } from "@/components/Icons";
-import { AccentButton, Chevron, CoinPill, Group, Row, SectionHeader, Segmented } from "@/components/ui";
+import {
+  AccentButton,
+  Chevron,
+  CoinPill,
+  FieldLabel,
+  Group,
+  PressableScale,
+  Row,
+  SectionHeader,
+  Segmented,
+  SelectableChip,
+  SheetFooter,
+  SheetSubtitle,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import { ACTIONS, CARE_PLANS, type ActionType } from "@/lib/data";
 import { ALERT_VERB, useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { cardShadow, colors, font, radius } from "@/lib/theme";
+
+/** TextField forwards every prop to TextInput; React 19 delivers `ref` as a
+ *  regular prop, so this alias just teaches the types about it. */
 
 const CAT_ACTIONS: ActionType[] = ["fed", "water", "litter", "groomed", "meds", "vet"];
 const DOG_ACTIONS: ActionType[] = ["fed", "water", "walk", "groomed", "meds", "vet"];
@@ -56,6 +74,7 @@ export default function LogsScreen() {
   const [vetDetailOpen, setVetDetailOpen] = useState(false);
   const [vetReason, setVetReason] = useState("");
   const [vetClinic, setVetClinic] = useState("");
+  const vetClinicRef = useRef<TextInput>(null);
   const prevDayDoneRef = useRef<{ petId: string; done: boolean } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(flashTimer.current), []);
@@ -120,6 +139,10 @@ export default function LogsScreen() {
     flashTimer.current = setTimeout(() => setJustLogged(null), 700);
   };
 
+  const successHaptic = () => {
+    if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   // Parsed "HH:MM" from the retro sheet — null while incomplete/invalid.
   const parsedRetroTime = (() => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(retroTime.trim());
@@ -166,14 +189,18 @@ export default function LogsScreen() {
       }
     >
       {state.pets.length > 1 ? (
-        <Pressable onPress={() => setPetPickerOpen(true)} style={({ pressed }) => [styles.petSwitcher, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.petSwitcherName}>{pet.name}</Text>
-          <Chevron />
-        </Pressable>
+        <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginTop: 12 }}>
+          <View style={styles.petSwitcher}>
+            <Text style={styles.petSwitcherName}>{pet.name}</Text>
+            <Chevron />
+          </View>
+        </PressableScale>
       ) : null}
 
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <Text style={[styles.sheetTitle, { marginBottom: 12, paddingHorizontal: 4 }]}>Switch pet</Text>
+        <View style={{ marginBottom: 12 }}>
+          <SheetTitle>Switch pet</SheetTitle>
+        </View>
         <Group>
           {state.pets.map((p) => (
             <Row
@@ -199,15 +226,16 @@ export default function LogsScreen() {
           const flashing = justLogged === type;
           const warning = !flashing && careWarnings.has(type);
           return (
-            <Pressable
+            <PressableScale
               key={type}
+              haptic
+              accessibilityRole="button"
               onPress={() => {
                 if (type === "fed") {
                   setFeedPortionOpen(true);
                   return;
                 }
                 if (logAction(pet.id, type)) {
-                  if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   flash(type);
                   // A vet tap naturally produces a health-history record — offer
                   // the details right away, skippable.
@@ -218,45 +246,50 @@ export default function LogsScreen() {
                   }
                 }
               }}
-              style={({ pressed }) => [styles.tile, pressed && { transform: [{ scale: 0.96 }] }]}
+              style={styles.tileWrap}
             >
-              {flashing ? <CoinPop /> : null}
-              {warning ? (
-                <View style={styles.warningBadge} accessibilityLabel={`${ACTIONS[type].label} warning`}>
-                  <Icon name="alert" size={14} color={colors.red} />
+              <View style={styles.tile}>
+                {flashing ? <CoinPop /> : null}
+                {warning ? (
+                  <View style={styles.warningBadge} accessibilityLabel={`${ACTIONS[type].label} warning`}>
+                    <Icon name="alert" size={14} color={colors.red} />
+                  </View>
+                ) : null}
+                <View style={[styles.tileIcon, { backgroundColor: flashing ? colors.green : a.bg }]}>
+                  {flashing ? <Icon name="check" size={18} color={colors.white} /> : <Icon name={a.icon} size={19} color={a.tint} />}
                 </View>
-              ) : null}
-              <View style={[styles.tileIcon, { backgroundColor: flashing ? colors.green : a.bg }]}>
-                {flashing ? <Icon name="check" size={18} color={colors.white} /> : <Icon name={a.icon} size={19} color={a.tint} />}
+                <Text style={styles.tileLabel}>{type === "meds" && pet.meds.length === 0 ? "No meds" : ACTIONS[type].label}</Text>
               </View>
-              <Text style={styles.tileLabel}>{type === "meds" && pet.meds.length === 0 ? "No meds" : ACTIONS[type].label}</Text>
-            </Pressable>
+            </PressableScale>
           );
         })}
       </View>
 
-      <Pressable
+      <PressableScale
         onPress={() => {
           setRetroType(null);
           setRetroDay("today");
           setRetroTime("");
           setRetroOpen(true);
         }}
-        style={({ pressed }) => [styles.retroLink, pressed && { opacity: 0.6 }]}
+        accessibilityRole="button"
+        style={{ marginTop: 16, alignSelf: "flex-start" }}
       >
-        <Icon name="clock" size={13} color={colors.accent} />
-        <Text style={styles.retroLinkLabel}>Forgot to log something earlier?</Text>
-      </Pressable>
+        <View style={styles.retroLink}>
+          <Icon name="clock" size={13} color={colors.accent} />
+          <Text style={styles.retroLinkLabel}>Forgot to log something earlier?</Text>
+        </View>
+      </PressableScale>
 
       <Text style={styles.footnote}>
         Every action is shared with the family and shows up in Activity. Tap the bell any time to see what everyone&apos;s been up to.
       </Text>
 
       <Sheet open={retroOpen} onClose={() => setRetroOpen(false)}>
-        <Text style={styles.sheetTitle}>Log an earlier action</Text>
-        <Text style={styles.sheetSubtitle}>For {pet.name} — backfill something you forgot</Text>
+        <SheetTitle>Log an earlier action</SheetTitle>
+        <SheetSubtitle>For {pet.name} — backfill something you forgot</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>WHAT HAPPENED</Text>
+        <FieldLabel>What happened</FieldLabel>
         <View style={styles.chipsWrap}>
           {actions
             .filter((t) => !(t === "meds" && pet.meds.length === 0))
@@ -264,19 +297,18 @@ export default function LogsScreen() {
               const a = ACTION_ICON[type];
               const active = retroType === type;
               return (
-                <Pressable
+                <SelectableChip
                   key={type}
+                  label={ACTIONS[type].label}
+                  selected={active}
                   onPress={() => setRetroType(type)}
-                  style={({ pressed }) => [styles.actionChip, active && styles.actionChipActive, pressed && { transform: [{ scale: 0.96 }] }]}
-                >
-                  <Icon name={a.icon} size={14} color={active ? colors.white : colors.label} />
-                  <Text style={[styles.actionChipLabel, active && { color: colors.white }]}>{ACTIONS[type].label}</Text>
-                </Pressable>
+                  leading={<Icon name={a.icon} size={14} color={active ? colors.white : colors.label} />}
+                />
               );
             })}
         </View>
 
-        <Text style={styles.fieldLabel}>WHEN</Text>
+        <FieldLabel>When</FieldLabel>
         <Segmented
           options={[
             { value: "today", label: "Earlier today" },
@@ -285,16 +317,16 @@ export default function LogsScreen() {
           value={retroDay}
           onChange={setRetroDay}
         />
-        <TextInput
+        <TextField
           value={retroTime}
           onChangeText={setRetroTime}
           placeholder="HH:MM — e.g. 14:30"
-          placeholderTextColor={colors.label3}
-          keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "default"}
-          style={[styles.input, { marginTop: 10 }]}
+          keyboardType="numbers-and-punctuation"
+          returnKeyType="done"
+          style={{ marginTop: 10 }}
         />
 
-        <View style={{ marginTop: 28 }}>
+        <SheetFooter>
           <AccentButton
             disabled={!retroType || !parsedRetroTime}
             onPress={() => {
@@ -304,51 +336,58 @@ export default function LogsScreen() {
                 toast("alert", "That time hasn't happened yet", "Pick a time in the past");
                 return;
               }
-              if (logAction(pet.id, retroType, undefined, ts)) setRetroOpen(false);
+              if (logAction(pet.id, retroType, undefined, ts)) {
+                successHaptic();
+                setRetroOpen(false);
+              }
             }}
           >
             Log it
           </AccentButton>
-        </View>
+        </SheetFooter>
       </Sheet>
 
       <Sheet open={vetDetailOpen} onClose={() => setVetDetailOpen(false)}>
-        <Text style={styles.sheetTitle}>Add visit details?</Text>
-        <Text style={styles.sheetSubtitle}>Saved to {pet.name}&apos;s health history — skip if it was nothing</Text>
+        <SheetTitle>Add visit details?</SheetTitle>
+        <SheetSubtitle>Saved to {pet.name}&apos;s health history — skip if it was nothing</SheetSubtitle>
 
-        <Text style={styles.fieldLabel}>REASON</Text>
-        <TextInput
+        <FieldLabel>Reason</FieldLabel>
+        <TextField
           value={vetReason}
           onChangeText={setVetReason}
           placeholder="e.g. Annual checkup, vaccination…"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => vetClinicRef.current?.focus()}
         />
 
-        <Text style={styles.fieldLabel}>VET OR CLINIC (OPTIONAL)</Text>
-        <TextInput
+        <FieldLabel>Vet or clinic (optional)</FieldLabel>
+        <TextField
+          ref={vetClinicRef}
           value={vetClinic}
           onChangeText={setVetClinic}
           placeholder="e.g. Dr. Weber, Happy Paws Clinic"
-          placeholderTextColor={colors.label3}
-          style={styles.input}
+          returnKeyType="done"
         />
 
-        <View style={{ marginTop: 28, gap: 10 }}>
-          <AccentButton
-            disabled={!vetReason.trim() && !vetClinic.trim()}
-            onPress={() => {
-              addVetVisit(pet.id, { ts: Date.now(), reason: vetReason.trim() || undefined, vetName: vetClinic.trim() || undefined });
-              setVetDetailOpen(false);
-              toast("stethoscope", "Visit saved", `${pet.name}'s health history updated`);
-            }}
-          >
-            Save details
-          </AccentButton>
-          <AccentButton variant="gray" onPress={() => setVetDetailOpen(false)}>
-            Skip
-          </AccentButton>
-        </View>
+        <SheetFooter>
+          <View style={{ gap: 10 }}>
+            <AccentButton
+              disabled={!vetReason.trim() && !vetClinic.trim()}
+              onPress={() => {
+                addVetVisit(pet.id, { ts: Date.now(), reason: vetReason.trim() || undefined, vetName: vetClinic.trim() || undefined });
+                successHaptic();
+                setVetDetailOpen(false);
+                toast("stethoscope", "Visit saved", `${pet.name}'s health history updated`);
+              }}
+            >
+              Save details
+            </AccentButton>
+            <AccentButton variant="gray" onPress={() => setVetDetailOpen(false)}>
+              Skip
+            </AccentButton>
+          </View>
+        </SheetFooter>
       </Sheet>
 
       <FeedPortionSheet
@@ -356,7 +395,7 @@ export default function LogsScreen() {
         open={feedPortionOpen}
         onClose={() => setFeedPortionOpen(false)}
         onLogged={() => {
-          if (Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          successHaptic();
           flash("fed");
         }}
       />
@@ -365,22 +404,17 @@ export default function LogsScreen() {
 }
 
 const styles = StyleSheet.create({
-  petSwitcher: { marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
+  petSwitcher: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
   petSwitcherName: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  tileWrap: { flexBasis: "30%", flexGrow: 1 },
   tile: {
-    flexBasis: "30%",
-    flexGrow: 1,
     alignItems: "flex-start",
     gap: 10,
     borderRadius: radius.lg,
     backgroundColor: colors.card,
     padding: 14,
-    shadowColor: "#3a3945",
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    ...cardShadow,
   },
   tileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   tileLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
@@ -396,37 +430,8 @@ const styles = StyleSheet.create({
   },
   coinPopLabel: { fontSize: 12, fontFamily: font.bold, color: colors.orange },
   warningBadge: { position: "absolute", right: 8, top: 8, zIndex: 10 },
-  retroLink: { marginTop: 16, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
+  retroLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
   retroLinkLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
   footnote: { marginTop: 4, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSubtitle: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.8, color: colors.label2 },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  actionChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor: "#3a3945",
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  actionChipActive: { backgroundColor: colors.accent },
-  actionChipLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
-  input: {
-    width: "100%",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    fontFamily: font.medium,
-    color: colors.label,
-  },
 });

@@ -1,15 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import NotificationBell from "@/components/NotificationBell";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import { TabScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { Chevron, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SmallButton } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { colors, font, radius, withAlpha } from "@/lib/theme";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -41,20 +41,19 @@ export default function SettingsPage() {
             title="PetPal+ is active"
             subtitle="Care plans, smart reminders & vet booking"
             trailing={
-              <Pressable
+              <SmallButton
+                label="Turn off"
+                tone="gray"
                 onPress={() => {
                   setPremium(false);
                   toast("sparkles", "PetPal+ deactivated", "You can re-enable it anytime");
                 }}
-                style={({ pressed }) => [styles.turnOff, pressed && { transform: [{ scale: 0.95 }] }]}
-              >
-                <Text style={styles.turnOffLabel}>Turn off</Text>
-              </Pressable>
+              />
             }
           />
         </Group>
       ) : (
-        <Pressable onPress={() => setPaywallOpen(true)} style={({ pressed }) => pressed && { transform: [{ scale: 0.98 }] }}>
+        <PressableScale onPress={() => setPaywallOpen(true)} accessibilityRole="button">
           <LinearGradient colors={[colors.accent, colors.accentDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.upgradeCard}>
             <View style={styles.upgradeRow}>
               <View style={styles.upgradeIcon}>
@@ -64,10 +63,10 @@ export default function SettingsPage() {
                 <Text style={styles.upgradeTitle}>Upgrade to PetPal+</Text>
                 <Text style={styles.upgradeBody}>Vet-built plans · smart reminders · booking</Text>
               </View>
-              <Icon name="chevron-right" size={16} color="rgba(255, 255, 255, 0.7)" />
+              <Icon name="chevron-right" size={16} color={withAlpha(colors.white, 0.7)} />
             </View>
           </LinearGradient>
-        </Pressable>
+        </PressableScale>
       )}
 
       <SectionHeader>Settings</SectionHeader>
@@ -108,17 +107,7 @@ export default function SettingsPage() {
 }
 
 const styles = StyleSheet.create({
-  plusTile: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  turnOff: {
-    borderRadius: radius.full,
-    backgroundColor: colors.fill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    minHeight: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  turnOffLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
+  plusTile: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
   upgradeCard: {
     borderRadius: radius.md,
     padding: 16,
@@ -132,12 +121,12 @@ const styles = StyleSheet.create({
   upgradeIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderRadius: radius.sm,
+    backgroundColor: withAlpha(colors.white, 0.15),
     alignItems: "center",
     justifyContent: "center",
   },
   upgradeText: { flex: 1, minWidth: 0 },
   upgradeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.white },
-  upgradeBody: { fontSize: 13, fontFamily: font.medium, color: "rgba(255, 255, 255, 0.8)" },
+  upgradeBody: { fontSize: 13, fontFamily: font.medium, color: withAlpha(colors.white, 0.8) },
 });

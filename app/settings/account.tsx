@@ -1,16 +1,27 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import StreakCalendarSheet from "@/components/StreakCalendarSheet";
-import { AccentButton, Chevron, ConfirmRow, Group, IconCircle, Row, SectionHeader } from "@/components/ui";
+import {
+  AccentButton,
+  Chevron,
+  ConfirmRow,
+  Group,
+  IconCircle,
+  Row,
+  SectionHeader,
+  SheetSubtitle,
+  SheetTitle,
+  TextField,
+} from "@/components/ui";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { colors, font, radius } from "@/lib/theme";
+import { colors, font } from "@/lib/theme";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
@@ -118,7 +129,7 @@ export default function AccountSettingsPage() {
           }}
           trailing={<Chevron />}
         />
-        <Row destructive onPress={signOut} title="Sign out" />
+        <ConfirmRow label="Sign out" confirmLabel="Tap again to sign out" onConfirm={signOut} />
         <ConfirmRow label="Delete account" confirmLabel="Tap again to permanently delete" onConfirm={deleteAccount} />
       </Group>
       <Text style={styles.footnote}>
@@ -136,27 +147,13 @@ export default function AccountSettingsPage() {
           setFormError(null);
         }}
       >
-        <Text style={styles.sheetTitle}>Change password</Text>
+        <SheetTitle>Change password</SheetTitle>
         <View style={styles.form}>
-          <TextInput
-            secureTextEntry
-            placeholder="New password"
-            placeholderTextColor={colors.label3}
-            value={newPw}
-            onChangeText={setNewPw}
-            style={styles.input}
-          />
-          <TextInput
-            secureTextEntry
-            placeholder="Confirm new password"
-            placeholderTextColor={colors.label3}
-            value={confirmPw}
-            onChangeText={setConfirmPw}
-            style={styles.input}
-          />
+          <TextField secureTextEntry placeholder="New password" value={newPw} onChangeText={setNewPw} />
+          <TextField secureTextEntry placeholder="Confirm new password" value={confirmPw} onChangeText={setConfirmPw} />
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-          <AccentButton disabled={busy} onPress={changePassword}>
-            {busy ? "Saving…" : "Update password"}
+          <AccentButton loading={busy} onPress={changePassword}>
+            Update password
           </AccentButton>
         </View>
       </Sheet>
@@ -169,22 +166,20 @@ export default function AccountSettingsPage() {
           setFormError(null);
         }}
       >
-        <Text style={styles.sheetTitle}>Change email</Text>
-        <Text style={styles.sheetSub}>We&apos;ll email a confirmation link to the new address before the change takes effect.</Text>
+        <SheetTitle>Change email</SheetTitle>
+        <SheetSubtitle>We&apos;ll email a confirmation link to the new address before the change takes effect.</SheetSubtitle>
         <View style={styles.form}>
-          <TextInput
+          <TextField
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
             placeholder="New email"
-            placeholderTextColor={colors.label3}
             value={newEmail}
             onChangeText={setNewEmail}
-            style={styles.input}
           />
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-          <AccentButton disabled={busy} onPress={changeEmail}>
-            {busy ? "Sending…" : "Send confirmation"}
+          <AccentButton loading={busy} onPress={changeEmail}>
+            Send confirmation
           </AccentButton>
         </View>
       </Sheet>
@@ -195,18 +190,6 @@ export default function AccountSettingsPage() {
 
 const styles = StyleSheet.create({
   footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  sheetSub: { marginTop: 4, fontSize: 13, fontFamily: font.regular, lineHeight: 18, color: colors.label3 },
   form: { marginTop: 20, gap: 12 },
-  input: {
-    height: 50,
-    width: "100%",
-    borderRadius: radius.sm,
-    backgroundColor: colors.fill,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    fontFamily: font.regular,
-    color: colors.label,
-  },
-  errorText: { fontSize: 13, fontFamily: font.regular, color: colors.red },
+  errorText: { fontSize: 14, fontFamily: font.medium, color: colors.red, textAlign: "left" },
 });
