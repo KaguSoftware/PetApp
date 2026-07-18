@@ -3,6 +3,7 @@ import { Dimensions, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollVie
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useA11yPrefs } from "@/lib/a11y";
 import { colors } from "@/lib/theme";
 
 const SCREEN_H = Dimensions.get("window").height;
@@ -24,6 +25,7 @@ export default function Sheet({
   scrollable?: boolean;
 }) {
   const insets = useSafeAreaInsets();
+  const { reduceTransparency } = useA11yPrefs();
   const [mounted, setMounted] = useState(open);
   const progress = useSharedValue(0); // 0 hidden → 1 shown
 
@@ -72,7 +74,13 @@ export default function Sheet({
   return (
     <Modal transparent visible statusBarTranslucent onRequestClose={onClose} animationType="none">
       <View style={styles.root}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}>
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            reduceTransparency ? styles.backdropSolid : styles.backdrop,
+            backdropStyle,
+          ]}
+        >
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         </Animated.View>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.kav} pointerEvents="box-none">
@@ -107,6 +115,7 @@ export default function Sheet({
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
   backdrop: { backgroundColor: "rgba(18, 18, 24, 0.35)" },
+  backdropSolid: { backgroundColor: "rgba(18, 18, 24, 0.72)" },
   kav: { justifyContent: "flex-end" },
   panel: {
     backgroundColor: colors.bg,

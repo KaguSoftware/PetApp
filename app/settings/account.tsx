@@ -80,15 +80,29 @@ export default function AccountSettingsPage() {
   // Deletion runs through the `delete-account` Edge Function: it verifies the
   // caller's JWT server-side, then deletes the auth user with the service-role
   // key (DB rows cascade). The local session is cleared afterward.
+  //
+  // If the function isn't deployed yet, invoke() rejects with a
+  // FunctionsFetchError / non-2xx — we surface that honestly instead of a vague
+  // "try again", since retrying won't help until it's deployed (see HANDOFF EAS
+  // step 3: `supabase functions deploy delete-account`).
   async function runDeleteAccount() {
     setBusy(true);
-    const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
-    setBusy(false);
-    if (error) {
-      toast("alert", "Couldn't delete account", "Please try again in a moment");
-      return;
+    try {
+      const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+      if (error) throw error;
+      await signOut();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const notDeployed = /not\s*found|404|failed to (send|fetch)|Function not found/i.test(msg);
+      Alert.alert(
+        "Account deletion unavailable",
+        notDeployed
+          ? "This build can't reach the deletion service yet. It goes live with the next backend update — your account is untouched."
+          : `We couldn't delete your account.\n\n${msg}`,
+      );
+    } finally {
+      setBusy(false);
     }
-    await signOut();
   }
 
   function confirmDeleteAccount() {

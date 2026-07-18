@@ -1,131 +1,188 @@
+import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
+import { Renderer } from "expo-three";
+import { useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from "react-native-reanimated";
+import * as THREE from "three";
 import type { Pet } from "@/lib/data";
-import { cardShadow, withAlpha } from "@/lib/theme";
-import PixelSprite from "./PixelSprite";
+import { colors } from "@/lib/theme";
 import { equippedCosmetics } from "./PixelPet";
 import { CAT_BODY_SPRITE, DOG_BODY_SPRITE } from "./petBodySprites";
 import { CAT_FUR, DOG_FUR, furSprite } from "./petSprites";
+import type { Sprite } from "./PixelSprite";
 
 /**
- * "Fake 3D" pet, ported from the web's CSS-3D card: the full-body pixel sprite
- * sits on a perspective-transformed card. Dragging tilts it (rotateX/rotateY);
- * on release the pose is held ~2.5s, then eases back to front-facing.
+ * A REAL 3D, Minecraft-style voxel pet, rendered with three.js through expo-gl.
+ * Every opaque pixel of the pet's sprite becomes a cube extruded a few voxels
+ * deep, so the flat pixel art turns into a chunky blocky figure. It idles with a
+ * slow spin and responds to drag. Always on — there is no "3D mode" toggle; the
+ * pet page just shows the pet like this.
  */
-const HOLD_MS = 2500;
-const MAX_X = 12; // deg of rotateX tilt
-const MAX_Y = 24; // deg of rotateY spin (web keeps Y at 2x the X range)
 
-/** Matches the web stage's soft plum ground shadow (theme cardShadow hue). */
-const GROUND_SHADOW = withAlpha(cardShadow.shadowColor, 0.22);
-const BACK_PLATE = withAlpha("#4a4770", 0.25);
+const DEPTH = 3; // how many voxels thick the extrusion is
+
+type Voxel = { x: number; y: number; color: THREE.Color };
+
+/** Flatten a sprite (+ its cosmetics) into a single voxel grid. */
+function spriteVoxels(sprite: Sprite, overlays: { sprite: Sprite; left: number; top: number; scale: number }[]): {
+  voxels: Voxel[];
+  w: number;
+  h: number;
+} {
+  const h = sprite.rows.length;
+  const w = sprite.rows[0]?.length ?? 0;
+  // Grid keyed by "x,y" so overlays (hats, glasses) paint over the body.
+  const grid = new Map<string, string>();
+  const paint = (rows: string[], palette: Record<string, string>, offX: number, offY: number) => {
+    for (let y = 0; y < rows.length; y++) {
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        const color = palette[ch];
+        if (!color || ch === " " || ch === ".") continue;
+        grid.set(`${Math.round(x + offX)},${Math.round(y + offY)}`, color);
+      }
+    }
+  };
+  paint(sprite.rows, sprite.palette, 0, 0);
+  for (const o of overlays) {
+    // Cosmetics are authored against a 16px face box at the sprite top; map their
+    // fractional placement onto the body grid.
+    paint(o.sprite.rows, o.sprite.palette, o.left, o.top);
+  }
+  const voxels: Voxel[] = [];
+  for (const [key, color] of grid) {
+    const [x, y] = key.split(",").map(Number);
+    voxels.push({ x, y, color: new THREE.Color(color) });
+  }
+  return { voxels, w, h };
+}
+
+function bodySpriteFor(pet: Pet): Sprite {
+  return pet.species === "cat"
+    ? furSprite(CAT_BODY_SPRITE, CAT_FUR.body, CAT_FUR.shade)
+    : furSprite(DOG_BODY_SPRITE, DOG_FUR.body, DOG_FUR.shade);
+}
 
 export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
-  const rotX = useSharedValue(0);
-  const rotY = useSharedValue(0);
-  const startX = useSharedValue(0);
-  const startY = useSharedValue(0);
+  // Shared rotation the gesture writes and the render loop reads.
+  const rotY = useRef(0);
+  const rotX = useRef(0);
+  const velY = useRef(0.5); // idle spin speed (rad/s), damped after a drag
+  const dragging = useRef(false);
+  const meshRef = useRef<THREE.InstancedMesh | null>(null);
+  const rafRef = useRef<number | null>(null);
 
-  // Web mapping: a drag across the card sweeps the full ±MAX range.
-  const factor = size / (MAX_X * 2);
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   const pan = Gesture.Pan()
     .onBegin(() => {
-      cancelAnimation(rotX);
-      cancelAnimation(rotY);
-      startX.value = rotX.value;
-      startY.value = rotY.value;
+      dragging.current = true;
     })
     .onUpdate((e) => {
-      const dx = -e.translationY / factor; // vertical drag → rotateX
-      const dy = e.translationX / factor; // horizontal drag → rotateY
-      rotX.value = Math.max(-MAX_X, Math.min(MAX_X, startX.value + dx));
-      rotY.value = Math.max(-MAX_Y, Math.min(MAX_Y, startY.value + dy));
+      rotY.current += (e.velocityX ?? 0) * 0.00002;
+      rotX.current = Math.max(-0.5, Math.min(0.5, rotX.current + (e.velocityY ?? 0) * 0.000012));
+      velY.current = (e.velocityX ?? 0) * 0.00002;
     })
     .onFinalize(() => {
-      // Hold the pose, then ease back to front-facing.
-      const back = { duration: 250, easing: Easing.out(Easing.cubic) };
-      rotX.value = withDelay(HOLD_MS, withTiming(0, back));
-      rotY.value = withDelay(HOLD_MS, withTiming(0, back));
+      dragging.current = false;
     });
 
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: size * 3 },
-      { rotateX: `${rotX.value}deg` },
-      { rotateY: `${rotY.value}deg` },
-    ],
-  }));
+  const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+    // expo-three's Renderer extends THREE.WebGLRenderer at runtime; its shipped
+    // types are thin, so treat it as the three renderer it actually is.
+    const renderer = new Renderer({ gl, alpha: true }) as unknown as THREE.WebGLRenderer;
+    renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
+    renderer.setClearColor(0x000000, 0);
 
-  // Ground shadow reacts to tilt like the web's.
-  const shadowStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: Math.abs(rotX.value) * 0.2 },
-      { scaleX: 1 - Math.abs(rotY.value) / 180 },
-    ],
-  }));
+    const scene = new THREE.Scene();
+    const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+    const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 1000);
+    camera.position.set(0, 0, 34);
 
-  // The body sprite (16×24) renders at `W` wide; its top 16 rows form a W×W
-  // "face box" at the sprite's top-left. Cosmetics are authored against a 16px
-  // face grid, so re-anchoring their `place` fractions to that box lands hats on
-  // the ears, glasses on the eyes, collars at the neck and outfits on the chest.
-  const W = size * 0.55;
-  const boxLeft = (size - W) / 2;
-  const boxTop = (size - W * 1.5) / 2;
-  const bodySprite =
-    pet.species === "cat"
-      ? furSprite(CAT_BODY_SPRITE, CAT_FUR.body, CAT_FUR.shade)
-      : furSprite(DOG_BODY_SPRITE, DOG_FUR.body, DOG_FUR.shade);
-  const cosmetics = equippedCosmetics(pet);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const key = new THREE.DirectionalLight(0xffffff, 0.9);
+    key.position.set(6, 10, 12);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0xbfb8ff, 0.35);
+    rim.position.set(-8, -4, -6);
+    scene.add(rim);
+
+    // Build the voxel instanced mesh from the pet sprite + cosmetics.
+    const body = bodySpriteFor(pet);
+    const overlays = equippedCosmetics(pet).map(({ cos }) => ({
+      sprite: cos.sprite,
+      // Body sprite is 16 wide; cosmetics place against a 16px face box at top.
+      left: cos.place.left * 16,
+      top: cos.place.top * 16,
+      scale: cos.place.widthFrac,
+    }));
+    const { voxels, w, h } = spriteVoxels(body, overlays);
+
+    const geo = new THREE.BoxGeometry(1, 1, DEPTH);
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: false, roughness: 0.85, metalness: 0 });
+    const mesh = new THREE.InstancedMesh(geo, mat, voxels.length);
+    const dummy = new THREE.Object3D();
+    const cx = (w - 1) / 2;
+    const cy = (h - 1) / 2;
+    voxels.forEach((v, i) => {
+      // Center the model; flip Y so sprite-top is up. Slight scale to fit view.
+      dummy.position.set(v.x - cx, cy - v.y, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, v.color);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+    const group = new THREE.Group();
+    // Fit the model to the camera: scale by the larger sprite dimension.
+    const fit = 15 / Math.max(w, h);
+    group.scale.setScalar(fit);
+    group.add(mesh);
+    scene.add(group);
+    meshRef.current = mesh;
+
+    let last = 0;
+    const render = (t: number) => {
+      rafRef.current = requestAnimationFrame(render);
+      const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
+      last = t;
+      if (!dragging.current) {
+        // Ease the idle spin back to a gentle constant rate.
+        velY.current += (0.5 - velY.current) * Math.min(1, dt * 1.5);
+        rotY.current += velY.current * dt;
+        rotX.current += (0 - rotX.current) * Math.min(1, dt * 2);
+      }
+      group.rotation.y = rotY.current;
+      group.rotation.x = rotX.current;
+      renderer.render(scene, camera);
+      gl.endFrameEXP();
+    };
+    render(0);
+  };
 
   return (
-    <View style={{ width: size, height: size }}>
-      <Animated.View
-        style={[
-          styles.groundShadow,
-          { width: size * 0.6, left: size * 0.2 },
-          shadowStyle,
-        ]}
-      />
+    <View style={[styles.wrap, { width: size, height: size }]}>
+      <View style={[styles.shadow, { width: size * 0.5, left: size * 0.25 }]} />
       <GestureDetector gesture={pan}>
-        <Animated.View style={[styles.card, cardStyle]}>
-          {/* back plate gives the sprite a hint of thickness as it turns */}
-          <View style={[styles.backPlate, { left: size * 0.12, right: size * 0.12, top: size * 0.12, bottom: size * 0.12 }]} />
-          <PixelSprite sprite={bodySprite} size={W} style={{ position: "absolute", left: boxLeft, top: boxTop }} />
-          {cosmetics.map(({ id, cos }) => (
-            <PixelSprite
-              key={id}
-              sprite={cos.sprite}
-              size={W * cos.place.widthFrac}
-              style={{
-                position: "absolute",
-                left: boxLeft + W * cos.place.left,
-                top: boxTop + W * cos.place.top,
-              }}
-            />
-          ))}
-        </Animated.View>
+        <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
       </GestureDetector>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { width: "100%", height: "100%" },
-  backPlate: { position: "absolute", borderRadius: 16, backgroundColor: BACK_PLATE },
-  groundShadow: {
+  wrap: { alignItems: "center", justifyContent: "center" },
+  shadow: {
     position: "absolute",
-    bottom: 0,
+    bottom: 2,
     height: 12,
     borderRadius: 999,
-    backgroundColor: GROUND_SHADOW,
+    backgroundColor: colors.sep,
   },
 });

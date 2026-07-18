@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
@@ -13,97 +14,120 @@ import { hapticsEnabled } from "@/lib/a11y";
 import { colors, font } from "@/lib/theme";
 
 const ITEM_HEIGHT = 44;
-const VISIBLE = 5; // odd, so one row is centered under the selection band
+const VISIBLE = 5; // odd, so one row sits centered under the selection band
+const PAD = (VISIBLE - 1) / 2;
 
 /**
- * A single snapping wheel column — the building block. Scrolling snaps to whole
- * rows and reports the value at rest; a light haptic ticks as each row crosses
- * center (iOS, when haptics are enabled). No native dependency, so it runs in
- * Expo Go and every dev build.
+ * A single snapping wheel column. Kept UNCONTROLLED while the user scrolls to
+ * avoid the feedback loop (scroll → onChange → re-render → contentOffset reset →
+ * scroll jump) that made the old version jitter: the initial position is set
+ * once with an imperative `scrollTo`, the centered row is tracked in local state
+ * for highlighting, and `onChange` only fires when scrolling settles. An
+ * external value change re-aligns the scroll only when it differs from where the
+ * wheel already sits.
  */
-export function WheelColumn({
+function WheelColumn({
   values,
   value,
   onChange,
   format = (v) => String(v),
-  width = 90,
-  suffix,
+  width,
 }: {
   values: number[];
   value: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
-  width?: number;
-  suffix?: string;
+  width: number;
 }) {
-  const lastIndex = useRef<number>(-1);
+  const ref = useRef<ScrollView>(null);
+  const scrolling = useRef(false);
+  const lastHaptic = useRef(-1);
 
-  const selectedIndex = useMemo(() => {
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < values.length; i++) {
-      const d = Math.abs(values[i] - value);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
+  const indexOf = useCallback(
+    (v: number) => {
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < values.length; i++) {
+        const d = Math.abs(values[i] - v);
+        if (d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
       }
+      return best;
+    },
+    [values],
+  );
+
+  const targetIndex = useMemo(() => indexOf(value), [indexOf, value]);
+  const [centerIndex, setCenterIndex] = useState(targetIndex);
+
+  // Align the scroll to the external value on mount and whenever it changes to a
+  // row we're not already parked on — but never while the user is mid-scroll.
+  useEffect(() => {
+    if (scrolling.current) return;
+    if (centerIndex !== targetIndex) {
+      ref.current?.scrollTo({ y: targetIndex * ITEM_HEIGHT, animated: false });
+      setCenterIndex(targetIndex);
     }
-    return best;
-  }, [values, value]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetIndex]);
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
-      if (idx !== lastIndex.current && idx >= 0 && idx < values.length) {
-        lastIndex.current = idx;
+      const idx = Math.max(0, Math.min(values.length - 1, Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
+      if (idx !== centerIndex) setCenterIndex(idx);
+      if (idx !== lastHaptic.current) {
+        lastHaptic.current = idx;
         if (Platform.OS === "ios" && hapticsEnabled()) Haptics.selectionAsync();
       }
     },
-    [values.length],
+    [values.length, centerIndex],
   );
 
-  const onSettle = useCallback(
+  const settle = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrolling.current = false;
       const idx = Math.max(0, Math.min(values.length - 1, Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
+      setCenterIndex(idx);
       const next = values[idx];
       if (next !== value) onChange(next);
     },
     [values, value, onChange],
   );
 
-  const pad = (VISIBLE - 1) / 2;
-
   return (
-    <View style={[styles.col, { width, height: ITEM_HEIGHT * VISIBLE }]}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        snapToInterval={ITEM_HEIGHT}
-        decelerationRate="fast"
-        contentOffset={{ x: 0, y: selectedIndex * ITEM_HEIGHT }}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={onSettle}
-        onScrollEndDrag={onSettle}
-        contentContainerStyle={{ paddingVertical: pad * ITEM_HEIGHT }}
-      >
-        {values.map((v, i) => (
-          <View key={i} style={styles.item}>
-            <Text style={[styles.itemText, i === selectedIndex && styles.itemTextActive]}>{format(v)}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      {suffix ? (
-        <Text pointerEvents="none" style={styles.suffix}>
-          {suffix}
-        </Text>
-      ) : null}
-    </View>
+    <ScrollView
+      ref={ref}
+      style={{ width, height: ITEM_HEIGHT * VISIBLE }}
+      showsVerticalScrollIndicator={false}
+      snapToInterval={ITEM_HEIGHT}
+      snapToAlignment="start"
+      disableIntervalMomentum
+      decelerationRate="fast"
+      nestedScrollEnabled
+      scrollEventThrottle={16}
+      onScrollBeginDrag={() => {
+        scrolling.current = true;
+      }}
+      onScroll={onScroll}
+      onMomentumScrollEnd={settle}
+      onScrollEndDrag={settle}
+      contentContainerStyle={{ paddingVertical: PAD * ITEM_HEIGHT }}
+    >
+      {values.map((v, i) => (
+        <View key={i} style={styles.item}>
+          <Text style={[styles.itemText, i === centerIndex && styles.itemTextActive]}>{format(v)}</Text>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 /**
  * iOS clock-style number picker split into TWO wheels: a whole-number column and
- * a decimal column (e.g. weight "12" · ".4"). The selection band spans both.
+ * a decimal column (e.g. weight "12" · "4"). A single selection band sits behind
+ * both, sized to the measured row so it never drifts.
  */
 export default function WheelPicker({
   whole,
@@ -113,9 +137,7 @@ export default function WheelPicker({
   unit,
   decimalPlaces = 1,
 }: {
-  /** Whole-number options, e.g. [0..120]. */
   whole: number[];
-  /** Decimal options as tenths etc., e.g. [0,1,...,9] for one place. */
   decimals: number[];
   value: number;
   onChange: (v: number) => void;
@@ -129,13 +151,17 @@ export default function WheelPicker({
   const setWhole = (w: number) => onChange(Number((w + decPart / scale).toFixed(decimalPlaces)));
   const setDec = (d: number) => onChange(Number((wholePart + d / scale).toFixed(decimalPlaces)));
 
+  const [rowW, setRowW] = useState(0);
+  const onRowLayout = (e: LayoutChangeEvent) => setRowW(e.nativeEvent.layout.width);
+
   return (
     <View style={styles.wrap}>
-      <View pointerEvents="none" style={styles.band} />
-      <View style={styles.row}>
-        <WheelColumn values={whole} value={wholePart} onChange={setWhole} width={84} />
+      {/* selection band, sized to the measured content row */}
+      <View pointerEvents="none" style={[styles.band, { width: rowW || "70%" }]} />
+      <View style={styles.row} onLayout={onRowLayout}>
+        <WheelColumn values={whole} value={wholePart} onChange={setWhole} width={80} />
         <Text style={styles.dot}>.</Text>
-        <WheelColumn values={decimals} value={decPart} onChange={setDec} width={64} format={(v) => String(v)} />
+        <WheelColumn values={decimals} value={decPart} onChange={setDec} width={56} />
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}
       </View>
     </View>
@@ -143,23 +169,18 @@ export default function WheelPicker({
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: "center", justifyContent: "center", height: ITEM_HEIGHT * VISIBLE },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  wrap: { alignSelf: "center", justifyContent: "center", alignItems: "center", height: ITEM_HEIGHT * VISIBLE },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "center", alignSelf: "center" },
   band: {
     position: "absolute",
-    left: "50%",
-    marginLeft: -130,
-    width: 260,
-    top: ITEM_HEIGHT * ((VISIBLE - 1) / 2),
+    top: ITEM_HEIGHT * PAD,
     height: ITEM_HEIGHT,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: colors.fill,
   },
-  col: { justifyContent: "center" },
   item: { height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
   itemText: { fontSize: 22, fontFamily: font.medium, color: colors.label3 },
   itemTextActive: { color: colors.label, fontFamily: font.semibold },
-  dot: { fontSize: 22, fontFamily: font.bold, color: colors.label, marginHorizontal: -2 },
-  unit: { fontSize: 17, fontFamily: font.medium, color: colors.label2, marginLeft: 8 },
-  suffix: { position: "absolute", right: 4, top: ITEM_HEIGHT * ((VISIBLE - 1) / 2) + 12, fontSize: 15, color: colors.label2 },
+  dot: { fontSize: 22, fontFamily: font.bold, color: colors.label, marginHorizontal: 2 },
+  unit: { fontSize: 17, fontFamily: font.medium, color: colors.label2, marginLeft: 10 },
 });

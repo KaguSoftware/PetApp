@@ -7,7 +7,7 @@ import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
-import PixelPet, { PixelCosmetic } from "@/components/pixel/PixelPet";
+import { PixelCosmetic } from "@/components/pixel/PixelPet";
 import Pet3D from "@/components/pixel/Pet3D";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import PixelSprite from "@/components/pixel/PixelSprite";
@@ -162,7 +162,6 @@ export default function PetsScreen() {
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
   const [openSheet, setOpenSheet] = useState<CosmeticSlot | "other" | null>(() => (searchParams.shop === "1" ? "other" : null));
-  const [threeD, setThreeD] = useState(false);
   const [addPetOpen, setAddPetOpen] = useState(false);
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
@@ -424,37 +423,13 @@ export default function PetsScreen() {
         </Group>
       </Sheet>
 
-      {/* Dressing stage */}
+      {/* Dressing stage — always the real voxel 3D pet (no 2D/3D toggle). */}
       <View style={styles.stageCard}>
-        {/* 3D toggle */}
-        <PressableScale
-          scaleTo={PRESS_SCALE_SMALL}
-          onPress={() => setThreeD((v) => !v)}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel="Toggle 3D view"
-          accessibilityState={{ selected: threeD }}
-          style={styles.threeDToggleWrap}
-        >
-          <View style={styles.threeDToggle}>
-            <Icon name="cube" size={15} color={threeD ? colors.accent : colors.label2} />
-            <Text style={[styles.threeDLabel, threeD && { color: colors.accent }]}>3D</Text>
-          </View>
-        </PressableScale>
-
         <ArcadeStage style={styles.stage}>
           <View style={styles.petBox}>
-            {threeD ? (
-              <Pet3D pet={pet} size={176} />
-            ) : (
-              <>
-                {/* Pixel pet on a soft platform shadow */}
-                <View style={styles.platformShadow} />
-                <Animated.View style={[styles.petCenter, bumpStyle]}>
-                  <PixelPet pet={pet} size={168} idle />
-                </Animated.View>
-              </>
-            )}
+            <Animated.View style={[styles.petCenter, bumpStyle]}>
+              <Pet3D pet={pet} size={200} />
+            </Animated.View>
 
             {/* Head slot button — shows the pixel hat when equipped. Kept
                 visible in 3D too so hat editing stays reachable; tucked into
@@ -468,7 +443,7 @@ export default function PetsScreen() {
                   onPress={() => setOpenSheet(s.slot)}
                   accessibilityRole="button"
                   accessibilityLabel={`${s.label}: ${equippedId ? cosmetic(equippedId)?.name : "empty — tap to add"}`}
-                  style={[styles.slotButtonWrap, threeD ? { left: -8, top: -8 } : { left: "50%", marginLeft: -22, top: -16 }]}
+                  style={[styles.slotButtonWrap, { left: -8, top: -8 }]}
                 >
                   <View style={styles.slotButton}>
                     {equippedId ? <PixelCosmetic id={equippedId} size={24} /> : <Icon name="plus" size={19} color={colors.label2} />}
@@ -478,7 +453,7 @@ export default function PetsScreen() {
             })}
           </View>
 
-          {threeD ? <Text style={styles.dragHint}>Drag to spin</Text> : null}
+          <Text style={styles.dragHint}>Drag to spin</Text>
 
           <Text style={styles.petName}>{pet.name}</Text>
           <Text style={styles.petBreed}>{pet.breed}</Text>
@@ -620,32 +595,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...cardShadow,
   },
-  threeDToggleWrap: { position: "absolute", right: 12, top: 12, zIndex: 20 },
-  threeDToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.fill,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 36,
-  },
-  threeDLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.label2, lineHeight: 13 },
   stage: { alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 },
-  petBox: { position: "relative", width: 176, height: 176, marginVertical: 32 },
+  petBox: { position: "relative", width: 200, height: 200, marginVertical: 28 },
   petCenter: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  platformShadow: {
-    position: "absolute",
-    bottom: 4,
-    left: "50%",
-    marginLeft: -48,
-    width: 96,
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: withAlpha(cardShadow.shadowColor, 0.18),
-  },
   slotButtonWrap: { position: "absolute", zIndex: 10 },
   slotButton: {
     width: HIT,

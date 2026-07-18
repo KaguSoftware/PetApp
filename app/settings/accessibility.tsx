@@ -1,13 +1,15 @@
-import { StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import * as Linking from "expo-linking";
+import { Platform, StyleSheet, Text, View } from "react-native";
+import { Chevron, Group, IconCircle, Row, SectionHeader, Toggle } from "@/components/ui";
 import { PushedScreen } from "@/components/Screen";
-import { Group, IconCircle, Row, SectionHeader, Toggle } from "@/components/ui";
 import { useA11yPrefs } from "@/lib/a11y";
 import { colors, font } from "@/lib/theme";
 
 export default function AccessibilitySettingsPage() {
   const { reduceMotion, reduceTransparency, haptics, setReduceMotion, setReduceTransparency, setHaptics } = useA11yPrefs();
 
-  const rows = [
+  const toggles = [
     {
       key: "motion",
       icon: "sparkles" as const,
@@ -20,7 +22,7 @@ export default function AccessibilitySettingsPage() {
       key: "transparency",
       icon: "drop" as const,
       label: "Reduce transparency",
-      hint: "Makes the glass tab bar, headers and toasts solid instead of blurred.",
+      hint: "Makes sheet backdrops and overlays solid instead of dimmed glass.",
       on: reduceTransparency,
       set: setReduceTransparency,
     },
@@ -34,11 +36,25 @@ export default function AccessibilitySettingsPage() {
     },
   ];
 
+  const testHaptics = () => {
+    // Fires the same feedback the app uses so the toggle is verifiable — a
+    // success buzz when on, a light tick when off so you still get a response.
+    if (haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    else Haptics.selectionAsync();
+  };
+
+  const openSystemSettings = () => {
+    // Text size, bold text and system contrast live in the OS settings; deep-link
+    // there rather than half-reimplement them.
+    if (Platform.OS === "ios") Linking.openURL("app-settings:");
+    else Linking.openSettings();
+  };
+
   return (
     <PushedScreen title="Accessibility">
-      <SectionHeader>Display</SectionHeader>
+      <SectionHeader>In-app</SectionHeader>
       <Group>
-        {rows.map((r) => (
+        {toggles.map((r) => (
           <Row
             key={r.key}
             leading={<IconCircle icon={r.icon} tint={colors.accent} bg={colors.accentSoft} />}
@@ -48,9 +64,27 @@ export default function AccessibilitySettingsPage() {
             trailing={<Toggle on={r.on} onChange={r.set} label={r.label} />}
           />
         ))}
+        <Row
+          leading={<IconCircle icon="sparkles" tint={colors.green} bg={colors.greenSoft} />}
+          title="Test haptics"
+          subtitle="Feel the current feedback setting"
+          onPress={testHaptics}
+        />
+      </Group>
+
+      <SectionHeader>System</SectionHeader>
+      <Group>
+        <Row
+          leading={<IconCircle icon="eye" tint={colors.label2} bg={colors.fill} />}
+          title="Text size, bold & contrast"
+          subtitle="Open your device accessibility settings"
+          trailing={<Chevron />}
+          onPress={openSystemSettings}
+        />
       </Group>
       <Text style={styles.footnote}>
-        Saved on this device. Motion also follows your system &ldquo;Reduce Motion&rdquo; setting automatically.
+        In-app choices are saved on this device. Reduce Motion also follows your system setting automatically, and text scales with
+        your device text-size setting.
       </Text>
 
       <View style={{ height: 16 }} />
@@ -59,5 +93,5 @@ export default function AccessibilitySettingsPage() {
 }
 
 const styles = StyleSheet.create({
-  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
 });
