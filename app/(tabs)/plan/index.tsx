@@ -563,7 +563,8 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   guideChipIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17 },
+  // Reserve two lines so single- and two-line titles keep every chip the same height.
+  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17, height: 34 },
   guideChipMeta: { flexDirection: "row", alignItems: "center", gap: 3 },
   guideChipMetaText: { fontSize: 11, fontFamily: font.medium, color: colors.label3 },
   lockedWrap: { alignItems: "center", paddingTop: 40, paddingBottom: 24 },

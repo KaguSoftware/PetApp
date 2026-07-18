@@ -86,6 +86,9 @@ interface Store {
   addReminder: (r: Omit<Reminder, "id" | "done" | "source">) => void;
   toggleReminder: (id: string) => void;
   deleteReminder: (id: string) => void;
+  /** Clear the `alert` flag on every outstanding alerting reminder (acknowledge
+   *  all notifications at once) without completing or deleting the tasks. */
+  dismissAllAlerts: () => void;
   addPet: (input: {
     name: string;
     species: "cat" | "dog";
@@ -1431,6 +1434,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [supabase, undoableDelete]
   );
 
+  const dismissAllAlerts = useCallback(() => {
+    const alerting = stateRef.current.reminders.filter((r) => r.alert && !r.done);
+    if (alerting.length === 0) return;
+    const ids = alerting.map((r) => r.id);
+    setState((prev) => ({
+      ...prev,
+      reminders: prev.reminders.map((r) => (ids.includes(r.id) ? { ...r, alert: false } : r)),
+    }));
+    persist(supabase.from("reminders").update({ alert: false }).in("id", ids), {
+      rollback: () =>
+        setState((prev) => ({
+          ...prev,
+          reminders: prev.reminders.map((r) => (ids.includes(r.id) ? { ...r, alert: true } : r)),
+        })),
+      message: "Couldn't clear notifications",
+    });
+    toast("check", "All caught up", `Cleared ${ids.length} notification${ids.length === 1 ? "" : "s"}`);
+  }, [supabase, persist, toast]);
+
   const addPet = useCallback(
     (input: {
       name: string;
@@ -2187,6 +2209,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         addReminder,
         toggleReminder,
         deleteReminder,
+        dismissAllAlerts,
         addPet,
         editPet,
         deletePet,

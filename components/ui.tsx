@@ -47,7 +47,11 @@ export function PressableScale({
   const dim = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ opacity: dim.value }));
   return (
-    <Animated.View style={[anim, style]}>
+    // needsOffscreenAlphaCompositing: on Android, animating opacity over a child
+    // with `elevation` (card shadow) otherwise leaks the shadow as a lighter
+    // rectangle mid-press. Compositing the subtree to one layer fixes it so the
+    // press is a clean, uniform dim.
+    <Animated.View style={[anim, style]} needsOffscreenAlphaCompositing>
       <Pressable
         android_ripple={null}
         {...props}
@@ -145,7 +149,9 @@ export function Row({
   );
   if (onPress)
     return (
-      <Pressable android_ripple={null} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.fill }]}>
+      // Simple uniform dim on press (no ripple, no background-fill rectangle) so
+      // rows feel the same as every other pressable in the app.
+      <Pressable android_ripple={null} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}>
         {inner}
       </Pressable>
     );

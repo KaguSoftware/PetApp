@@ -37,7 +37,7 @@ function dayKey(ts: number) {
 }
 
 export default function ActivityScreen() {
-  const { state, hydrated, bookVetById, toast } = useStore();
+  const { state, hydrated, bookVetById, dismissAllAlerts, toast } = useStore();
   const router = useRouter();
   const [bookOpen, setBookOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -92,7 +92,15 @@ export default function ActivityScreen() {
       {/* Needs attention — one group per pet, standard rows */}
       {alertGroups.length > 0 ? (
         <>
-          <SectionHeader>Needs attention</SectionHeader>
+          <SectionHeader
+            trailing={
+              <PressableScale onPress={dismissAllAlerts} accessibilityRole="button" accessibilityLabel="Clear all notifications" hitSlop={8}>
+                <Text style={styles.clearAll}>Clear all</Text>
+              </PressableScale>
+            }
+          >
+            Needs attention
+          </SectionHeader>
           <View style={{ gap: 12 }}>
             {alertGroups.map(({ pet, items }) => (
               <Group key={pet.id}>
@@ -311,6 +319,7 @@ const styles = StyleSheet.create({
   alertTitle: { fontSize: 16, fontFamily: font.medium, color: colors.red },
   alertExpand: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 2, gap: 12 },
   alertExpandBody: { fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },
+  clearAll: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
   insightCard: {
     borderRadius: radius.md,
     backgroundColor: colors.card,
