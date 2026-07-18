@@ -1,4 +1,3 @@
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
@@ -64,7 +63,6 @@ export function TabScreen({
 } & ScrollViewProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -80,7 +78,10 @@ export function TabScreen({
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        paddingTop: (Platform.OS === "android" ? headerHeight : 0) + 8,
+        // The header is opaque on both platforms, so content already begins
+        // below it — just a little breathing room, no header-height offset
+        // (that offset was the huge empty gap on Android).
+        paddingTop: 8,
         paddingBottom: contentBottomPad + Math.max(insets.bottom, 12),
         paddingHorizontal: 16,
       }}
@@ -110,7 +111,6 @@ export function PushedScreen({
 }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -120,7 +120,7 @@ export function PushedScreen({
   }, [navigation, title, trailing]);
 
   if (!scroll) {
-    return <View style={[styles.root, { paddingTop: headerHeight + 10 }]}>{children}</View>;
+    return <View style={[styles.root, { paddingTop: 10 }]}>{children}</View>;
   }
   return (
     <ScrollView
@@ -129,7 +129,8 @@ export function PushedScreen({
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        paddingTop: Platform.OS === "android" ? headerHeight + 10 : 10,
+        // Opaque header → content already sits below it on both platforms.
+        paddingTop: 10,
         paddingBottom: insets.bottom + 32,
         paddingHorizontal: 16,
       }}
