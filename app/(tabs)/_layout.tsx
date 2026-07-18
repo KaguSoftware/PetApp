@@ -18,7 +18,7 @@ export default function TabsLayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (
-    <NativeTabs tintColor={colors.accent} minimizeBehavior="onScrollDown">
+    <NativeTabs tintColor={colors.accent}>
       <NativeTabs.Trigger name="home">
         <Icon sf={{ default: "house", selected: "house.fill" }} androidSrc={androidIcon("home")} />
         <Label>Home</Label>

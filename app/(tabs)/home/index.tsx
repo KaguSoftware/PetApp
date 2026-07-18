@@ -109,7 +109,7 @@ export default function Home() {
       subtitle={greeting}
       trailing={
         <>
-          <CoinPill amount={state.coins} onPress={() => router.push("/pets")} />
+          <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
           <NotificationBell />
         </>
       }
@@ -263,7 +263,6 @@ export default function Home() {
         label={`Weight (${weightUnitLabel(state.units)})`}
         min={0.1}
         max={state.units === "lb" ? 260 : 120}
-        step={0.1}
         unit={weightUnitLabel(state.units)}
         initialValue={kgToUnit(pet.weightKg, state.units)}
         onSave={(v) => {
@@ -279,7 +278,6 @@ export default function Home() {
         label="Age (years)"
         min={0}
         max={30}
-        step={0.5}
         unit="yr"
         initialValue={pet.ageYears}
         onSave={(ageYears) => {

@@ -9,34 +9,35 @@ import {
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { hapticsEnabled } from "@/lib/a11y";
 import { colors, font } from "@/lib/theme";
 
 const ITEM_HEIGHT = 44;
 const VISIBLE = 5; // odd, so one row is centered under the selection band
 
 /**
- * iOS clock-style wheel picker built with a snapping ScrollView — no native
- * dependency, so it runs in Expo Go and every dev build. The centered row sits
- * under a translucent selection band; scrolling snaps to whole rows and emits
- * the value at rest. Light haptic tick as each row crosses center (iOS).
+ * A single snapping wheel column — the building block. Scrolling snaps to whole
+ * rows and reports the value at rest; a light haptic ticks as each row crosses
+ * center (iOS, when haptics are enabled). No native dependency, so it runs in
+ * Expo Go and every dev build.
  */
-export default function WheelPicker({
+export function WheelColumn({
   values,
   value,
   onChange,
   format = (v) => String(v),
-  width = 120,
+  width = 90,
+  suffix,
 }: {
   values: number[];
   value: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
   width?: number;
+  suffix?: string;
 }) {
-  const ref = useRef<ScrollView>(null);
   const lastIndex = useRef<number>(-1);
 
-  // Nearest index to the current value (values may be fractional / stepped).
   const selectedIndex = useMemo(() => {
     let best = 0;
     let bestDist = Infinity;
@@ -55,7 +56,7 @@ export default function WheelPicker({
       const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
       if (idx !== lastIndex.current && idx >= 0 && idx < values.length) {
         lastIndex.current = idx;
-        if (Platform.OS === "ios") Haptics.selectionAsync();
+        if (Platform.OS === "ios" && hapticsEnabled()) Haptics.selectionAsync();
       }
     },
     [values.length],
@@ -73,10 +74,8 @@ export default function WheelPicker({
   const pad = (VISIBLE - 1) / 2;
 
   return (
-    <View style={[styles.wrap, { width, height: ITEM_HEIGHT * VISIBLE }]}>
-      <View pointerEvents="none" style={styles.band} />
+    <View style={[styles.col, { width, height: ITEM_HEIGHT * VISIBLE }]}>
       <ScrollView
-        ref={ref}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
@@ -93,22 +92,74 @@ export default function WheelPicker({
           </View>
         ))}
       </ScrollView>
+      {suffix ? (
+        <Text pointerEvents="none" style={styles.suffix}>
+          {suffix}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * iOS clock-style number picker split into TWO wheels: a whole-number column and
+ * a decimal column (e.g. weight "12" · ".4"). The selection band spans both.
+ */
+export default function WheelPicker({
+  whole,
+  decimals,
+  value,
+  onChange,
+  unit,
+  decimalPlaces = 1,
+}: {
+  /** Whole-number options, e.g. [0..120]. */
+  whole: number[];
+  /** Decimal options as tenths etc., e.g. [0,1,...,9] for one place. */
+  decimals: number[];
+  value: number;
+  onChange: (v: number) => void;
+  unit?: string;
+  decimalPlaces?: number;
+}) {
+  const scale = 10 ** decimalPlaces;
+  const wholePart = Math.floor(value + 1e-9);
+  const decPart = Math.round((value - wholePart) * scale);
+
+  const setWhole = (w: number) => onChange(Number((w + decPart / scale).toFixed(decimalPlaces)));
+  const setDec = (d: number) => onChange(Number((wholePart + d / scale).toFixed(decimalPlaces)));
+
+  return (
+    <View style={styles.wrap}>
+      <View pointerEvents="none" style={styles.band} />
+      <View style={styles.row}>
+        <WheelColumn values={whole} value={wholePart} onChange={setWhole} width={84} />
+        <Text style={styles.dot}>.</Text>
+        <WheelColumn values={decimals} value={decPart} onChange={setDec} width={64} format={(v) => String(v)} />
+        {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignSelf: "center", justifyContent: "center" },
+  wrap: { alignSelf: "center", justifyContent: "center", height: ITEM_HEIGHT * VISIBLE },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   band: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: "50%",
+    marginLeft: -130,
+    width: 260,
     top: ITEM_HEIGHT * ((VISIBLE - 1) / 2),
     height: ITEM_HEIGHT,
     borderRadius: 10,
     backgroundColor: colors.fill,
   },
+  col: { justifyContent: "center" },
   item: { height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
-  itemText: { fontSize: 20, fontFamily: font.medium, color: colors.label3 },
+  itemText: { fontSize: 22, fontFamily: font.medium, color: colors.label3 },
   itemTextActive: { color: colors.label, fontFamily: font.semibold },
+  dot: { fontSize: 22, fontFamily: font.bold, color: colors.label, marginHorizontal: -2 },
+  unit: { fontSize: 17, fontFamily: font.medium, color: colors.label2, marginLeft: 8 },
+  suffix: { position: "absolute", right: 4, top: ITEM_HEIGHT * ((VISIBLE - 1) / 2) + 12, fontSize: 15, color: colors.label2 },
 });

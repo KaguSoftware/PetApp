@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { View } from "react-native";
 import Sheet from "@/components/Sheet";
 import WheelPicker from "@/components/WheelPicker";
 import { AccentButton, FieldLabel, SheetFooter, SheetTitle, TextField } from "@/components/ui";
@@ -13,8 +14,8 @@ export default function EditStatSheet({
   onSave,
   min,
   max,
-  step = 1,
   unit,
+  decimalPlaces = 1,
 }: {
   open: boolean;
   onClose: () => void;
@@ -22,23 +23,24 @@ export default function EditStatSheet({
   label: string;
   initialValue: number | undefined;
   onSave: (value: number) => void;
-  /** When min & max are given, the sheet shows an iOS clock-style wheel picker. */
+  /** When min & max are given, the sheet shows an iOS clock-style wheel picker
+   *  with a whole-number column and a separate decimal column. */
   min?: number;
   max?: number;
-  step?: number;
   unit?: string;
+  decimalPlaces?: number;
 }) {
   const wheel = min != null && max != null;
+  const scale = 10 ** decimalPlaces;
 
-  // Rounds a value to the picker's step grid so it lands on a real row.
-  const snap = (v: number) => {
+  const clampSnap = (v: number) => {
     if (!wheel) return v;
-    const clamped = Math.min(max!, Math.max(min!, v));
-    return Math.round((clamped - min!) / step) * step + min!;
+    const c = Math.min(max!, Math.max(min!, v));
+    return Math.round(c * scale) / scale;
   };
 
   const [value, setValue] = useState(initialValue != null ? String(initialValue) : "");
-  const [wheelValue, setWheelValue] = useState<number>(snap(initialValue ?? min ?? 0));
+  const [wheelValue, setWheelValue] = useState<number>(clampSnap(initialValue ?? min ?? 0));
 
   // Re-sync whenever the sheet opens (or its target changes while open) —
   // adjusting state during render avoids the extra pass a useEffect would add.
@@ -46,13 +48,13 @@ export default function EditStatSheet({
   if (open && (synced.open !== open || synced.initialValue !== initialValue)) {
     setSynced({ open, initialValue });
     setValue(initialValue != null ? String(initialValue) : "");
-    setWheelValue(snap(initialValue ?? min ?? 0));
+    setWheelValue(clampSnap(initialValue ?? min ?? 0));
   } else if (!open && synced.open !== open) {
     setSynced({ open, initialValue });
   }
 
   const parsed = Number(value);
-  const valid = wheel ? Number.isFinite(wheelValue) : value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
+  const valid = wheel ? Number.isFinite(wheelValue) && wheelValue > 0 : value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
 
   const save = () => {
     if (!valid) return;
@@ -60,13 +62,11 @@ export default function EditStatSheet({
     onClose();
   };
 
-  // Build the discrete option list for the wheel (rounded to avoid FP drift).
-  const decimals = step < 1 ? String(step).split(".")[1]?.length ?? 1 : 0;
-  const values: number[] = [];
-  if (wheel) {
-    for (let v = min!; v <= max! + 1e-9; v += step) values.push(Number(v.toFixed(decimals)));
-  }
-  const fmt = (v: number) => `${v.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+  // Whole-number column (min..max) + decimal column (0..9 for one place, etc.).
+  const wholeValues: number[] = [];
+  if (wheel) for (let v = Math.floor(min!); v <= Math.floor(max!); v++) wholeValues.push(v);
+  const decimalValues: number[] = [];
+  for (let d = 0; d < scale; d++) decimalValues.push(d);
 
   return (
     <Sheet open={open} onClose={onClose}>
@@ -74,7 +74,16 @@ export default function EditStatSheet({
 
       <FieldLabel>{label}</FieldLabel>
       {wheel ? (
-        <WheelPicker values={values} value={wheelValue} onChange={setWheelValue} format={fmt} width={200} />
+        <View style={{ marginTop: 4 }}>
+          <WheelPicker
+            whole={wholeValues}
+            decimals={decimalValues}
+            value={wheelValue}
+            onChange={setWheelValue}
+            unit={unit}
+            decimalPlaces={decimalPlaces}
+          />
+        </View>
       ) : (
         <TextField
           keyboardType="decimal-pad"

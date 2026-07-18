@@ -184,7 +184,7 @@ export default function LogsScreen() {
       subtitle="Log care · everyone's notified"
       trailing={
         <>
-          <CoinPill amount={state.coins} onPress={() => router.push("/pets")} />
+          <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
           <NotificationBell />
         </>
       }
@@ -256,7 +256,7 @@ export default function LogsScreen() {
                   </View>
                 ) : null}
                 <View style={[styles.tileIcon, { backgroundColor: flashing ? colors.green : a.bg }]}>
-                  {flashing ? <Icon name="check" size={18} color={colors.white} /> : <Icon name={a.icon} size={19} color={a.tint} />}
+                  {flashing ? <Icon name="check" size={24} color={colors.white} /> : <Icon name={a.icon} size={24} color={a.tint} />}
                 </View>
                 <Text style={styles.tileLabel}>{type === "meds" && pet.meds.length === 0 ? "No meds" : ACTIONS[type].label}</Text>
               </View>
@@ -411,15 +411,18 @@ const styles = StyleSheet.create({
   // 2 columns → 3 rows for the 6 care actions; wider tiles give each label room.
   tileWrap: { flexBasis: "47%", flexGrow: 1 },
   tile: {
-    alignItems: "flex-start",
+    // Icon centered at the top, label centered beneath it (2-col roomy layout).
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
     borderRadius: radius.lg,
     backgroundColor: colors.card,
-    padding: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     ...cardShadow,
   },
-  tileIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  tileLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
+  tileIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  tileLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label, textAlign: "center" },
   coinPop: {
     position: "absolute",
     right: 8,

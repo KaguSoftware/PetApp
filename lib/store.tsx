@@ -3,7 +3,6 @@ import * as Crypto from "expo-crypto";
 import { supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
-import { notifyActionLogged } from "@/lib/notifications";
 
 // Verb used in alert copy for each loggable action that can carry a /plan daily target.
 export const ALERT_VERB: Partial<Record<ActionType, string>> = {
@@ -1174,12 +1173,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         label: "Undo",
         onClick: () => undoLogAction(id),
       });
-      // Also push an OS notification to the person who logged it — reports noted
-      // the actor never got notified for their own actions. Gated on their care
-      // notification pref and only for fresh (today) logs, not backfilled ones.
-      if (isToday && (currentMember()?.notifyCareReminders ?? true)) {
-        notifyActionLogged(`${pet.name} — ${ACTIONS[type].label.toLowerCase()}`, `Logged at ${timeLabel} · +5 coins`);
-      }
+      // NOTE: the person who performs the action is NOT sent a push notification —
+      // they already see the in-app toast above. Notifications are for *other*
+      // family members (that path lives in raiseFeedingAlert/raiseCareAlert).
       if (newStreak > before.streak) toast("flame", `${newStreak}-day streak!`, "You're on a roll — keep it going");
 
       // Persist the activity (+ any supply drain) per-row; on failure roll the

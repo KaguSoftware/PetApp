@@ -19,7 +19,6 @@ import {
   Row,
   SectionHeader,
   SelectableChip,
-  SmallButton,
 } from "@/components/ui";
 import { ACTIONS, Activity, VET, VETS } from "@/lib/data";
 import { dueLabel, timeAgo, useStore } from "@/lib/store";
@@ -44,6 +43,7 @@ export default function ActivityScreen() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [filterPetId, setFilterPetId] = useState<string | null>(null);
   const [visible, setVisible] = useState(40);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (!hydrated) {
     return (
@@ -102,17 +102,34 @@ export default function ActivityScreen() {
                 </View>
                 {items.map((r) => {
                   const alertVet = r.vetId ? VETS.find((v) => v.id === r.vetId) ?? VET : null;
+                  const expanded = expandedId === r.id;
+                  // Where "attention" leads: a vet alert → the vet marketplace,
+                  // otherwise the reminders agenda where it can be resolved.
+                  const goLabel = alertVet ? "Book a vet" : "Go to reminders";
+                  const go = () => router.push(alertVet ? "/vets" : "/reminders");
                   return (
-                    <Row
-                      key={r.id}
-                      title={
-                        <Text numberOfLines={1} style={styles.alertTitle}>
-                          {r.title}
-                        </Text>
-                      }
-                      subtitle={dueLabel(r.due)}
-                      trailing={alertVet ? <SmallButton label="Book vet" tone="red" onPress={() => router.push("/vets")} /> : undefined}
-                    />
+                    <View key={r.id}>
+                      <Row
+                        title={
+                          <Text numberOfLines={1} style={styles.alertTitle}>
+                            {r.title}
+                          </Text>
+                        }
+                        subtitle={dueLabel(r.due)}
+                        trailing={<Chevron />}
+                        onPress={() => setExpandedId(expanded ? null : r.id)}
+                      />
+                      {expanded ? (
+                        <FadeInItem style={styles.alertExpand}>
+                          <Text style={styles.alertExpandBody}>
+                            {pet.name} needs attention: {r.title.toLowerCase()} — due {dueLabel(r.due).toLowerCase()}.
+                          </Text>
+                          <AccentButton size="sm" onPress={go}>
+                            {goLabel}
+                          </AccentButton>
+                        </FadeInItem>
+                      ) : null}
+                    </View>
                   );
                 })}
               </Group>
@@ -292,6 +309,8 @@ const styles = StyleSheet.create({
   alertPetHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   alertPetName: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   alertTitle: { fontSize: 16, fontFamily: font.medium, color: colors.red },
+  alertExpand: { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 2, gap: 12 },
+  alertExpandBody: { fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },
   insightCard: {
     borderRadius: radius.md,
     backgroundColor: colors.card,

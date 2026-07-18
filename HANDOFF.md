@@ -44,6 +44,17 @@ Every phase (1–6) is implemented, committed, and statically verified: `tsc --n
 - **Per-user notification on your own actions**: `notifyActionLogged` fires an immediate local notification from `logAction` (gated on the actor's care pref) — reports said the actor never got notified (`lib/notifications.ts`, `lib/store.tsx`).
 - **Animations**: `components/Motion.tsx` (`FadeInItem`/`FadeInView`, reduce-motion aware); staggered entrances on the activity feed + logs grid. More surfaces can adopt it.
 
+### Bug-fix batch round 2 (2026-07-18, owner follow-ups + corrections) — landed, needs device verify
+
+- **iOS header architecture change** (fixes "massive gap at top / no page title" + "back button is just a glass border, no 'Back' text" + "two overlapping bells on home"): `nativeHeaderOptions` in `components/Screen.tsx` no longer sets `headerTransparent` on iOS — the header is now a standard OPAQUE native header (UIKit auto-blurs on scroll). Transparent + large-title was leaving a blank inset with an unpainted title and double-rendering `headerRight`. Also added `headerBackButtonDisplayMode: "default"` so the chevron shows the "Back" label. **All three are one root cause; confirm on a real iPhone (I'm on Windows — no iOS simulator, couldn't screenshot).**
+- **Care-page overscroll nav-squish**: removed `minimizeBehavior="onScrollDown"` from `NativeTabs` (`app/(tabs)/_layout.tsx`) — that native minimize was the squish-to-left on overscroll.
+- **REVERSAL — do NOT notify the actor**: round-1 added a local push to the person who logs an action; the owner then asked for the opposite. Removed `notifyActionLogged` and its call — the actor only gets the in-app toast now. (Other-member notification still lives in `raiseFeedingAlert`/`raiseCareAlert`.)
+- **Notifications expand + redirect**: "Needs attention" alerts on `app/activity.tsx` are now tap-to-expand (chevron) revealing a body line + a "Go to reminders"/"Book a vet" button that redirects to the item needing attention.
+- **Two-column wheel picker**: `components/WheelPicker.tsx` rebuilt — separate whole-number wheel + decimal wheel (e.g. "12" · ".4"), shared selection band. `EditStatSheet` uses `min`/`max`/`unit`/`decimalPlaces` (the old `step` prop is gone; all call sites updated).
+- **Logs tiles**: icon centered at top (48px circle, 24px glyph), label centered beneath (`app/(tabs)/logs/index.tsx`), still 3×2.
+- **Coins page** (`app/coins.tsx`, new): balance hero + buyable coin packs (mock "coming soon" purchase via toast — real IAP is an EAS-cutover item, same gateway as PetPal+) + "earn coins free" explainer. `CoinPill` now routes to `/coins` (was `/pets`).
+- **Instructions expanded** (`app/instructions.tsx`): 6 guides now have multiple sections, richer steps, a pro-tip card, and inline theme-colored SVG diagrams (body-condition silhouettes, toothbrush 45° angle, nail-quick cut line). Each card scrolls vertically; still a horizontal swipe slider.
+
 **Still needs a device / not fully closable statically:**
 - iOS "heading not showing", "back button doesn't work", overscroll nav-squish — believed addressed by the SafeAreaProvider fix but must be confirmed on a real iPhone; the NativeTabs overscroll-minimize behavior is system-owned.
 - Delete-account only works once the Edge Function is deployed.

@@ -589,7 +589,6 @@ export default function PetsScreen() {
         label={`Weight (${weightUnitLabel(state.units)})`}
         min={0.1}
         max={state.units === "lb" ? 260 : 120}
-        step={0.1}
         unit={weightUnitLabel(state.units)}
         initialValue={kgToUnit(pet.weightKg, state.units)}
         onSave={(v) => {
@@ -605,7 +604,6 @@ export default function PetsScreen() {
         label="Age (years)"
         min={0}
         max={30}
-        step={0.5}
         unit="yr"
         initialValue={pet.ageYears}
         onSave={(ageYears) => {

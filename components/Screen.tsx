@@ -12,14 +12,18 @@ import { colors, font } from "@/lib/theme";
  * hand-rolled headers anywhere.
  */
 export const nativeHeaderOptions = {
-  headerTransparent: Platform.OS === "ios",
-  headerBlurEffect: "systemChromeMaterial" as const,
+  // A standard OPAQUE native header. iOS gives it the system material and
+  // auto-blurs it as content scrolls under — a *transparent* header here left a
+  // blank gap with no title painted, so we let UIKit own the background.
   headerShadowVisible: false,
   headerTintColor: colors.accent,
   headerTitleStyle: { fontFamily: font.semibold, color: colors.label },
+  // Always show the "Back" text next to the chevron (iOS defaults to icon-only
+  // "minimal" mode on many screens otherwise).
   headerBackTitle: "Back",
+  headerBackButtonDisplayMode: "default" as const,
   headerBackTitleStyle: { fontFamily: font.regular },
-  headerStyle: Platform.OS === "ios" ? undefined : { backgroundColor: colors.bg },
+  headerStyle: { backgroundColor: colors.bg },
   contentStyle: { backgroundColor: colors.bg },
 };
 
