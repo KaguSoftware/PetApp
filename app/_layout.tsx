@@ -17,6 +17,7 @@ function Root() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    GeistPixel: require("@/assets/fonts/GeistPixel.ttf"),
   });
 
   useEffect(() => {

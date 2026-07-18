@@ -1,4 +1,5 @@
 import { Link } from "expo-router";
+import BrandMark from "@/components/BrandMark";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,7 +31,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.brand}>PetPal</Text>
+          <BrandMark />
           <Text style={styles.subtitle}>Care for your pets, together</Text>
         </View>
         <View style={styles.form}>
