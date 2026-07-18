@@ -42,11 +42,14 @@ export default function Sheet({
 
   const dragY = useSharedValue(0);
   const pan = Gesture.Pan()
+    // Claim downward drags immediately so the handle reliably drags the sheet
+    // (rather than the gesture never activating).
+    .activeOffsetY(6)
     .onUpdate((e) => {
       dragY.value = Math.max(0, e.translationY);
     })
     .onEnd((e) => {
-      if (e.translationY > 90 || e.velocityY > 900) {
+      if (e.translationY > 70 || e.velocityY > 600) {
         runOnJS(onClose)();
         dragY.value = withTiming(0, { duration: 250 });
       } else {
@@ -65,11 +68,11 @@ export default function Sheet({
   });
 
   if (!mounted) return null;
-  // Never let a sheet climb under the status bar; leave a comfortable gap at the
-  // top so the drag handle and first line are always clear of the notch. The
-  // inner scroll gets whatever's left, so nothing is hidden off the bottom.
+  // Cap the sheet to a comfortable fraction of the screen — never let it climb
+  // to the status bar. It sizes to its content up to this cap; taller content
+  // scrolls inside. This keeps it from sliding up too far.
   const topGap = insets.top + 24;
-  const maxPanelH = SCREEN_H - topGap;
+  const maxPanelH = Math.min(SCREEN_H * 0.8, SCREEN_H - topGap);
   const body = <View style={{ paddingBottom: insets.bottom + 20 }}>{children}</View>;
   return (
     <Modal transparent visible statusBarTranslucent onRequestClose={onClose} animationType="none">
@@ -97,8 +100,8 @@ export default function Sheet({
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
-                // Leave room for the handle zone (~29) so the last row isn't clipped.
-                style={{ maxHeight: maxPanelH - 29 }}
+                // Leave room for the handle zone (~33) so the last row isn't clipped.
+                style={{ maxHeight: maxPanelH - 33 }}
               >
                 {body}
               </ScrollView>
@@ -128,6 +131,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -8 },
     elevation: 16,
   },
-  handleZone: { alignItems: "center", paddingTop: 10, paddingBottom: 14 },
-  handle: { width: 36, height: 5, borderRadius: 999, backgroundColor: "rgba(25, 25, 32, 0.18)" },
+  handleZone: { alignItems: "center", paddingTop: 12, paddingBottom: 16 },
+  handle: { width: 44, height: 5, borderRadius: 999, backgroundColor: "rgba(25, 25, 32, 0.22)" },
 });
