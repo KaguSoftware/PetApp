@@ -1,104 +1,359 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import EmptyState from "@/components/EmptyState";
+import NotificationBell from "@/components/NotificationBell";
+import PetAvatar from "@/components/PetAvatar";
+import { TabScreen } from "@/components/Screen";
+import Sheet from "@/components/Sheet";
+import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
-import { timeAgo, useStore } from "@/lib/store";
-import { colors, radius } from "@/lib/theme";
+import { AccentButton, Chevron, Chip, CoinPill, Group, Row } from "@/components/ui";
+import { dailyTarget, formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
+import { dueLabel, useStore } from "@/lib/store";
+import { cardShadow, colors, font, radius } from "@/lib/theme";
 
-/**
- * Phase-1 Home: proves live hydration from the shared Supabase backend
- * (pets, members, coins, streak, latest activity). The full glance-hero
- * design lands in Phase 2.
- */
-export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
-  const { state, hydrated, userEmail } = useStore();
+/** Small tap-to-edit sheet for a single numeric pet stat (weight or age) — the web's EditStatSheet. */
+function EditStatSheet({
+  open,
+  onClose,
+  title,
+  label,
+  initialValue,
+  onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  label: string;
+  initialValue: number | undefined;
+  onSave: (value: number) => void;
+}) {
+  const [value, setValue] = useState(initialValue != null ? String(initialValue) : "");
+  // Re-sync the input whenever the sheet opens (or its target value changes
+  // while open) — adjusting state during render instead of an effect avoids
+  // the extra render pass a `useEffect` + `setState` would trigger.
+  const [synced, setSynced] = useState({ open, initialValue });
+  if (open && (synced.open !== open || synced.initialValue !== initialValue)) {
+    setSynced({ open, initialValue });
+    setValue(initialValue != null ? String(initialValue) : "");
+  } else if (!open && synced.open !== open) {
+    setSynced({ open, initialValue });
+  }
 
-  if (!hydrated) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
+  const parsed = Number(value);
+  const valid = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
+
+  return (
+    <Sheet open={open} onClose={onClose}>
+      <Text style={styles.sheetTitle}>{title}</Text>
+      <Text style={styles.fieldLabel}>{label.toUpperCase()}</Text>
+      <TextInput
+        keyboardType="decimal-pad"
+        value={value}
+        onChangeText={setValue}
+        style={styles.input}
+        placeholderTextColor={colors.label3}
+      />
+      <View style={{ marginTop: 28 }}>
+        <AccentButton
+          disabled={!valid}
+          onPress={() => {
+            onSave(parsed);
+            onClose();
+          }}
+        >
+          Save
+        </AccentButton>
       </View>
+    </Sheet>
+  );
+}
+
+/** Animated "meals today" progress bar. */
+function MealsBar({ pct }: { pct: number }) {
+  const [barW, setBarW] = useState(0);
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withTiming(pct, { duration: 250, easing: Easing.out(Easing.quad) });
+  }, [pct, progress]);
+  const fillStyle = useAnimatedStyle(() => ({ width: (barW * progress.value) / 100 }));
+  return (
+    <View style={styles.barTrack} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
+      <Animated.View style={[styles.barFill, { backgroundColor: pct >= 100 ? colors.green : colors.accent }, fillStyle]} />
+    </View>
+  );
+}
+
+export default function Home() {
+  const { state, hydrated, addWeight, editPet, toast } = useStore();
+  const router = useRouter();
+  const [petIndex, setPetIndex] = useState(0);
+  const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
+
+  const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
+
+  const pet = state.pets[Math.min(petIndex, state.pets.length - 1)] as (typeof state.pets)[number] | undefined;
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const todays = useMemo(
+    () => (pet ? state.activities.filter((a) => a.petId === pet.id && a.ts >= startOfDay.getTime()) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.activities, pet?.id]
+  );
+
+  // Horizontal swipe on the hero card pages between pets, like the web's
+  // pointer swipe. activeOffsetX keeps taps and vertical scrolls untouched.
+  const swipe = Gesture.Pan()
+    .activeOffsetX([-15, 15])
+    .failOffsetY([-12, 12])
+    .onEnd((e) => {
+      if (Math.abs(e.translationX) > 45 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.4) {
+        runOnJS(changePet)(e.translationX < 0 ? 1 : -1);
+      }
+    });
+
+  if (!hydrated || !pet) {
+    return (
+      <TabScreen title="Home" trailing={<NotificationBell />}>
+        {hydrated ? (
+          <View style={{ marginTop: 16 }}>
+            <EmptyState
+              icon="paw"
+              title="No pets yet"
+              body="Add your first pet to start tracking their care together."
+              cta="Add a pet"
+              onCta={() => router.push("/pets")}
+            />
+          </View>
+        ) : (
+          <View style={styles.loadingWrap}>
+            <Text style={styles.loadingText}>Loading your household…</Text>
+          </View>
+        )}
+        <Welcome />
+      </TabScreen>
     );
   }
 
-  const latest = state.activities[0];
-  const latestPet = latest && state.pets.find((p) => p.id === latest.petId);
-  const latestMember = latest && state.members.find((m) => m.id === latest.memberId);
+  const me = state.members.find((m) => m.id === state.currentMemberId);
+  // Use the canonical daily target (breed plan → species default) so a
+  // plan-less cat targets 3 meals here, matching the rest of the app, not a
+  // hardcoded 2.
+  const fedTarget = dailyTarget(pet, "fed") ?? 2;
+  const fedCount = todays.filter((a) => a.type === "fed").length;
+  const fedPct = Math.min(100, Math.round((fedCount / fedTarget) * 100));
+
+  // Household-wide outstanding alerts, deduped by pet+title (the data can hold
+  // duplicates) — Home shows one calm summary line, the details live on /activity.
+  const alertCount = new Set(state.reminders.filter((r) => r.alert && !r.done).map((r) => `${r.petId}|${r.title}`)).size;
+
+  const nextReminder = state.reminders.filter((r) => !r.done && r.petId === pet.id).sort((a, b) => a.due - b.due)[0];
+
+  const hour = new Date().getHours();
+  const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${me?.name}`;
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + 12 }]}>
-      <Text style={styles.title}>Home</Text>
-      <Text style={styles.subtitle}>{userEmail}</Text>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Icon name="coin" size={20} color={colors.accent} />
-          <Text style={styles.statValue}>{state.coins}</Text>
-          <Text style={styles.statLabel}>Coins</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Icon name="flame" size={20} color={colors.orange} />
-          <Text style={styles.statValue}>{state.streak}</Text>
-          <Text style={styles.statLabel}>Day streak</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Icon name="people" size={20} color={colors.green} />
-          <Text style={styles.statValue}>{state.members.length}</Text>
-          <Text style={styles.statLabel}>Members</Text>
-        </View>
-      </View>
-
-      <Text style={styles.sectionTitle}>Pets</Text>
-      {state.pets.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardBody}>No pets yet — new pets will appear here once added.</Text>
-        </View>
-      ) : (
-        state.pets.map((pet) => (
-          <View key={pet.id} style={styles.card}>
-            <View style={styles.cardRow}>
-              <View style={[styles.petDot, { backgroundColor: colors.accentSoft }]}>
-                <Icon name="paw" size={20} color={colors.accent} />
-              </View>
-              <View style={styles.flex}>
-                <Text style={styles.cardTitle}>{pet.name}</Text>
-                <Text style={styles.cardBody}>
-                  {pet.breed} · {pet.ageYears} {pet.ageYears === 1 ? "year" : "years"} · {pet.weightKg} kg
+    <TabScreen
+      title="Home"
+      subtitle={greeting}
+      trailing={
+        <>
+          <CoinPill amount={state.coins} />
+          <NotificationBell />
+        </>
+      }
+    >
+      {/* Pet hero card */}
+      <GestureDetector gesture={swipe}>
+        <View style={styles.hero}>
+          <Pressable
+            onPress={() => router.push(`/pet/${pet.id}`)}
+            style={({ pressed }) => [styles.heroTop, pressed && { transform: [{ scale: 0.99 }] }]}
+          >
+            <PetAvatar pet={pet} size="lg" idle />
+            <View style={styles.heroText}>
+              <View style={styles.heroNameRow}>
+                <Text numberOfLines={1} style={styles.heroName}>
+                  {pet.name}
                 </Text>
+                <Icon name="chevron-right" size={14} color={colors.label3} />
               </View>
+              <Text numberOfLines={1} style={styles.heroBreed}>
+                {pet.breed}
+              </Text>
             </View>
+          </Pressable>
+
+          <View style={styles.chipsRow}>
+            <Pressable
+              onPress={() => setEditingStat("age")}
+              accessibilityLabel="Edit age"
+              hitSlop={8}
+              style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
+            >
+              <Chip>
+                <Text style={styles.chipText}>{formatAge(pet.ageYears)}</Text>
+                <Icon name="chevron-right" size={9} color={colors.label3} />
+              </Chip>
+            </Pressable>
+            <Pressable
+              onPress={() => setEditingStat("weight")}
+              accessibilityLabel="Edit weight"
+              hitSlop={8}
+              style={({ pressed }) => (pressed ? { transform: [{ scale: 0.95 }] } : undefined)}
+            >
+              <Chip>
+                <Text style={styles.chipText}>{formatWeight(pet.weightKg, state.units)}</Text>
+                <Icon name="chevron-right" size={9} color={colors.label3} />
+              </Chip>
+            </Pressable>
           </View>
-        ))
+
+          <View style={{ marginTop: 16 }}>
+            <View style={styles.mealsRow}>
+              <Text style={styles.mealsLabel}>Meals today</Text>
+              <Text style={styles.mealsCount}>
+                {fedCount} <Text style={{ color: colors.label3 }}>of {fedTarget}</Text>
+              </Text>
+            </View>
+            <MealsBar pct={fedPct} />
+          </View>
+
+          {state.pets.length > 1 && (
+            <View style={styles.dotsRow}>
+              {state.pets.map((p, i) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => setPetIndex(i)}
+                  accessibilityLabel={`Show ${p.name}`}
+                  hitSlop={10}
+                  style={[styles.petDot, i === petIndex && styles.petDotActive]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </GestureDetector>
+
+      {/* One calm entry point for everything that needs attention */}
+      {alertCount > 0 && (
+        <Pressable
+          onPress={() => router.push("/activity")}
+          style={({ pressed }) => [styles.alertBanner, pressed && { transform: [{ scale: 0.98 }] }]}
+        >
+          <View style={styles.alertIcon}>
+            <Icon name="bell" size={16} color={colors.white} />
+          </View>
+          <Text style={styles.alertLabel}>
+            {alertCount} thing{alertCount === 1 ? "" : "s"} need{alertCount === 1 ? "s" : ""} attention
+          </Text>
+          <Icon name="chevron-right" size={15} color="rgba(226, 50, 66, 0.7)" />
+        </Pressable>
       )}
 
-      {latest && latestPet && latestMember ? (
-        <>
-          <Text style={styles.sectionTitle}>Latest activity</Text>
-          <View style={styles.card}>
-            <Text style={styles.cardBody}>
-              {latestMember.name} logged “{latest.type}” for {latestPet.name} · {timeAgo(latest.ts)}
-            </Text>
-          </View>
-        </>
-      ) : null}
-    </ScrollView>
+      {/* Next up */}
+      <Group style={{ marginTop: 32 }}>
+        <Row
+          onPress={() => router.push("/reminders")}
+          leading={
+            <View style={styles.nextUpIcon}>
+              <Icon name="clock" size={19} color={colors.accent} />
+            </View>
+          }
+          title={nextReminder ? nextReminder.title : "No upcoming reminders"}
+          subtitle={
+            nextReminder
+              ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
+              : "Tap to add one for the family"
+          }
+          trailing={<Chevron />}
+        />
+      </Group>
+
+      <EditStatSheet
+        open={editingStat === "weight"}
+        onClose={() => setEditingStat(null)}
+        title={`${pet.name}'s weight`}
+        label={`Weight (${weightUnitLabel(state.units)})`}
+        initialValue={kgToUnit(pet.weightKg, state.units)}
+        onSave={(v) => {
+          const kg = unitToKg(v, state.units);
+          addWeight(pet.id, kg);
+          toast("scale", `${pet.name}'s weight updated`, formatWeight(kg, state.units));
+        }}
+      />
+      <EditStatSheet
+        open={editingStat === "age"}
+        onClose={() => setEditingStat(null)}
+        title={`${pet.name}'s age`}
+        label="Age (years)"
+        initialValue={pet.ageYears}
+        onSave={(ageYears) => {
+          // Typing an age switches the pet back to approximate-age mode — a
+          // stored birth date would otherwise silently win on next load.
+          editPet(pet.id, {
+            name: pet.name,
+            breed: pet.breed,
+            ageYears,
+            weightKg: pet.weightKg,
+            cupGrams: pet.cupGrams,
+            ...(pet.birthDate != null ? { birthDate: null } : {}),
+          });
+          toast("calendar", `${pet.name}'s age updated`, formatAge(ageYears));
+        }}
+      />
+
+      <Welcome />
+    </TabScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  container: { paddingHorizontal: 16, paddingBottom: 32 },
-  title: { fontSize: 30, fontFamily: "Inter_700Bold", color: colors.label, letterSpacing: -0.4 },
-  subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", color: colors.label2, marginTop: 2, marginBottom: 16 },
-  statsRow: { flexDirection: "row", gap: 10, marginBottom: 8 },
-  statCard: { flex: 1, backgroundColor: colors.card, borderRadius: radius.md, padding: 12, alignItems: "center", gap: 4 },
-  statValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: colors.label },
-  statLabel: { fontSize: 12, fontFamily: "Inter_400Regular", color: colors.label2 },
-  sectionTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: colors.label, marginTop: 20, marginBottom: 8 },
-  card: { backgroundColor: colors.card, borderRadius: radius.md, padding: 14, marginBottom: 8 },
-  cardRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  petDot: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  cardTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.label },
-  cardBody: { fontSize: 14, fontFamily: "Inter_400Regular", color: colors.label2, marginTop: 1 },
+  loadingWrap: { marginTop: 40, alignItems: "center" },
+  loadingText: { fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
+  hero: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 20, ...cardShadow },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
+  heroText: { flex: 1, minWidth: 0 },
+  heroNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  heroName: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, flexShrink: 1 },
+  heroBreed: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
+  chipsRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chipText: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
+  mealsRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  mealsLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
+  mealsCount: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
+  barTrack: { marginTop: 6, height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: "hidden" },
+  barFill: { height: "100%", borderRadius: 3 },
+  dotsRow: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  petDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(28, 28, 35, 0.18)" },
+  petDotActive: { width: 20, backgroundColor: colors.label },
+  alertBanner: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.redSoft,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  alertIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  alertLabel: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: font.semibold, color: colors.red },
+  nextUpIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
+  fieldLabel: { marginTop: 20, marginBottom: 6, fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.6, color: colors.label2 },
+  input: {
+    width: "100%",
+    borderRadius: radius.sm,
+    backgroundColor: colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: font.medium,
+    color: colors.label,
+  },
 });
