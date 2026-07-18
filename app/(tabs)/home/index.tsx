@@ -50,7 +50,7 @@ function MealsBar({ pct }: { pct: number }) {
 }
 
 export default function Home() {
-  const { state, hydrated, addWeight, editPet, dismissAllAlerts, toast } = useStore();
+  const { state, hydrated, addWeight, editPet, toast } = useStore();
   const router = useRouter();
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
@@ -219,15 +219,10 @@ export default function Home() {
         </View>
       </GestureDetector>
 
-      {/* One calm entry point for everything that needs attention, with an
-          inline "Clear all" to wipe every notification at once. */}
+      {/* One calm entry point for everything that needs attention */}
       {alertCount > 0 && (
-        <View style={[styles.alertBanner, { marginTop: 12 }]}>
-          <PressableScale
-            onPress={() => router.push("/activity")}
-            accessibilityRole="button"
-            style={styles.alertMain}
-          >
+        <PressableScale onPress={() => router.push("/activity")} accessibilityRole="button" style={{ marginTop: 12 }}>
+          <View style={styles.alertBanner}>
             <View style={styles.alertIcon}>
               <Icon name="bell" size={16} color={colors.white} />
             </View>
@@ -235,18 +230,8 @@ export default function Home() {
               {alertCount} thing{alertCount === 1 ? "" : "s"} need{alertCount === 1 ? "s" : ""} attention
             </Text>
             <Icon name="chevron-right" size={15} color={withAlpha(colors.red, 0.7)} />
-          </PressableScale>
-          <PressableScale
-            onPress={dismissAllAlerts}
-            accessibilityRole="button"
-            accessibilityLabel="Clear all notifications"
-            hitSlop={6}
-          >
-            <View style={styles.alertClear}>
-              <Text style={styles.alertClearLabel}>Clear all</Text>
-            </View>
-          </PressableScale>
-        </View>
+          </View>
+        </PressableScale>
       )}
 
       {/* Next up */}
@@ -369,17 +354,13 @@ const styles = StyleSheet.create({
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
     borderRadius: radius.md,
     backgroundColor: colors.redSoft,
-    paddingLeft: 16,
-    paddingRight: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  alertMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 4 },
   alertIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
   alertLabel: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: font.semibold, color: colors.red },
-  alertClear: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: withAlpha(colors.red, 0.14) },
-  alertClearLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.red },
   nextUpIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
 });

@@ -17,11 +17,27 @@ function tone(icon: string): { tint: string; bg: string } {
 }
 
 export default function Toasts() {
-  const { toasts, dismissToast } = useStore();
+  const { toasts, dismissToast, stopNotifications } = useStore();
   const insets = useSafeAreaInsets();
   if (toasts.length === 0) return null;
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
+      {/* When several stack up, a small button clears them all at once (and
+          cancels any still queued) so overlays don't pile on the screen. */}
+      {toasts.length > 1 ? (
+        <Animated.View entering={SlideInUp.duration(200)} exiting={FadeOutUp.duration(160)} style={styles.clearRow}>
+          <Pressable
+            onPress={stopNotifications}
+            accessibilityRole="button"
+            accessibilityLabel="Clear all notifications"
+            hitSlop={8}
+            style={({ pressed }) => [styles.clearBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Icon name="xmark" size={13} color={colors.white} />
+            <Text style={styles.clearLabel}>Clear all</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
       {toasts.map((t) => {
         const { tint, bg } = tone(t.icon);
         return (
@@ -62,6 +78,17 @@ export default function Toasts() {
 
 const styles = StyleSheet.create({
   wrap: { position: "absolute", left: 12, right: 12, gap: 8, zIndex: 100 },
+  clearRow: { alignItems: "center" },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "rgba(28, 28, 35, 0.82)",
+  },
+  clearLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.white },
   toast: {
     flexDirection: "row",
     alignItems: "center",
