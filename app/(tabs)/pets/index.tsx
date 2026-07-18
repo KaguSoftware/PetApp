@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
 import EditStatSheet from "@/components/EditStatSheet";
-import NotificationBell from "@/components/NotificationBell";
+import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import PixelPet, { PixelCosmetic } from "@/components/pixel/PixelPet";
@@ -191,7 +191,7 @@ export default function PetsScreen() {
 
   if (!hydrated)
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<NotificationBell />}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />}>
         <PageLoading />
       </TabScreen>
     );
@@ -358,7 +358,7 @@ export default function PetsScreen() {
 
   if (!pet) {
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<NotificationBell />}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />}>
         <View style={{ marginTop: 16 }}>
           <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
         </View>
@@ -384,12 +384,7 @@ export default function PetsScreen() {
     <TabScreen
       title="Pets"
       subtitle="Style your companion"
-      trailing={
-        <>
-          <CoinPill amount={state.coins} />
-          <NotificationBell />
-        </>
-      }
+      trailing={<HeaderActions />}
     >
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginBottom: 8 }}>

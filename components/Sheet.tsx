@@ -53,11 +53,21 @@ export default function Sheet({
     });
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - progress.value) * SCREEN_H * 0.5 + dragY.value }],
-  }));
+  // The panel is height-driven by its content and slides up from below; animate
+  // it in by its own measured height so short sheets rise just enough and tall
+  // ones don't overshoot. Falls back to half-screen until measured.
+  const [panelH, setPanelH] = useState(0);
+  const panelStyle = useAnimatedStyle(() => {
+    const travel = panelH || SCREEN_H * 0.5;
+    return { transform: [{ translateY: (1 - progress.value) * travel + dragY.value }] };
+  });
 
   if (!mounted) return null;
+  // Never let a sheet climb under the status bar; leave a comfortable gap at the
+  // top so the drag handle and first line are always clear of the notch. The
+  // inner scroll gets whatever's left, so nothing is hidden off the bottom.
+  const topGap = insets.top + 24;
+  const maxPanelH = SCREEN_H - topGap;
   const body = <View style={{ paddingBottom: insets.bottom + 20 }}>{children}</View>;
   return (
     <Modal transparent visible statusBarTranslucent onRequestClose={onClose} animationType="none">
@@ -66,14 +76,22 @@ export default function Sheet({
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         </Animated.View>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.kav} pointerEvents="box-none">
-          <Animated.View style={[styles.panel, panelStyle]}>
+          <Animated.View
+            style={[styles.panel, { maxHeight: maxPanelH }, panelStyle]}
+            onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
+          >
             <GestureDetector gesture={pan}>
               <View style={styles.handleZone}>
                 <View style={styles.handle} />
               </View>
             </GestureDetector>
             {scrollable ? (
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: SCREEN_H * 0.78 }}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                // Leave room for the handle zone (~29) so the last row isn't clipped.
+                style={{ maxHeight: maxPanelH - 29 }}
+              >
                 {body}
               </ScrollView>
             ) : (
@@ -95,7 +113,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 20,
-    maxHeight: "88%",
     shadowColor: "#000",
     shadowOpacity: 0.18,
     shadowRadius: 40,

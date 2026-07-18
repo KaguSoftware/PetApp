@@ -27,13 +27,15 @@ export const nativeHeaderOptions = {
   contentStyle: { backgroundColor: colors.bg },
 };
 
-/** Tab stacks add the collapsing large title on top of the shared chrome. */
+/**
+ * Tab stacks render their big title as in-content text (see TabScreen), not as
+ * a native large title — the native large-title header did not paint reliably
+ * in Expo Go on iOS (blank gap, no title). We keep a normal small header only
+ * for the trailing accessories (coins + bell), with no title text of its own.
+ */
 export const tabStackScreenOptions = {
   ...nativeHeaderOptions,
-  headerLargeTitle: true,
-  headerLargeTitleShadowVisible: false,
-  headerLargeStyle: { backgroundColor: colors.bg },
-  headerLargeTitleStyle: { fontFamily: font.bold, color: colors.label },
+  headerTitle: "",
 };
 
 function HeaderTrailing({ children }: { children: React.ReactNode }) {
@@ -41,10 +43,9 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Top-level tab page scaffold. The title lives in the REAL native large-title
- * header (configured by the tab's stack layout); this component wires the
- * title + trailing accessories into it and provides the scroll container
- * whose content insets drive the native collapse.
+ * Top-level tab page scaffold. The big page title is rendered as in-content
+ * text (reliable everywhere), while the small native header carries only the
+ * trailing accessories (coins + bell). Content starts just below that header.
  */
 export function TabScreen({
   title,
@@ -67,10 +68,10 @@ export function TabScreen({
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title,
+      headerTitle: "",
       headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-  }, [navigation, title, trailing]);
+  }, [navigation, trailing]);
 
   return (
     <ScrollView
@@ -79,12 +80,13 @@ export function TabScreen({
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        paddingTop: Platform.OS === "android" ? headerHeight + 6 : 6,
+        paddingTop: (Platform.OS === "android" ? headerHeight : 0) + 8,
         paddingBottom: contentBottomPad + Math.max(insets.bottom, 12),
         paddingHorizontal: 16,
       }}
       {...scrollProps}
     >
+      <Text style={styles.pageTitle}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {children}
     </ScrollView>
@@ -139,6 +141,7 @@ export function PushedScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  subtitle: { fontSize: 14, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingBottom: 8 },
+  pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label, paddingHorizontal: 4, paddingTop: 4 },
+  subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10 },
   headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
 });

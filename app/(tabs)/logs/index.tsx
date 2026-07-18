@@ -5,8 +5,8 @@ import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
+import HeaderActions from "@/components/HeaderActions";
 import { FadeInItem } from "@/components/Motion";
-import NotificationBell from "@/components/NotificationBell";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
@@ -15,7 +15,6 @@ import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
   Chevron,
-  CoinPill,
   FieldLabel,
   Group,
   PressableScale,
@@ -112,13 +111,13 @@ export default function LogsScreen() {
 
   if (!hydrated)
     return (
-      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<NotificationBell />}>
+      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />}>
         <PageLoading />
       </TabScreen>
     );
   if (!pet) {
     return (
-      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<NotificationBell />}>
+      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />}>
         <View style={{ marginTop: 16 }}>
           <EmptyState
             icon="list"
@@ -182,12 +181,7 @@ export default function LogsScreen() {
     <TabScreen
       title="Logs"
       subtitle="Log care · everyone's notified"
-      trailing={
-        <>
-          <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
-          <NotificationBell />
-        </>
-      }
+      trailing={<HeaderActions />}
     >
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginTop: 12 }}>

@@ -55,6 +55,20 @@ Every phase (1–6) is implemented, committed, and statically verified: `tsc --n
 - **Coins page** (`app/coins.tsx`, new): balance hero + buyable coin packs (mock "coming soon" purchase via toast — real IAP is an EAS-cutover item, same gateway as PetPal+) + "earn coins free" explainer. `CoinPill` now routes to `/coins` (was `/pets`).
 - **Instructions expanded** (`app/instructions.tsx`): 6 guides now have multiple sections, richer steps, a pro-tip card, and inline theme-colored SVG diagrams (body-condition silhouettes, toothbrush 45° angle, nail-quick cut line). Each card scrolls vertically; still a horizontal swipe slider.
 
+### Bug-fix batch round 3 (2026-07-18, from an on-device iOS screenshot + follow-ups)
+
+- **iOS header rebuilt as in-content title** (the real fix — a screenshot showed a big blank gap with no "Home" title, only the floating accessories): the native large-title header wasn't painting in Expo Go iOS. `TabScreen` now renders the page title + subtitle as the **first scrollable content** (`styles.pageTitle`), and `tabStackScreenOptions` uses a plain small header (`headerTitle: ""`) that only carries the trailing accessories. Device-independent; the title always shows. `nativeHeaderOptions` stays opaque + `headerBackButtonDisplayMode: "default"` from round 2.
+- **Header "island" consistency**: the coins pill + bell now render on **every** tab via one shared `components/HeaderActions.tsx` (coins → `/coins`, bell → `/activity`). Previously tabs without coins showed a lone bell in a coin-shaped gap. All five tabs use `trailing={<HeaderActions />}`.
+- **Streak in Home header**: a `StreakPill` (flame + count) sits left of the header island on Home and opens the **StreakCalendarSheet** (not account settings).
+- **Bottom sheets sizing** (`components/Sheet.tsx`): height is now content-driven and clamped to `SCREEN_H - (safe-area-top + 24)`, animated in by the panel's own measured height, and the inner scroll leaves room for the handle — so sheets rise enough to show everything but never slide under the status bar or clip the last row.
+- **Guides feature (`/impeccable craft`)** — Instructions is now a real feature, not one swipe screen:
+  - `lib/guides.tsx` — single source of truth for guide content + the inline SVG diagrams.
+  - `/instructions` — a clean tappable list menu of guides (icon · title · summary · read-time).
+  - `/instructions/[id]` — per-guide detail (hero, diagram, numbered sections, pro-tip).
+  - **Care tab** has a "How-to guides" section: a titled header with "See all" + a horizontal rail of guide chips (available whether or not PetPal+ is active). Reached from Settings too.
+
+**Deferred (agreed with owner): full dark mode** — the color tokens are baked into ~37 module-level `StyleSheet.create` calls; real dark mode needs a `useTheme()` refactor across all of them + on-device checking. Scheduled as its own dedicated pass. `app.json` is still `userInterfaceStyle: "light"`.
+
 **Still needs a device / not fully closable statically:**
 - iOS "heading not showing", "back button doesn't work", overscroll nav-squish — believed addressed by the SafeAreaProvider fix but must be confirmed on a real iPhone; the NativeTabs overscroll-minimize behavior is system-owned.
 - Delete-account only works once the Edge Function is deployed.

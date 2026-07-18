@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import NotificationBell from "@/components/NotificationBell";
+import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import { TabScreen } from "@/components/Screen";
@@ -20,7 +20,7 @@ export default function SettingsPage() {
 
   if (!hydrated) {
     return (
-      <TabScreen title="Settings" trailing={<NotificationBell />}>
+      <TabScreen title="Settings" trailing={<HeaderActions />}>
         <PageLoading />
       </TabScreen>
     );
@@ -47,7 +47,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <TabScreen title="Settings" trailing={<NotificationBell />}>
+    <TabScreen title="Settings" trailing={<HeaderActions />}>
       {/* PetPal+ status / upgrade */}
       {state.premium ? (
         <Group>

@@ -5,16 +5,34 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import EditStatSheet from "@/components/EditStatSheet";
-import NotificationBell from "@/components/NotificationBell";
+import HeaderActions from "@/components/HeaderActions";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
+import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
-import { Chevron, Chip, CoinPill, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitle } from "@/components/ui";
+import { Chevron, Chip, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitle } from "@/components/ui";
 import { dailyTarget, formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+
+/** Compact day-streak pill for the Home header (flame + count). */
+function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
+  return (
+    <PressableScale
+      haptic
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${streak} day streak`}
+    >
+      <View style={styles.streakPill}>
+        <Icon name="flame" size={14} color={colors.orange} />
+        <Text style={styles.streakPillLabel}>{streak}</Text>
+      </View>
+    </PressableScale>
+  );
+}
 
 /** Animated "meals today" progress bar. */
 function MealsBar({ pct }: { pct: number }) {
@@ -37,6 +55,7 @@ export default function Home() {
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
 
   const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
 
@@ -63,7 +82,7 @@ export default function Home() {
 
   if (!hydrated || !pet) {
     return (
-      <TabScreen title="Home" trailing={<NotificationBell />}>
+      <TabScreen title="Home" trailing={<HeaderActions />}>
         {hydrated ? (
           <View style={{ marginTop: 16 }}>
             <EmptyState
@@ -109,8 +128,8 @@ export default function Home() {
       subtitle={greeting}
       trailing={
         <>
-          <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
-          <NotificationBell />
+          <StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />
+          <HeaderActions />
         </>
       }
     >
@@ -295,12 +314,24 @@ export default function Home() {
         }}
       />
 
+      <StreakCalendarSheet open={streakOpen} onClose={() => setStreakOpen(false)} />
+
       <Welcome />
     </TabScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  streakPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: radius.full,
+    backgroundColor: colors.orangeSoft,
+  },
+  streakPillLabel: { fontSize: 14, fontFamily: font.bold, color: colors.orange },
   loadingWrap: { marginTop: 40, alignItems: "center" },
   loadingText: { fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
   hero: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 20, ...cardShadow },

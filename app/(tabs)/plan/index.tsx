@@ -1,11 +1,11 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
-import NotificationBell from "@/components/NotificationBell";
+import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import PetAvatar from "@/components/PetAvatar";
@@ -14,6 +14,7 @@ import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
 import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader, SheetTitle } from "@/components/ui";
 import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
+import { GUIDES } from "@/lib/guides";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
 
@@ -109,6 +110,63 @@ const LOCKED_PREVIEWS: { icon: IconName; title: string; text: string }[] = [
   { icon: "stethoscope", title: "Vet schedule", text: "Checkups, vaccines & treatments — reminders before they're due." },
 ];
 
+/**
+ * Care-guides menu: a titled row with "See all" plus a horizontal rail of
+ * tappable guide chips. Available on the Care tab whether or not PetPal+ is on —
+ * how-to guidance isn't gated. Chips deep-link straight into a guide; the header
+ * opens the full list.
+ */
+function CareGuides() {
+  const router = useRouter();
+  return (
+    <View style={styles.guidesWrap}>
+      <PressableScale
+        onPress={() => router.push("/instructions")}
+        accessibilityRole="button"
+        accessibilityLabel="All how-to guides"
+        style={styles.guidesHeader}
+      >
+        <View style={styles.guidesHeaderText}>
+          <Text style={styles.guidesTitle}>How-to guides</Text>
+          <Text style={styles.guidesSubtitle}>Weight checks, dental care & more</Text>
+        </View>
+        <View style={styles.guidesSeeAll}>
+          <Text style={styles.guidesSeeAllText}>See all</Text>
+          <Icon name="chevron-right" size={14} color={colors.accent} />
+        </View>
+      </PressableScale>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.guidesRail}
+      >
+        {GUIDES.map((g) => (
+          <PressableScale
+            key={g.id}
+            haptic
+            onPress={() => router.push(`/instructions/${g.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={g.title}
+          >
+            <View style={styles.guideChip}>
+              <View style={[styles.guideChipIcon, { backgroundColor: g.bg }]}>
+                <Icon name={g.icon} size={22} color={g.tint} />
+              </View>
+              <Text numberOfLines={2} style={styles.guideChipLabel}>
+                {g.title}
+              </Text>
+              <View style={styles.guideChipMeta}>
+                <Icon name="clock" size={10} color={colors.label3} />
+                <Text style={styles.guideChipMetaText}>{g.minutes}m</Text>
+              </View>
+            </View>
+          </PressableScale>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 export default function PlanPage() {
   const router = useRouter();
   const { state, hydrated, editPet, logAction, toast } = useStore();
@@ -142,7 +200,7 @@ export default function PlanPage() {
 
   if (!hydrated) {
     return (
-      <TabScreen title="Care Plan" trailing={<NotificationBell />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
         <PageLoading />
       </TabScreen>
     );
@@ -151,7 +209,7 @@ export default function PlanPage() {
   const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
   if (!pet) {
     return (
-      <TabScreen title="Care Plan" trailing={<NotificationBell />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
         <View style={{ marginTop: 16 }}>
           <EmptyState
             icon="paw"
@@ -175,7 +233,7 @@ export default function PlanPage() {
 
   if (!state.premium) {
     return (
-      <TabScreen title="Care Plan" trailing={<NotificationBell />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
         <View style={styles.lockedWrap}>
           <View style={styles.lockCircle}>
             <Icon name="lock" size={34} color={colors.accent} />
@@ -202,13 +260,14 @@ export default function PlanPage() {
             <AccentButton onPress={() => setPaywallOpen(true)}>Unlock with PetPal+</AccentButton>
           </View>
         </View>
+        <CareGuides />
         <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
       </TabScreen>
     );
   }
 
   return (
-    <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<NotificationBell />}>
+    <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<HeaderActions />}>
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Switch pet" hitSlop={8}>
           <View style={styles.petSwitcher}>
@@ -236,6 +295,8 @@ export default function PlanPage() {
           ))}
         </Group>
       </Sheet>
+
+      <CareGuides />
 
       {plan ? (
         <>
@@ -485,6 +546,26 @@ export default function PlanPage() {
 }
 
 const styles = StyleSheet.create({
+  guidesWrap: { marginTop: 8, marginBottom: 20 },
+  guidesHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
+  guidesHeaderText: { flex: 1, minWidth: 0 },
+  guidesTitle: { fontSize: 18, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
+  guidesSubtitle: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
+  guidesSeeAll: { flexDirection: "row", alignItems: "center", gap: 2 },
+  guidesSeeAllText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
+  guidesRail: { gap: 10, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 2 },
+  guideChip: {
+    width: 108,
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    gap: 8,
+    ...cardShadow,
+  },
+  guideChipIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17 },
+  guideChipMeta: { flexDirection: "row", alignItems: "center", gap: 3 },
+  guideChipMetaText: { fontSize: 11, fontFamily: font.medium, color: colors.label3 },
   lockedWrap: { alignItems: "center", paddingTop: 40, paddingBottom: 24 },
   lockCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
   lockedTitle: { marginTop: 20, fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, textAlign: "center" },
