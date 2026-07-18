@@ -20,28 +20,30 @@ import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { colors, font, radius } from "@/lib/theme";
 
 /**
- * Press-feedback system. The rule app-wide: cards/buttons/chips SCALE
- * (springy, subtle — never an opacity blink); list rows use a background
- * fill highlight (Row below). Bare `opacity` pressed styles are banned.
+ * Press-feedback system — the standard iOS control behavior: the pressed
+ * control DIMS smoothly while held (like every UIButton) and eases back on
+ * release. No scaling, no bouncing, no opacity blinks. List rows use a
+ * background fill highlight (Row below) instead.
  */
-export const PRESS_SCALE = 0.97;
+export const PRESS_SCALE = 0.97; // retained for API compatibility; no longer used
 export const PRESS_SCALE_SMALL = 0.94;
 
 export function PressableScale({
-  scaleTo = PRESS_SCALE,
+  scaleTo: _scaleTo,
   haptic = false,
   onPress,
   children,
   style,
   ...props
 }: PressableProps & {
+  /** @deprecated Press feedback is now the system dim; kept so call sites compile. */
   scaleTo?: number;
   /** Light impact on press (iOS). */
   haptic?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const dim = useSharedValue(1);
+  const anim = useAnimatedStyle(() => ({ opacity: dim.value }));
   return (
     <Animated.View style={[anim, style]}>
       <Pressable
@@ -51,11 +53,11 @@ export function PressableScale({
           onPress?.(e);
         }}
         onPressIn={(e) => {
-          scale.value = withTiming(scaleTo, { duration: 110, easing: Easing.out(Easing.quad) });
+          dim.value = withTiming(0.55, { duration: 90, easing: Easing.out(Easing.quad) });
           props.onPressIn?.(e);
         }}
         onPressOut={(e) => {
-          scale.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
+          dim.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) });
           props.onPressOut?.(e);
         }}
       >

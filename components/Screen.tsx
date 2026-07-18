@@ -47,14 +47,14 @@ export function TabScreen({
   subtitle,
   trailing,
   children,
-  contentBottomPad = 96,
+  contentBottomPad = 16,
   ...scrollProps
 }: {
   title: string;
   subtitle?: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
-  /** Extra space for the floating island tab bar. */
+  /** Extra bottom breathing room — the native tab bar inset is handled by the system. */
   contentBottomPad?: number;
 } & ScrollViewProps) {
   const navigation = useNavigation();
