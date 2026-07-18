@@ -6,13 +6,11 @@ import { colors, font } from "@/lib/theme";
 
 /**
  * Top-right bell on tab pages, badged with the outstanding care-alert count.
- * Tapping opens the activity hub. When there ARE alerts, a small "clear" button
- * appears beside it to dismiss every notification at once — reachable from any
- * page's header (handy while the alert machinery is noisy in development).
+ * Tapping opens the activity hub — mirrors the web NotificationBell.
  */
 export default function NotificationBell() {
   const router = useRouter();
-  const { state, dismissAllAlerts } = useStore();
+  const { state } = useStore();
   // Care alerts deduped by petId|title, matching the web's badge count.
   const seen = new Set<string>();
   let count = 0;
@@ -24,48 +22,23 @@ export default function NotificationBell() {
     count++;
   }
   return (
-    <View style={styles.row}>
+    <Pressable
+      onPress={() => router.push("/activity")}
+      accessibilityLabel={count > 0 ? `Activity, ${count} alerts` : "Activity"}
+      hitSlop={8}
+      style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
+    >
+      <Icon name="bell" size={21} color={colors.label} />
       {count > 0 ? (
-        <Pressable
-          onPress={dismissAllAlerts}
-          accessibilityRole="button"
-          accessibilityLabel="Clear all notifications"
-          hitSlop={8}
-          style={({ pressed }) => [styles.clear, pressed && { opacity: 0.6 }]}
-        >
-          <Icon name="xmark" size={13} color={colors.label2} />
-          <Text style={styles.clearLabel}>Clear</Text>
-        </Pressable>
+        <View style={styles.badge}>
+          <Text style={styles.badgeLabel}>{count > 9 ? "9+" : count}</Text>
+        </View>
       ) : null}
-      <Pressable
-        onPress={() => router.push("/activity")}
-        accessibilityLabel={count > 0 ? `Activity, ${count} alerts` : "Activity"}
-        hitSlop={8}
-        style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
-      >
-        <Icon name="bell" size={21} color={colors.label} />
-        {count > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeLabel}>{count > 9 ? "9+" : count}</Text>
-          </View>
-        ) : null}
-      </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  clear: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    height: 30,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: colors.fill,
-  },
-  clearLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   wrap: {
     width: 38,
     height: 38,

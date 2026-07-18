@@ -64,6 +64,36 @@ function headSpriteFor(pet: Pet): Sprite {
   return furSprite(base, fur.body, fur.shade);
 }
 
+/** Builds a fresh voxel InstancedMesh for a pet's current head + cosmetics. */
+function buildPetMesh(pet: Pet): { mesh: THREE.InstancedMesh; fit: number } {
+  const head = headSpriteFor(pet);
+  const hw = head.rows[0]?.length ?? 16;
+  const hh = head.rows.length;
+  const overlays = equippedCosmetics(pet).map(({ cos }) => ({
+    sprite: cos.sprite,
+    left: cos.place.left * hw,
+    top: cos.place.top * hh,
+    scale: cos.place.widthFrac,
+  }));
+  const { voxels, w, h } = spriteVoxels(head, overlays);
+
+  const geo = new THREE.BoxGeometry(1, 1, DEPTH);
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 });
+  const mesh = new THREE.InstancedMesh(geo, mat, voxels.length);
+  const dummy = new THREE.Object3D();
+  const cx = (w - 1) / 2;
+  const cy = (h - 1) / 2;
+  voxels.forEach((v, i) => {
+    dummy.position.set(v.x - cx, cy - v.y, 0);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+    mesh.setColorAt(i, v.color);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  return { mesh, fit: 15 / Math.max(w, h) };
+}
+
 export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   // Rotation state the gesture writes (on the JS thread — see runOnJS below) and
   // the render loop reads. Plain refs so mutations never trigger re-renders.
@@ -74,6 +104,34 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   const grabX = useRef(0);
   const grabY = useRef(0);
   const rafRef = useRef<number | null>(null);
+  // Scene refs so the model can be rebuilt when cosmetics change without
+  // recreating the whole GL context.
+  const groupRef = useRef<THREE.Group | null>(null);
+  const meshRef = useRef<THREE.InstancedMesh | null>(null);
+
+  // Signature of the pet identity + species + equipped cosmetics → rebuild the
+  // voxel mesh in place whenever it changes: switch pets → the model swaps to
+  // that pet; put a hat on → the 3D model wears it.
+  const equipSig = `${pet.id}|${pet.species}|${Object.entries(pet.equipped)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}:${v}`)
+    .sort()
+    .join(",")}`;
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    if (meshRef.current) {
+      group.remove(meshRef.current);
+      meshRef.current.geometry.dispose();
+      (meshRef.current.material as THREE.Material).dispose();
+    }
+    const { mesh, fit } = buildPetMesh(pet);
+    group.add(mesh);
+    group.scale.setScalar(fit);
+    meshRef.current = mesh;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipSig]);
 
   useEffect(() => {
     return () => {
@@ -119,41 +177,15 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
     rim.position.set(-8, -4, -6);
     scene.add(rim);
 
-    // Build the voxel instanced mesh from the pet's HEAD sprite + cosmetics.
-    const head = headSpriteFor(pet);
-    const hw = head.rows[0]?.length ?? 16;
-    const hh = head.rows.length;
-    const overlays = equippedCosmetics(pet).map(({ cos }) => ({
-      sprite: cos.sprite,
-      // Cosmetics place as fractions of the head sprite box (same as PixelPet).
-      left: cos.place.left * hw,
-      top: cos.place.top * hh,
-      scale: cos.place.widthFrac,
-    }));
-    const { voxels, w, h } = spriteVoxels(head, overlays);
-
-    const geo = new THREE.BoxGeometry(1, 1, DEPTH);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: false, roughness: 0.85, metalness: 0 });
-    const mesh = new THREE.InstancedMesh(geo, mat, voxels.length);
-    const dummy = new THREE.Object3D();
-    const cx = (w - 1) / 2;
-    const cy = (h - 1) / 2;
-    voxels.forEach((v, i) => {
-      // Center the model; flip Y so sprite-top is up. Slight scale to fit view.
-      dummy.position.set(v.x - cx, cy - v.y, 0);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-      mesh.setColorAt(i, v.color);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-
+    // Build the voxel model from the pet's HEAD sprite + cosmetics and keep the
+    // group/mesh in refs so the equip effect can swap it in later.
     const group = new THREE.Group();
-    // Fit the model to the camera: scale by the larger sprite dimension.
-    const fit = 15 / Math.max(w, h);
+    const { mesh, fit } = buildPetMesh(pet);
     group.scale.setScalar(fit);
     group.add(mesh);
     scene.add(group);
+    groupRef.current = group;
+    meshRef.current = mesh;
 
     let last = 0;
     const render = (t: number) => {
