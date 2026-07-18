@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
@@ -9,7 +9,6 @@ import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import {
   AccentButton,
   Chevron,
-  ConfirmRow,
   Group,
   IconCircle,
   Row,
@@ -71,10 +70,36 @@ export default function AccountSettingsPage() {
     toast("bell", "Confirm your new email", "We sent a link to finish the change");
   }
 
-  // SCOPE(P6): needs delete-account Edge Function — GROWS LATER. The web calls a
-  // service-role API route (/api/account/delete) that doesn't exist on mobile.
-  function deleteAccount() {
-    toast("alert", "Account deletion is coming soon", "It arrives in the next backend update");
+  function confirmSignOut() {
+    Alert.alert("Sign out", "You'll need to log back in to see your household.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: () => signOut() },
+    ]);
+  }
+
+  // Deletion runs through the `delete-account` Edge Function: it verifies the
+  // caller's JWT server-side, then deletes the auth user with the service-role
+  // key (DB rows cascade). The local session is cleared afterward.
+  async function runDeleteAccount() {
+    setBusy(true);
+    const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+    setBusy(false);
+    if (error) {
+      toast("alert", "Couldn't delete account", "Please try again in a moment");
+      return;
+    }
+    await signOut();
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      "Delete account?",
+      "This permanently deletes your account and the whole household — pets, activity, everything. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => runDeleteAccount() },
+      ],
+    );
   }
 
   return (
@@ -129,8 +154,8 @@ export default function AccountSettingsPage() {
           }}
           trailing={<Chevron />}
         />
-        <ConfirmRow label="Sign out" confirmLabel="Tap again to sign out" onConfirm={signOut} />
-        <ConfirmRow label="Delete account" confirmLabel="Tap again to permanently delete" onConfirm={deleteAccount} />
+        <Row destructive title="Sign out" onPress={confirmSignOut} />
+        <Row destructive title="Delete account" onPress={confirmDeleteAccount} />
       </Group>
       <Text style={styles.footnote}>
         Permanently deletes your account and the whole household — pets, activity, everything. This can&apos;t be undone.

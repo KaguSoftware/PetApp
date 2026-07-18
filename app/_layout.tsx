@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import NotificationSync from "@/components/NotificationSync";
 import { nativeHeaderOptions } from "@/components/Screen";
 import Toasts from "@/components/Toasts";
@@ -48,9 +49,11 @@ function Root() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SessionProvider>
-        <Root />
-      </SessionProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <SessionProvider>
+          <Root />
+        </SessionProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

@@ -1,7 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import NotificationBell from "@/components/NotificationBell";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
@@ -26,6 +28,23 @@ export default function SettingsPage() {
 
   const petCount = state.pets.length;
   const memberCount = state.members.length;
+
+  async function emailSupport() {
+    const url =
+      "mailto:support@kagu.app?subject=" +
+      encodeURIComponent("PetPal support") +
+      "&body=" +
+      encodeURIComponent("\n\n—\nTell us what's going on and we'll help.");
+    const ok = await Linking.canOpenURL(url);
+    if (ok) Linking.openURL(url);
+    else Alert.alert("Email us", "Reach the team at support@kagu.app and we'll get back to you.");
+  }
+
+  function openHelp() {
+    WebBrowser.openBrowserAsync("https://kagu.app/help").catch(() => {
+      Alert.alert("Couldn't open help", "Please try again in a moment.");
+    });
+  }
 
   return (
     <TabScreen title="Settings" trailing={<NotificationBell />}>
@@ -97,6 +116,31 @@ export default function SettingsPage() {
           leading={<IconCircle icon="person" tint={colors.orange} bg={colors.orangeSoft} />}
           title="Account"
           subtitle="Sign-in, progress & intro"
+          trailing={<Chevron />}
+        />
+      </Group>
+
+      <SectionHeader>Learn & Support</SectionHeader>
+      <Group>
+        <Row
+          onPress={() => router.push("/instructions")}
+          leading={<IconCircle icon="list" tint={colors.accent} bg={colors.accentSoft} />}
+          title="How-to guides"
+          subtitle="Weight checks, dental care & more"
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={emailSupport}
+          leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}
+          title="Contact support"
+          subtitle="We usually reply within a day"
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={openHelp}
+          leading={<IconCircle icon="eye" tint={colors.label2} bg={colors.fill} />}
+          title="Help center"
+          subtitle="FAQ & troubleshooting"
           trailing={<Chevron />}
         />
       </Group>

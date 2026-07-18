@@ -24,8 +24,30 @@ Native rebuild of **PetPal** (family pet-care app: care logging, reminders, heal
 - **Colors/fonts**: theme tokens only; derive tints with `withAlpha(colors.x, a)`. Tab bar is the REAL system UITabBar (expo-router NativeTabs, SF Symbols) — never rebuild it. Press feedback is the standard iOS dim-while-held (PressableScale).
 - **Gotcha**: if typed routes error on valid paths (`/home`), the Metro file-map cache is stale — delete `%LOCALAPPDATA%/Temp/metro-*` and boot `expo start` once.
 
-## Current status (2026-07-18 — ALL PHASES BUILT + native-feel pass done; on-device verification pending)
-Every phase (1–6) is implemented, committed, and statically verified: `tsc --noEmit` clean, `expo lint` clean, iOS Metro bundle compiles (5.4 MB), expo-doctor 18/18. **Not yet exercised on a device** — the owner's next step is a full walkthrough in Expo Go (log care, reminders + local notification firing, dress-up/shop, pet detail health records, family invite, paywall mock purchase, cross-check writes against the web demo).
+## Current status (2026-07-18 — ALL PHASES BUILT + native-feel pass + bug-fix batch done; on-device verification pending)
+Every phase (1–6) is implemented, committed, and statically verified: `tsc --noEmit` clean, iOS + Android Metro bundles compile (5.4 MB each). **Not yet exercised on a device** — the owner's next step is a full walkthrough in Expo Go (log care, reminders + local notification firing, dress-up/shop, pet detail health records, family invite, paywall mock purchase, cross-check writes against the web demo).
+
+### Bug-fix batch (2026-07-18, from owner + Kemal reports) — all landed, needs device verify
+
+- **Android invisible bottom nav** (Kemal, high): NativeTabs used iOS-only SF Symbols → glyphs blank on Android. Added `androidSrc` per tab drawn from our own `components/Icons.tsx` stroke set (`app/(tabs)/_layout.tsx`).
+- **Huawei app starts mid-screen / empty top** (Kemal, high): no `SafeAreaProvider` existed though `useSafeAreaInsets` was consumed. Added `SafeAreaProvider initialMetrics={initialWindowMetrics}` at root (`app/_layout.tsx`). This is also the most likely fix for the iOS "heading not showing" / "home text invisible" reports (wrong `useHeaderHeight`) — **verify on iPhone**.
+- **Sign out / delete account** (`app/settings/account.tsx`): replaced `ConfirmRow` double-tap with native `Alert.alert` pop-ups (single tap → confirm). `signOut` now `await supabase.auth.signOut({ scope: "local" })` so a flaky network can't strand the user. Delete now calls the `delete-account` Edge Function (`supabase.functions.invoke`) then signs out — **needs the function deployed (EAS step 3) to work on device**.
+- **Unwanted Android ripple** on nav/care buttons: `android_ripple={null}` on `PressableScale` + `Row` (`components/ui.tsx`).
+- **Coins not clickable**: `CoinPill` takes optional `onPress` (wraps in PressableScale); wired on home + logs headers → `/pets` (the cosmetics shop).
+- **Notifications not clickable / overlapping buttons**: Activity "Recent activity" rows now have `onPress` → pet detail + chevron (`app/activity.tsx`); header trailing gap widened (`components/Screen.tsx`).
+- **Logs grid** → 3 rows × 2 columns (`tileWrap` flexBasis 30%→47%).
+- **iPhone clock-style pickers** for weight/age: new `components/WheelPicker.tsx` (snapping ScrollView, no native dep); `EditStatSheet` shows it when `min`/`max` passed; wired at all weight/age call sites (home, pets, plan, pet/[id]).
+- **PetPal+ locked Care**: removed the fake transparent-text "blur"; shows real, readable feature previews (`app/(tabs)/plan/index.tsx`).
+- **Accessibility now functional**: `useReduceMotion()` (pref OR OS setting) gates PressableScale/CoinPill animations; added a Haptics toggle consumed via `hapticsEnabled()` (`lib/a11y.tsx`, `components/ui.tsx`, `app/settings/accessibility.tsx`).
+- **New: Support** rows (email via mailto + Help center via expo-web-browser) in the settings hub.
+- **New: How-to guides** — swipeable instruction slider at `app/instructions.tsx` (weight check, dental, grooming, nails, feeding, vet visits), linked from Settings › Learn & Support.
+- **Per-user notification on your own actions**: `notifyActionLogged` fires an immediate local notification from `logAction` (gated on the actor's care pref) — reports said the actor never got notified (`lib/notifications.ts`, `lib/store.tsx`).
+- **Animations**: `components/Motion.tsx` (`FadeInItem`/`FadeInView`, reduce-motion aware); staggered entrances on the activity feed + logs grid. More surfaces can adopt it.
+
+**Still needs a device / not fully closable statically:**
+- iOS "heading not showing", "back button doesn't work", overscroll nav-squish — believed addressed by the SafeAreaProvider fix but must be confirmed on a real iPhone; the NativeTabs overscroll-minimize behavior is system-owned.
+- Delete-account only works once the Edge Function is deployed.
+- Full family-wide (not just actor) push notifications remain an EAS-cutover item (no notifications table yet).
 
 What exists:
 - **Phase 1** auth (login/signup/confirm), session persistence, full store port (`lib/store.tsx`, ~2,200 lines: optimistic writes, rollback, 5s undo, care alerts, streak/coin debounce).
@@ -61,9 +83,11 @@ What exists:
 | --- | --- | --- | --- |
 | Purchases | Mock gateway, instant unlock via `households.premium` | RevenueCat adapter + webhook | EAS cutover |
 | Notifications | Local scheduling only | Remote push via 0015 + Edge Function | EAS cutover |
-| Account deletion | Toast stub (`SCOPE(P6)` in account.tsx) | `delete-account` Edge Function call | EAS cutover step 3 |
+| Account deletion | Now calls `delete-account` Edge Function + signs out | — (works once function deployed, EAS step 3) | EAS cutover step 3 |
+| Weight/age inputs | JS `WheelPicker` (iOS clock-style, no native dep) | Fine as-is; native picker optional | — |
 | Date/time inputs | Chip/stepper pickers (no native dep) | Consider native datetimepicker in dev build | Post-verify polish |
-| A11y prefs | Stored via `lib/a11y.tsx`, not yet consumed | Reduce-motion gating on reanimated effects | Polish |
+| A11y prefs | Reduce-motion (pref OR OS) + haptics now consumed | Extend gating to more animated surfaces | Polish |
+| Notifications | Local scheduling + immediate local notif on own action | Family-wide remote push (needs notifications table) | EAS cutover |
 | Invite web origin | Placeholder `https://petpal.app` in family.tsx | Real deployed web-demo origin | One-line fix (owner: provide URL) |
 | Emergency card | Text share only | Print/PDF variant (needs expo-print) | Optional |
 

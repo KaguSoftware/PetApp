@@ -52,6 +52,26 @@ export async function ensurePermissions(): Promise<boolean> {
 }
 
 /**
+ * Fire an immediate local notification confirming an action the user just took.
+ * Reports asked for a notification to reach the person who performs an action
+ * (not only the reminder-driven ones), so care logging surfaces one right away.
+ * Best-effort and silent: if permission isn't granted or the module misbehaves,
+ * it no-ops — the in-app toast already covered the confirmation.
+ */
+export async function notifyActionLogged(title: string, body: string): Promise<void> {
+  try {
+    const ok = await ensurePermissions();
+    if (!ok) return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, data: { url: "/activity" } },
+      trigger: null, // deliver now
+    });
+  } catch {
+    // no-op — best-effort
+  }
+}
+
+/**
  * Mirror the store's reminders into the OS notification queue: clear
  * everything, then schedule the soonest future occurrences (up to 60 — iOS
  * caps pending local notifications at 64). Past-due repeating reminders roll

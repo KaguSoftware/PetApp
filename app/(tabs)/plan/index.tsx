@@ -103,10 +103,10 @@ const GUIDE_GROUP_BY_TITLE: Record<string, GuideGroupKey> = {
   "Medication tracking": "vet",
 };
 
-const LOCKED_PREVIEWS: { icon: IconName; text: string }[] = [
-  { icon: "bowl", text: "Feeding · 65 g per meal, 3× daily" },
-  { icon: "scissors", text: "Brushing · 2× weekly" },
-  { icon: "stethoscope", text: "Vet checkup · every 6 months" },
+const LOCKED_PREVIEWS: { icon: IconName; title: string; text: string }[] = [
+  { icon: "bowl", title: "Exact portions", text: "Grams per meal and how many times a day, tuned to breed, age & weight." },
+  { icon: "scissors", title: "Grooming cadence", text: "Brushing, bathing, nail & dental care on the right schedule." },
+  { icon: "stethoscope", title: "Vet schedule", text: "Checkups, vaccines & treatments — reminders before they're due." },
 ];
 
 export default function PlanPage() {
@@ -187,12 +187,14 @@ export default function PlanPage() {
           </Text>
           <View style={styles.lockedPreviews}>
             {LOCKED_PREVIEWS.map((t) => (
-              <View key={t.text} style={styles.lockedPreviewRow}>
+              <View key={t.title} style={styles.lockedPreviewRow}>
                 <View style={styles.lockedPreviewIcon}>
-                  <Icon name={t.icon} size={16} color={colors.label2} />
+                  <Icon name={t.icon} size={16} color={colors.accent} />
                 </View>
-                {/* Blurred teaser copy — transparent glyphs with a soft shadow stand in for the web's blur filter. */}
-                <Text style={styles.lockedPreviewText}>{t.text}</Text>
+                <View style={styles.lockedPreviewCopy}>
+                  <Text style={styles.lockedPreviewTitle}>{t.title}</Text>
+                  <Text style={styles.lockedPreviewText}>{t.text}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -498,7 +500,7 @@ const styles = StyleSheet.create({
   lockedPreviews: { marginTop: 28, width: "100%", gap: 10 },
   lockedPreviewRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
     borderRadius: radius.md,
     backgroundColor: colors.card,
@@ -506,15 +508,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     ...cardShadow,
   },
-  lockedPreviewIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },
-  lockedPreviewText: {
-    fontSize: 14,
-    fontFamily: font.medium,
-    color: "transparent",
-    textShadowColor: colors.label2,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
-  },
+  lockedPreviewIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  lockedPreviewCopy: { flex: 1, minWidth: 0, gap: 2 },
+  lockedPreviewTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
+  lockedPreviewText: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
   lockedCta: { marginTop: 28, width: "100%" },
   petSwitcher: { marginTop: 4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44 },
   petSwitcherLabel: { fontSize: 18, fontFamily: font.semibold, color: colors.label },

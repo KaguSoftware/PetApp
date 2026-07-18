@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import EmptyState from "@/components/EmptyState";
+import { FadeInItem } from "@/components/Motion";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
@@ -204,8 +205,8 @@ export default function ActivityScreen() {
       {groups.length === 0 ? (
         <EmptyState icon="bell" title="No activity yet" body="Log some care from the Logs tab and it'll show up here for the whole family." />
       ) : (
-        groups.map((g) => (
-          <View key={g.day}>
+        groups.map((g, gi) => (
+          <FadeInItem key={g.day} index={gi}>
             {g.day !== "Today" ? <SectionHeader>{g.day}</SectionHeader> : null}
             <Group>
               {g.items.map((a) => {
@@ -226,11 +227,13 @@ export default function ActivityScreen() {
                       </Text>
                     }
                     subtitle={a.note ?? timeAgo(a.ts)}
+                    trailing={<Chevron />}
+                    onPress={() => router.push(`/pet/${p.id}`)}
                   />
                 );
               })}
             </Group>
-          </View>
+          </FadeInItem>
         ))
       )}
       {visible < filtered.length ? (

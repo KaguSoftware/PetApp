@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { AccessibilityInfo } from "react-native";
 
 /**
  * Device-local display accessibility preferences (Reduce Motion / Reduce
@@ -11,10 +12,10 @@ import { useEffect, useSyncExternalStore } from "react";
  * Backed by useSyncExternalStore over a module-level snapshot so every mounted
  * hook stays in sync without a provider.
  */
-export type A11yPrefs = { reduceMotion: boolean; reduceTransparency: boolean };
+export type A11yPrefs = { reduceMotion: boolean; reduceTransparency: boolean; haptics: boolean };
 
 const KEY = "petpal.a11y";
-const DEFAULT: A11yPrefs = { reduceMotion: false, reduceTransparency: false };
+const DEFAULT: A11yPrefs = { reduceMotion: false, reduceTransparency: false, haptics: true };
 
 const listeners = new Set<() => void>();
 let current: A11yPrefs = DEFAULT;
@@ -31,7 +32,11 @@ function load(): void {
       if (!raw) return;
       try {
         const p = JSON.parse(raw) as Partial<A11yPrefs>;
-        current = { reduceMotion: !!p.reduceMotion, reduceTransparency: !!p.reduceTransparency };
+        current = {
+          reduceMotion: !!p.reduceMotion,
+          reduceTransparency: !!p.reduceTransparency,
+          haptics: p.haptics ?? true,
+        };
         listeners.forEach((l) => l());
       } catch {
         // corrupt value — keep defaults
@@ -60,14 +65,43 @@ function set(next: Partial<A11yPrefs>): void {
   });
 }
 
-// SCOPE(later): motion/transparency not yet consumed app-wide
 export function useA11yPrefs() {
   useEffect(load, []);
   const prefs = useSyncExternalStore(subscribe, getSnapshot);
   return {
     reduceMotion: prefs.reduceMotion,
     reduceTransparency: prefs.reduceTransparency,
+    haptics: prefs.haptics,
     setReduceMotion: (v: boolean) => set({ reduceMotion: v }),
     setReduceTransparency: (v: boolean) => set({ reduceTransparency: v }),
+    setHaptics: (v: boolean) => set({ haptics: v }),
   };
+}
+
+/**
+ * The effective "reduce motion" signal for animation code: true when EITHER the
+ * in-app pref OR the operating system's Reduce Motion setting is on. Read this
+ * from any component that plays a non-essential animation.
+ */
+export function useReduceMotion(): boolean {
+  useEffect(load, []);
+  const prefs = useSyncExternalStore(subscribe, getSnapshot);
+  const [osReduce, setOsReduce] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (alive) setOsReduce(v);
+    });
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setOsReduce);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+  return prefs.reduceMotion || osReduce;
+}
+
+/** Non-hook read of the haptics pref for imperative call sites. */
+export function hapticsEnabled(): boolean {
+  return current.haptics;
 }

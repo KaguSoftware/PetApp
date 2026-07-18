@@ -3,6 +3,7 @@ import * as Crypto from "expo-crypto";
 import { supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
+import { notifyActionLogged } from "@/lib/notifications";
 
 // Verb used in alert copy for each loggable action that can carry a /plan daily target.
 export const ALERT_VERB: Partial<Record<ActionType, string>> = {
@@ -142,7 +143,7 @@ interface Store {
   /** Switch which household is shown on-screen (for users in more than one). */
   setActiveHousehold: (householdId: string) => Promise<void>;
   setNotificationPref: (key: "notifyCareReminders" | "notifyFamilyActivity" | "notifyVetSuggestions", on: boolean) => void;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -1173,6 +1174,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         label: "Undo",
         onClick: () => undoLogAction(id),
       });
+      // Also push an OS notification to the person who logged it — reports noted
+      // the actor never got notified for their own actions. Gated on their care
+      // notification pref and only for fresh (today) logs, not backfilled ones.
+      if (isToday && (currentMember()?.notifyCareReminders ?? true)) {
+        notifyActionLogged(`${pet.name} — ${ACTIONS[type].label.toLowerCase()}`, `Logged at ${timeLabel} · +5 coins`);
+      }
       if (newStreak > before.streak) toast("flame", `${newStreak}-day streak!`, "You're on a roll — keep it going");
 
       // Persist the activity (+ any supply drain) per-row; on failure roll the
@@ -2158,8 +2165,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Navigation back to /login happens in the root layout, which watches auth
   // state — signOut here only clears the session (onAuthStateChange re-runs
   // load() and resets the store to EMPTY_STATE).
-  const signOut = useCallback(() => {
-    supabase.auth.signOut();
+  const signOut = useCallback(async () => {
+    // `local` scope clears the on-device session even if the network call to
+    // revoke the refresh token fails — otherwise a flaky connection would leave
+    // the user stuck "signed in". onAuthStateChange then drives the redirect.
+    await supabase.auth.signOut({ scope: "local" });
   }, []);
 
   return (

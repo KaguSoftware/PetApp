@@ -5,6 +5,7 @@ import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
+import { FadeInItem } from "@/components/Motion";
 import NotificationBell from "@/components/NotificationBell";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
@@ -183,7 +184,7 @@ export default function LogsScreen() {
       subtitle="Log care · everyone's notified"
       trailing={
         <>
-          <CoinPill amount={state.coins} />
+          <CoinPill amount={state.coins} onPress={() => router.push("/pets")} />
           <NotificationBell />
         </>
       }
@@ -221,13 +222,13 @@ export default function LogsScreen() {
       {/* Log care grid — the whole point of this tab */}
       <SectionHeader>Log care</SectionHeader>
       <View style={styles.grid}>
-        {actions.map((type) => {
+        {actions.map((type, ti) => {
           const a = ACTION_ICON[type];
           const flashing = justLogged === type;
           const warning = !flashing && careWarnings.has(type);
           return (
+            <FadeInItem key={type} index={ti} style={styles.tileWrap}>
             <PressableScale
-              key={type}
               haptic
               accessibilityRole="button"
               onPress={() => {
@@ -246,7 +247,6 @@ export default function LogsScreen() {
                   }
                 }
               }}
-              style={styles.tileWrap}
             >
               <View style={styles.tile}>
                 {flashing ? <CoinPop /> : null}
@@ -261,6 +261,7 @@ export default function LogsScreen() {
                 <Text style={styles.tileLabel}>{type === "meds" && pet.meds.length === 0 ? "No meds" : ACTIONS[type].label}</Text>
               </View>
             </PressableScale>
+            </FadeInItem>
           );
         })}
       </View>
@@ -407,7 +408,8 @@ const styles = StyleSheet.create({
   petSwitcher: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
   petSwitcherName: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  tileWrap: { flexBasis: "30%", flexGrow: 1 },
+  // 2 columns → 3 rows for the 6 care actions; wider tiles give each label room.
+  tileWrap: { flexBasis: "47%", flexGrow: 1 },
   tile: {
     alignItems: "flex-start",
     gap: 10,

@@ -136,5 +136,5 @@ export function PushedScreen({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   subtitle: { fontSize: 14, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingBottom: 8 },
-  headerTrailing: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
 });

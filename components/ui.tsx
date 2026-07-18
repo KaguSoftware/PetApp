@@ -17,6 +17,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withT
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
+import { hapticsEnabled, useReduceMotion } from "@/lib/a11y";
 import { colors, font, radius } from "@/lib/theme";
 
 /**
@@ -42,22 +43,25 @@ export function PressableScale({
   haptic?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const reduceMotion = useReduceMotion();
   const dim = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ opacity: dim.value }));
   return (
     <Animated.View style={[anim, style]}>
       <Pressable
+        android_ripple={null}
         {...props}
         onPress={(e) => {
-          if (haptic && Platform.OS === "ios") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          if (haptic && Platform.OS === "ios" && hapticsEnabled()) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress?.(e);
         }}
         onPressIn={(e) => {
-          dim.value = withTiming(0.55, { duration: 90, easing: Easing.out(Easing.quad) });
+          // Reduce Motion → snap the dim in with no easing animation.
+          dim.value = reduceMotion ? 0.7 : withTiming(0.55, { duration: 90, easing: Easing.out(Easing.quad) });
           props.onPressIn?.(e);
         }}
         onPressOut={(e) => {
-          dim.value = withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) });
+          dim.value = reduceMotion ? 1 : withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) });
           props.onPressOut?.(e);
         }}
       >
@@ -141,7 +145,7 @@ export function Row({
   );
   if (onPress)
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.fill }]}>
+      <Pressable android_ripple={null} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.fill }]}>
         {inner}
       </Pressable>
     );
@@ -267,26 +271,38 @@ export function Segmented<T extends string>({
   );
 }
 
-export function CoinPill({ amount }: { amount: number }) {
+export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => void }) {
   // Bump whenever the balance INCREASES — one place gives coin-earn feedback
   // for every source. Spending (a decrease) doesn't bump.
+  const reduceMotion = useReduceMotion();
   const prev = useRef(amount);
   const scale = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   useEffect(() => {
-    if (amount > prev.current) {
+    if (amount > prev.current && !reduceMotion) {
       scale.value = withSequence(
         withTiming(1.18, { duration: 160, easing: Easing.out(Easing.quad) }),
         withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
       );
     }
     prev.current = amount;
-  }, [amount, scale]);
-  return (
+  }, [amount, scale, reduceMotion]);
+  const pill = (
     <Animated.View style={[styles.coinPill, anim]}>
       <PixelSprite sprite={COIN_SPRITE} size={13} />
       <Text style={styles.coinPillLabel}>{amount.toLocaleString()}</Text>
     </Animated.View>
+  );
+  if (!onPress) return pill;
+  return (
+    <PressableScale
+      haptic
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${amount.toLocaleString()} coins. Spend them on your pets.`}
+    >
+      {pill}
+    </PressableScale>
   );
 }
 

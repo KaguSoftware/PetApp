@@ -109,7 +109,7 @@ export default function Home() {
       subtitle={greeting}
       trailing={
         <>
-          <CoinPill amount={state.coins} />
+          <CoinPill amount={state.coins} onPress={() => router.push("/pets")} />
           <NotificationBell />
         </>
       }
@@ -261,6 +261,10 @@ export default function Home() {
         onClose={() => setEditingStat(null)}
         title={`${pet.name}'s weight`}
         label={`Weight (${weightUnitLabel(state.units)})`}
+        min={0.1}
+        max={state.units === "lb" ? 260 : 120}
+        step={0.1}
+        unit={weightUnitLabel(state.units)}
         initialValue={kgToUnit(pet.weightKg, state.units)}
         onSave={(v) => {
           const kg = unitToKg(v, state.units);
@@ -273,6 +277,10 @@ export default function Home() {
         onClose={() => setEditingStat(null)}
         title={`${pet.name}'s age`}
         label="Age (years)"
+        min={0}
+        max={30}
+        step={0.5}
+        unit="yr"
         initialValue={pet.ageYears}
         onSave={(ageYears) => {
           // Typing an age switches the pet back to approximate-age mode — a

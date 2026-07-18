@@ -4,16 +4,15 @@ import { Group, IconCircle, Row, SectionHeader, Toggle } from "@/components/ui";
 import { useA11yPrefs } from "@/lib/a11y";
 import { colors, font } from "@/lib/theme";
 
-// SCOPE(later): motion/transparency not yet consumed app-wide
 export default function AccessibilitySettingsPage() {
-  const { reduceMotion, reduceTransparency, setReduceMotion, setReduceTransparency } = useA11yPrefs();
+  const { reduceMotion, reduceTransparency, haptics, setReduceMotion, setReduceTransparency, setHaptics } = useA11yPrefs();
 
   const rows = [
     {
       key: "motion",
       icon: "sparkles" as const,
       label: "Reduce motion",
-      hint: "Turns off the arcade wobble, coin pops and other animations.",
+      hint: "Turns off the arcade wobble, coin pops and press animations.",
       on: reduceMotion,
       set: setReduceMotion,
     },
@@ -24,6 +23,14 @@ export default function AccessibilitySettingsPage() {
       hint: "Makes the glass tab bar, headers and toasts solid instead of blurred.",
       on: reduceTransparency,
       set: setReduceTransparency,
+    },
+    {
+      key: "haptics",
+      icon: "sparkles" as const,
+      label: "Haptic feedback",
+      hint: "Small vibrations when you log care, earn coins and tap buttons.",
+      on: haptics,
+      set: setHaptics,
     },
   ];
 
