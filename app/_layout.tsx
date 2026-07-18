@@ -4,8 +4,10 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import NotificationSync from "@/components/NotificationSync";
 import Toasts from "@/components/Toasts";
 import { StoreProvider } from "@/lib/store";
+import { PurchasesProvider } from "@/providers/purchases";
 import { SessionProvider, useSession } from "@/providers/session";
 
 SplashScreen.preventAutoHideAsync();
@@ -28,12 +30,15 @@ function Root() {
 
   return (
     <StoreProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-      <Toasts />
-      <StatusBar style="dark" />
+      <PurchasesProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+        <Toasts />
+        <NotificationSync />
+        <StatusBar style="dark" />
+      </PurchasesProvider>
     </StoreProvider>
   );
 }
