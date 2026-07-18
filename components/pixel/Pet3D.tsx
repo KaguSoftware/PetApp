@@ -7,8 +7,7 @@ import * as THREE from "three";
 import type { Pet } from "@/lib/data";
 import { colors } from "@/lib/theme";
 import { equippedCosmetics } from "./PixelPet";
-import { CAT_BODY_SPRITE, DOG_BODY_SPRITE } from "./petBodySprites";
-import { CAT_FUR, DOG_FUR, furSprite } from "./petSprites";
+import { CAT_FUR, CAT_SPRITE, DOG_FUR, DOG_SPRITE, furSprite } from "./petSprites";
 import type { Sprite } from "./PixelSprite";
 
 /**
@@ -58,19 +57,22 @@ function spriteVoxels(sprite: Sprite, overlays: { sprite: Sprite; left: number; 
   return { voxels, w, h };
 }
 
-function bodySpriteFor(pet: Pet): Sprite {
-  return pet.species === "cat"
-    ? furSprite(CAT_BODY_SPRITE, CAT_FUR.body, CAT_FUR.shade)
-    : furSprite(DOG_BODY_SPRITE, DOG_FUR.body, DOG_FUR.shade);
+/** The pet's HEAD/face sprite — the same square sprite the 2D stage showed. */
+function headSpriteFor(pet: Pet): Sprite {
+  const base = pet.species === "cat" ? CAT_SPRITE : DOG_SPRITE;
+  const fur = pet.species === "cat" ? CAT_FUR : DOG_FUR;
+  return furSprite(base, fur.body, fur.shade);
 }
 
 export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
-  // Shared rotation the gesture writes and the render loop reads.
+  // Rotation state the gesture writes (on the JS thread — see runOnJS below) and
+  // the render loop reads. Plain refs so mutations never trigger re-renders.
   const rotY = useRef(0);
   const rotX = useRef(0);
-  const velY = useRef(0.5); // idle spin speed (rad/s), damped after a drag
+  const idleSpin = useRef(0.6); // constant idle spin (rad/s)
   const dragging = useRef(false);
-  const meshRef = useRef<THREE.InstancedMesh | null>(null);
+  const grabX = useRef(0);
+  const grabY = useRef(0);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -79,14 +81,19 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
     };
   }, []);
 
+  // runOnJS(true): run the gesture callbacks on the JS thread so they can mutate
+  // the JS refs the GL render loop reads (a UI-thread worklet can't).
   const pan = Gesture.Pan()
+    .runOnJS(true)
     .onBegin(() => {
       dragging.current = true;
+      grabX.current = rotY.current;
+      grabY.current = rotX.current;
     })
     .onUpdate((e) => {
-      rotY.current += (e.velocityX ?? 0) * 0.00002;
-      rotX.current = Math.max(-0.5, Math.min(0.5, rotX.current + (e.velocityY ?? 0) * 0.000012));
-      velY.current = (e.velocityX ?? 0) * 0.00002;
+      // Map horizontal drag → yaw, vertical drag → pitch (clamped).
+      rotY.current = grabX.current + e.translationX * 0.012;
+      rotX.current = Math.max(-0.6, Math.min(0.6, grabY.current - e.translationY * 0.012));
     })
     .onFinalize(() => {
       dragging.current = false;
@@ -112,16 +119,18 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
     rim.position.set(-8, -4, -6);
     scene.add(rim);
 
-    // Build the voxel instanced mesh from the pet sprite + cosmetics.
-    const body = bodySpriteFor(pet);
+    // Build the voxel instanced mesh from the pet's HEAD sprite + cosmetics.
+    const head = headSpriteFor(pet);
+    const hw = head.rows[0]?.length ?? 16;
+    const hh = head.rows.length;
     const overlays = equippedCosmetics(pet).map(({ cos }) => ({
       sprite: cos.sprite,
-      // Body sprite is 16 wide; cosmetics place against a 16px face box at top.
-      left: cos.place.left * 16,
-      top: cos.place.top * 16,
+      // Cosmetics place as fractions of the head sprite box (same as PixelPet).
+      left: cos.place.left * hw,
+      top: cos.place.top * hh,
       scale: cos.place.widthFrac,
     }));
-    const { voxels, w, h } = spriteVoxels(body, overlays);
+    const { voxels, w, h } = spriteVoxels(head, overlays);
 
     const geo = new THREE.BoxGeometry(1, 1, DEPTH);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: false, roughness: 0.85, metalness: 0 });
@@ -145,7 +154,6 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
     group.scale.setScalar(fit);
     group.add(mesh);
     scene.add(group);
-    meshRef.current = mesh;
 
     let last = 0;
     const render = (t: number) => {
@@ -153,10 +161,9 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
       const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
       last = t;
       if (!dragging.current) {
-        // Ease the idle spin back to a gentle constant rate.
-        velY.current += (0.5 - velY.current) * Math.min(1, dt * 1.5);
-        rotY.current += velY.current * dt;
-        rotX.current += (0 - rotX.current) * Math.min(1, dt * 2);
+        // Constant gentle spin, and ease pitch back to level.
+        rotY.current += idleSpin.current * dt;
+        rotX.current += (0 - rotX.current) * Math.min(1, dt * 3);
       }
       group.rotation.y = rotY.current;
       group.rotation.x = rotX.current;
