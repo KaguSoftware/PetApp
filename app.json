@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "PetApp",
+    "name": "PetPal",
     "slug": "PetApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "petapp",
-    "userInterfaceStyle": "automatic",
+    "scheme": "petpal",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kagu.petpal"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,6 +28,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
+      "expo-font",
       [
         "expo-splash-screen",
         {
