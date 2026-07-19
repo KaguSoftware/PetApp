@@ -3,6 +3,15 @@ import * as Crypto from "expo-crypto";
 import { supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
+import { colors } from "@/lib/theme";
+
+// Guards against LinearGradient's native crash ("Cannot set prop 'colors'" /
+// NPE casting to Double) when a DB row's gradient column is null, empty, or
+// otherwise not a parseable hex color — not just null/undefined.
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+function safeGradient(from: unknown, to: unknown): [string, string] {
+  return [typeof from === "string" && HEX_COLOR.test(from) ? from : colors.accent, typeof to === "string" && HEX_COLOR.test(to) ? to : colors.accentDeep];
+}
 
 // Verb used in alert copy for each loggable action that can carry a /plan daily target.
 export const ALERT_VERB: Partial<Record<ActionType, string>> = {
@@ -885,7 +894,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         notes: p.notes ?? undefined,
         owned: p.owned,
         equipped: p.equipped,
-        gradient: [p.gradient_from, p.gradient_to],
+        gradient: safeGradient(p.gradient_from, p.gradient_to),
         cupGrams: p.cup_grams ?? (p.species === "cat" ? 60 : 120),
         customPlan: p.custom_plan ?? undefined,
         weights: [...(p.weights ?? [])]
@@ -925,7 +934,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: m.name,
         emoji: m.emoji,
         role: m.role,
-        gradient: [m.gradient_from, m.gradient_to] as [string, string],
+        gradient: safeGradient(m.gradient_from, m.gradient_to),
         notifyCareReminders: m.notify_care_reminders,
         notifyFamilyActivity: m.notify_family_activity,
         notifyVetSuggestions: m.notify_vet_suggestions,

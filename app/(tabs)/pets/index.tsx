@@ -441,7 +441,7 @@ export default function PetsScreen() {
             >
               <Chip>{formatWeight(pet.weightKg, state.units)}</Chip>
             </PressableScale>
-            <Chip>{pet.owned.length} items</Chip>
+            <Chip>{`${pet.owned.length} items`}</Chip>
           </View>
 
           {/* Other accessories */}

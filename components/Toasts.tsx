@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeOutDown, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
@@ -48,7 +48,17 @@ export default function Toasts() {
       {toasts.slice(-MAX_VISIBLE).map((t) => {
         const { tint, bg } = tone(t.icon);
         return (
-          <Animated.View key={t.id} entering={SlideInDown.duration(240)} exiting={FadeOutDown.duration(180)}>
+          <Animated.View
+            key={t.id}
+            entering={SlideInDown.duration(240)}
+            exiting={FadeOutDown.duration(180)}
+            // Android draws `elevation` shadows in a pass that doesn't fade
+            // with the exit animation's opacity, leaving a flash of the
+            // shadow's rectangle behind after the toast content is gone.
+            // Compositing the view into one hardware texture fades the
+            // shadow along with everything else.
+            renderToHardwareTextureAndroid={Platform.OS === "android"}
+          >
             <Pressable style={styles.toast} onPress={() => dismissToast(t.id)} accessibilityRole="alert">
               <View style={[styles.tile, { backgroundColor: bg }]}>
                 <Icon name={t.icon} size={18} color={tint} />
