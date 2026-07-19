@@ -274,7 +274,7 @@ export default function ActivityScreen() {
       {/* Booking sheet */}
       <Sheet open={bookOpen} onClose={() => setBookOpen(false)}>
         <View style={styles.vetHead}>
-          <InitialAvatar name={VET.name.replace("Dr. ", "")} gradient={["oklch(0.6 0.13 200)", "oklch(0.48 0.13 240)"]} size={56} />
+          <InitialAvatar name={VET.name.replace("Dr. ", "")} gradient={["#00969f", "#00649e"]} size={56} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.vetName}>{VET.name}</Text>
             <Text style={styles.vetClinic}>{VET.clinic}</Text>

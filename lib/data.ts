@@ -264,7 +264,7 @@ export const VETS: Vet[] = [
     clinic: "Sunny Paws Veterinary Clinic",
     rating: 4.9,
     distanceKm: 2.3,
-    gradient: ["oklch(0.6 0.13 200)", "oklch(0.48 0.13 240)"],
+    gradient: ["#00969f", "#00649e"], // oklch(0.6 0.13 200) / oklch(0.48 0.13 240)
     sponsored: true,
     specialties: ["General", "Dental", "Cats"],
     openNow: true,
@@ -275,7 +275,7 @@ export const VETS: Vet[] = [
     clinic: "Riverside Animal Hospital",
     rating: 4.8,
     distanceKm: 3.1,
-    gradient: ["oklch(0.64 0.14 150)", "oklch(0.5 0.13 175)"],
+    gradient: ["#40a35c", "#007a5f"], // oklch(0.64 0.14 150) / oklch(0.5 0.13 175)
     sponsored: true,
     specialties: ["Surgery", "Dogs", "Orthopedics"],
     openNow: true,
@@ -286,7 +286,7 @@ export const VETS: Vet[] = [
     clinic: "Little Whiskers Clinic",
     rating: 4.7,
     distanceKm: 4.6,
-    gradient: ["oklch(0.68 0.15 350)", "oklch(0.56 0.17 20)"],
+    gradient: ["#db6ea5", "#c43e49"], // oklch(0.68 0.15 350) / oklch(0.56 0.17 20)
     sponsored: false,
     specialties: ["General", "Nutrition"],
     openNow: false,
@@ -297,7 +297,7 @@ export const VETS: Vet[] = [
     clinic: "Parkside Pet Care",
     rating: 4.6,
     distanceKm: 5.9,
-    gradient: ["oklch(0.7 0.14 85)", "oklch(0.6 0.16 55)"],
+    gradient: ["#c69612", "#c66000"], // oklch(0.7 0.14 85) / oklch(0.6 0.16 55)
     sponsored: false,
     specialties: ["Vaccination", "Exotics"],
     openNow: true,

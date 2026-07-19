@@ -187,12 +187,12 @@ const NOTIF_PREF_DB_COLUMN = {
 } as const;
 
 const MEMBER_GRADIENTS: [string, string][] = [
-  ["oklch(0.62 0.16 258)", "oklch(0.5 0.18 280)"],
-  ["oklch(0.68 0.15 350)", "oklch(0.56 0.17 20)"],
-  ["oklch(0.66 0.13 165)", "oklch(0.54 0.13 200)"],
-  ["oklch(0.72 0.14 85)", "oklch(0.62 0.16 50)"],
-  ["oklch(0.6 0.13 200)", "oklch(0.48 0.13 240)"],
-  ["oklch(0.64 0.14 150)", "oklch(0.5 0.13 175)"],
+  ["#4385e4", "#544ec5"],
+  ["#db6ea5", "#c43e49"],
+  ["#24ab7e", "#00848c"],
+  ["#cd9c1f", "#cf630d"],
+  ["#00969f", "#00649e"],
+  ["#40a35c", "#007a5f"],
 ];
 
 /**
@@ -240,10 +240,10 @@ async function bootstrapHousehold(
   const { data: members } = await supabase
     .from("members")
     .insert([
-      { household_id: household.id, name, emoji: "🧑‍💻", role: ADMIN_ROLE, gradient_from: "oklch(0.62 0.16 258)", gradient_to: "oklch(0.5 0.18 280)" },
-      { household_id: household.id, name: "Mom", emoji: "👩‍🦰", role: "Admin", gradient_from: "oklch(0.68 0.15 350)", gradient_to: "oklch(0.56 0.17 20)" },
-      { household_id: household.id, name: "Dad", emoji: "👨‍🦳", role: "Member", gradient_from: "oklch(0.66 0.13 165)", gradient_to: "oklch(0.54 0.13 200)" },
-      { household_id: household.id, name: "Sara", emoji: "👧", role: "Member", gradient_from: "oklch(0.72 0.14 85)", gradient_to: "oklch(0.62 0.16 50)" },
+      { household_id: household.id, name, emoji: "🧑‍💻", role: ADMIN_ROLE, gradient_from: "#4385e4", gradient_to: "#544ec5" },
+      { household_id: household.id, name: "Mom", emoji: "👩‍🦰", role: "Admin", gradient_from: "#db6ea5", gradient_to: "#c43e49" },
+      { household_id: household.id, name: "Dad", emoji: "👨‍🦳", role: "Member", gradient_from: "#24ab7e", gradient_to: "#00848c" },
+      { household_id: household.id, name: "Sara", emoji: "👧", role: "Member", gradient_from: "#cd9c1f", gradient_to: "#cf630d" },
     ])
     .select();
   const [you, mom, dad, sara] = members ?? [];
@@ -275,8 +275,8 @@ async function bootstrapHousehold(
         weight_kg: 5.1,
         owned: ["bowtie", "glasses"],
         equipped: { neck: "bowtie" },
-        gradient_from: "oklch(0.72 0.008 260)",
-        gradient_to: "oklch(0.5 0.01 260)",
+        gradient_from: "#a2a5aa",
+        gradient_to: "#606369",
       },
       {
         household_id: household.id,
@@ -288,8 +288,8 @@ async function bootstrapHousehold(
         weight_kg: 29.5,
         owned: ["cap"],
         equipped: { head: "cap" },
-        gradient_from: "oklch(0.74 0.13 75)",
-        gradient_to: "oklch(0.6 0.15 45)",
+        gradient_from: "#da9e3f",
+        gradient_to: "#c65d26",
       },
     ])
     .select();
@@ -1520,8 +1520,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const id = Crypto.randomUUID();
       const gradient: [string, string] =
         species === "cat"
-          ? ["oklch(0.66 0.13 165)", "oklch(0.52 0.14 200)"]
-          : ["oklch(0.68 0.15 350)", "oklch(0.55 0.17 20)"];
+          ? ["#24ab7e", "#007f88"]
+          : ["#db6ea5", "#c13a46"];
       // Supply keys follow the seed convention (cat → "litter", dog →
       // "poopbags") so new and seeded pets are consistent. logAction still
       // drains sanitation by icon ("broom"), so the exact key never matters
