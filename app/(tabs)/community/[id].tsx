@@ -1,6 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import { Icon } from "@/components/Icons";
 import EmptyState from "@/components/EmptyState";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
@@ -17,12 +18,12 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
-import { createAnswer, fetchPost, familyLabel, relativeTime, speciesEmoji, type ForumAnswer, type ForumPost } from "@/lib/forum";
+import { createAnswer, deleteAnswer, deletePost, fetchPost, familyLabel, relativeTime, speciesEmoji, type ForumAnswer, type ForumPost } from "@/lib/forum";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
 
-/** One answer card. */
-function AnswerCard({ answer }: { answer: ForumAnswer }) {
+/** One answer card. `onDelete` is provided only when the viewer is the author. */
+function AnswerCard({ answer, onDelete }: { answer: ForumAnswer; onDelete?: () => void }) {
   return (
     <View style={styles.answerCard}>
       <View style={styles.answerHeader}>
@@ -40,15 +41,32 @@ function AnswerCard({ answer }: { answer: ForumAnswer }) {
       <Text style={styles.answerBody}>{answer.body}</Text>
       <View style={styles.answerFooter}>
         <VoteControl target={{ answerId: answer.id }} score={answer.score} voted={answer.votedByMe} size="sm" />
+        {onDelete ? (
+          <>
+            <View style={{ flex: 1 }} />
+            <DeleteButton onPress={onDelete} accessibilityLabel="Delete answer" />
+          </>
+        ) : null}
       </View>
     </View>
+  );
+}
+
+/** Small tappable trash affordance shown only to the author of a post/answer. */
+function DeleteButton({ onPress, accessibilityLabel }: { onPress: () => void; accessibilityLabel: string }) {
+  return (
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} hitSlop={8}>
+      <View style={styles.deleteButton}>
+        <Icon name="trash" size={16} color={colors.red} />
+      </View>
+    </PressableScale>
   );
 }
 
 export default function PostDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { state, toast } = useStore();
+  const { state, userId, toast } = useStore();
   const [data, setData] = useState<{ post: ForumPost; answers: ForumAnswer[] } | null | undefined>(undefined);
 
   // Answer composer.
@@ -106,6 +124,47 @@ export default function PostDetail() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const confirmDeletePost = () => {
+    if (!id) return;
+    Alert.alert("Delete question", "This removes your question and all its answers. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deletePost(id);
+            toast("check", "Question deleted");
+            router.replace("/(tabs)/community");
+          } catch (e) {
+            console.error("[petpal] forum delete post failed:", e);
+            toast("alert", "Couldn't delete", "Try again in a moment");
+          }
+        },
+      },
+    ]);
+  };
+
+  const confirmDeleteAnswer = (answerId: string) => {
+    Alert.alert("Delete answer", "This removes your answer. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteAnswer(answerId);
+            toast("check", "Answer deleted");
+            await load();
+          } catch (e) {
+            console.error("[petpal] forum delete answer failed:", e);
+            toast("alert", "Couldn't delete", "Try again in a moment");
+          }
+        },
+      },
+    ]);
   };
 
   if (data === undefined) {
@@ -178,6 +237,12 @@ export default function PostDetail() {
         <View style={styles.postFooter}>
           <VoteControl target={{ postId: post.id }} score={post.score} voted={post.votedByMe} />
           <Text style={styles.meta}>{relativeTime(post.createdAt)}</Text>
+          {userId && post.authorUserId === userId ? (
+            <>
+              <View style={{ flex: 1 }} />
+              <DeleteButton onPress={confirmDeletePost} accessibilityLabel="Delete question" />
+            </>
+          ) : null}
         </View>
       </View>
 
@@ -196,7 +261,7 @@ export default function PostDetail() {
       ) : (
         <View style={styles.answerList}>
           {answers.map((a) => (
-            <AnswerCard key={a.id} answer={a} />
+            <AnswerCard key={a.id} answer={a} onDelete={userId && a.authorUserId === userId ? () => confirmDeleteAnswer(a.id) : undefined} />
           ))}
         </View>
       )}
@@ -225,4 +290,5 @@ const styles = StyleSheet.create({
   answerFooter: { marginTop: 12, flexDirection: "row", alignItems: "center" },
   petChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   multiline: { minHeight: 100, paddingTop: 12, textAlignVertical: "top" },
+  deleteButton: { width: 34, height: 34, borderRadius: radius.full, backgroundColor: colors.redSoft, alignItems: "center", justifyContent: "center" },
 });

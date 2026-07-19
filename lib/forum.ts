@@ -14,6 +14,7 @@ export type Species = "cat" | "dog";
 
 export interface ForumPost {
   id: string;
+  authorUserId: string;
   authorHouseholdId: string;
   species: Species;
   breed: string;
@@ -29,6 +30,7 @@ export interface ForumPost {
 export interface ForumAnswer {
   id: string;
   postId: string;
+  authorUserId: string;
   authorHouseholdId: string;
   species: Species | null;
   breed: string | null;
@@ -42,11 +44,12 @@ export type FeedSort = "top" | "new";
 
 // PostgREST embeds. `my_vote` embeds only the caller's own vote row (RLS scopes
 // forum_votes to user_id = auth.uid()), so a non-empty array means "I upvoted".
-const POST_SELECT = "id, author_household_id, species, breed, title, body, score, created_at, answer_count:forum_answers(count), my_vote:forum_votes(id)";
-const ANSWER_SELECT = "id, post_id, author_household_id, species, breed, body, score, created_at, my_vote:forum_votes(id)";
+const POST_SELECT = "id, author_user_id, author_household_id, species, breed, title, body, score, created_at, answer_count:forum_answers(count), my_vote:forum_votes(id)";
+const ANSWER_SELECT = "id, post_id, author_user_id, author_household_id, species, breed, body, score, created_at, my_vote:forum_votes(id)";
 
 type PostRow = {
   id: string;
+  author_user_id: string;
   author_household_id: string;
   species: Species;
   breed: string;
@@ -61,6 +64,7 @@ type PostRow = {
 type AnswerRow = {
   id: string;
   post_id: string;
+  author_user_id: string;
   author_household_id: string;
   species: Species | null;
   breed: string | null;
@@ -73,6 +77,7 @@ type AnswerRow = {
 function mapPost(r: PostRow): ForumPost {
   return {
     id: r.id,
+    authorUserId: r.author_user_id,
     authorHouseholdId: r.author_household_id,
     species: r.species,
     breed: r.breed,
@@ -89,6 +94,7 @@ function mapAnswer(r: AnswerRow): ForumAnswer {
   return {
     id: r.id,
     postId: r.post_id,
+    authorUserId: r.author_user_id,
     authorHouseholdId: r.author_household_id,
     species: r.species,
     breed: r.breed,
@@ -164,6 +170,19 @@ export async function createAnswer(input: {
   });
   if (error) throw error;
   return id;
+}
+
+/** Delete one of the caller's own questions. RLS ("forum_posts delete own")
+ *  enforces author-only deletion; answers/votes cascade via FK. */
+export async function deletePost(id: string): Promise<void> {
+  const { error } = await supabase.from("forum_posts").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Delete one of the caller's own answers. RLS restricts this to the author. */
+export async function deleteAnswer(id: string): Promise<void> {
+  const { error } = await supabase.from("forum_answers").delete().eq("id", id);
+  if (error) throw error;
 }
 
 /** Toggle the caller's upvote on a post or answer. The score column is kept in

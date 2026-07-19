@@ -71,6 +71,8 @@ interface Store {
   state: AppState;
   hydrated: boolean;
   userEmail: string | null;
+  /** Auth user id of the signed-in user, or null when signed out. */
+  userId: string | null;
   toast: (icon: IconName, title: string, body?: string, action?: Toast["action"]) => void;
   toasts: Toast[];
   dismissToast: (id: number) => void;
@@ -441,6 +443,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [reloadNonce, setReloadNonce] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const householdIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
@@ -743,6 +746,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         userIdRef.current = null;
         if (!cancelled) {
           setUserEmail(null);
+          setUserId(null);
           setState(EMPTY_STATE);
           setHydrated(true);
         }
@@ -753,6 +757,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       userIdRef.current = user.id;
       setUserEmail(user.email ?? null);
+      setUserId(user.id);
 
       // Resolve which household is on-screen: the user's saved active household,
       // else any membership (prefer one they own). Membership-based RLS lets us
@@ -2196,6 +2201,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         state,
         hydrated,
         userEmail,
+        userId,
         toasts,
         toast,
         dismissToast,
