@@ -4,10 +4,9 @@ import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
-import { TabScreen } from "@/components/Screen";
+import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SmallButton } from "@/components/ui";
 import { useStore } from "@/lib/store";
@@ -20,9 +19,9 @@ export default function SettingsPage() {
 
   if (!hydrated) {
     return (
-      <TabScreen title="Settings" trailing={<HeaderActions />}>
+      <PushedScreen title="Settings">
         <PageLoading />
-      </TabScreen>
+      </PushedScreen>
     );
   }
 
@@ -47,7 +46,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <TabScreen title="Settings" trailing={<HeaderActions />}>
+    <PushedScreen title="Settings">
       {/* PetPal+ status / upgrade */}
       {state.premium ? (
         <Group>
@@ -146,7 +145,7 @@ export default function SettingsPage() {
       </Group>
 
       <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
-    </TabScreen>
+    </PushedScreen>
   );
 }
 

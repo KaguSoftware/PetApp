@@ -17,6 +17,7 @@ import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { usePullToRefresh } from "@/lib/useRefresh";
 
 type CustomTargetKey = Exclude<keyof NonNullable<Pet["customPlan"]>, "cadences">;
 
@@ -170,6 +171,7 @@ function CareGuides() {
 export default function PlanPage() {
   const router = useRouter();
   const { state, hydrated, editPet, logAction, toast } = useStore();
+  const refreshControl = usePullToRefresh();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
   const [feedPortionOpen, setFeedPortionOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -200,7 +202,7 @@ export default function PlanPage() {
 
   if (!hydrated) {
     return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <PageLoading />
       </TabScreen>
     );
@@ -209,7 +211,7 @@ export default function PlanPage() {
   const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
   if (!pet) {
     return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <View style={{ marginTop: 16 }}>
           <EmptyState
             icon="paw"
@@ -233,7 +235,7 @@ export default function PlanPage() {
 
   if (!state.premium) {
     return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />}>
+      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <View style={styles.lockedWrap}>
           <View style={styles.lockCircle}>
             <Icon name="lock" size={34} color={colors.accent} />
@@ -267,7 +269,7 @@ export default function PlanPage() {
   }
 
   return (
-    <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<HeaderActions />}>
+    <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<HeaderActions />} refreshControl={refreshControl}>
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Switch pet" hitSlop={8}>
           <View style={styles.petSwitcher}>

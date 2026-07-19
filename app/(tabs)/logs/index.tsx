@@ -30,6 +30,7 @@ import {
 import { ACTIONS, CARE_PLANS, type ActionType } from "@/lib/data";
 import { ALERT_VERB, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { usePullToRefresh } from "@/lib/useRefresh";
 
 /** TextField forwards every prop to TextInput; React 19 delivers `ref` as a
  *  regular prop, so this alias just teaches the types about it. */
@@ -62,6 +63,7 @@ function CoinPop() {
 
 export default function LogsScreen() {
   const { state, hydrated, logAction, addVetVisit, toast } = useStore();
+  const refreshControl = usePullToRefresh();
   const router = useRouter();
   const [petId, setPetId] = useState("");
   const [justLogged, setJustLogged] = useState<ActionType | null>(null);
@@ -111,13 +113,13 @@ export default function LogsScreen() {
 
   if (!hydrated)
     return (
-      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />}>
+      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <PageLoading />
       </TabScreen>
     );
   if (!pet) {
     return (
-      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />}>
+      <TabScreen title="Logs" subtitle="Log care · everyone's notified" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <View style={{ marginTop: 16 }}>
           <EmptyState
             icon="list"
@@ -182,6 +184,7 @@ export default function LogsScreen() {
       title="Logs"
       subtitle="Log care · everyone's notified"
       trailing={<HeaderActions />}
+      refreshControl={refreshControl}
     >
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginTop: 12 }}>

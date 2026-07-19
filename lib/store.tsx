@@ -148,6 +148,8 @@ interface Store {
   setActiveHousehold: (householdId: string) => Promise<void>;
   setNotificationPref: (key: "notifyCareReminders" | "notifyFamilyActivity" | "notifyVetSuggestions", on: boolean) => void;
   signOut: () => Promise<void>;
+  /** Re-fetch the active household from Supabase (pull-to-refresh). Resolves once the reload settles. */
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -463,6 +465,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // (see notifyRecentActivity below) — lets stopNotifications cancel any
   // still-queued toasts from that batch in one shot.
   const pendingNotificationTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Resolvers for in-flight refresh() calls (pull-to-refresh) — settled once
+  // the reloadNonce-triggered re-hydration below reaches a terminal state.
+  const pendingRefreshResolversRef = useRef<Set<() => void>>(new Set());
+  const resolvePendingRefreshes = () => {
+    pendingRefreshResolversRef.current.forEach((resolve) => resolve());
+    pendingRefreshResolversRef.current.clear();
+  };
   const hid = () => householdIdRef.current;
   // The signed-in member currently "active" in the UI — notification prefs
   // are per-member, not per-household, so gating checks read off of this.
@@ -749,6 +758,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setUserId(null);
           setState(EMPTY_STATE);
           setHydrated(true);
+          resolvePendingRefreshes();
         }
         return;
       }
@@ -815,6 +825,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       if (!finalHousehold || cancelled) {
         setHydrated(true);
+        resolvePendingRefreshes();
         if (!finalHousehold) {
           toast("alert", "Couldn't set up your household", bootstrapErrRef.current ?? "unknown error — check console");
         }
@@ -955,6 +966,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         activeHouseholdId: h.id,
       });
       setHydrated(true);
+      resolvePendingRefreshes();
       if (computedStreak !== h.streak) {
         supabase.from("households").update({ streak: computedStreak }).eq("id", h.id).then();
       }
@@ -2185,6 +2197,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [supabase, persist]
   );
 
+  // Pull-to-refresh: bumping reloadNonce re-runs the load effect from scratch
+  // (same mechanism used after joining/switching households), and the promise
+  // settles once that pass reaches a terminal setHydrated(true).
+  const refresh = useCallback(() => {
+    return new Promise<void>((resolve) => {
+      pendingRefreshResolversRef.current.add(resolve);
+      setReloadNonce((n) => n + 1);
+    });
+  }, []);
+
   // Navigation back to /login happens in the root layout, which watches auth
   // state — signOut here only clears the session (onAuthStateChange re-runs
   // load() and resets the store to EMPTY_STATE).
@@ -2242,6 +2264,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setActiveHousehold,
         setNotificationPref,
         signOut,
+        refresh,
       }}
     >
       {children}

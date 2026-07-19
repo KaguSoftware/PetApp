@@ -16,6 +16,7 @@ import { Chevron, Chip, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitl
 import { dailyTarget, formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+import { usePullToRefresh } from "@/lib/useRefresh";
 
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
@@ -52,6 +53,7 @@ function MealsBar({ pct }: { pct: number }) {
 export default function Home() {
   const { state, hydrated, addWeight, editPet, toast } = useStore();
   const router = useRouter();
+  const refreshControl = usePullToRefresh();
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
@@ -82,7 +84,7 @@ export default function Home() {
 
   if (!hydrated || !pet) {
     return (
-      <TabScreen title="Home" trailing={<HeaderActions />}>
+      <TabScreen title="Home" trailing={<HeaderActions />} refreshControl={refreshControl}>
         {hydrated ? (
           <View style={{ marginTop: 16 }}>
             <EmptyState
@@ -132,6 +134,7 @@ export default function Home() {
           <HeaderActions />
         </>
       }
+      refreshControl={refreshControl}
     >
       {/* Pet hero card */}
       <GestureDetector gesture={swipe}>

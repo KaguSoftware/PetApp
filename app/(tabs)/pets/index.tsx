@@ -49,6 +49,7 @@ import {
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, HIT, radius, withAlpha } from "@/lib/theme";
+import { usePullToRefresh } from "@/lib/useRefresh";
 
 /* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
 const MAIN_SLOTS: { slot: CosmeticSlot; label: string; hint: string }[] = [{ slot: "head", label: "Hat", hint: "Hats & headwear" }];
@@ -158,6 +159,7 @@ function ItemCard({
 
 export default function PetsScreen() {
   const { state, hydrated, buyCosmetic, toggleEquip, addPet, addWeight, editPet, toast } = useStore();
+  const refreshControl = usePullToRefresh();
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
   const [openSheet, setOpenSheet] = useState<CosmeticSlot | "other" | null>(() => (searchParams.shop === "1" ? "other" : null));
@@ -188,7 +190,7 @@ export default function PetsScreen() {
 
   if (!hydrated)
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <PageLoading />
       </TabScreen>
     );
@@ -316,7 +318,7 @@ export default function PetsScreen() {
 
   if (!pet) {
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />} refreshControl={refreshControl}>
         <View style={{ marginTop: 16 }}>
           <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
         </View>
@@ -343,6 +345,7 @@ export default function PetsScreen() {
       title="Pets"
       subtitle="Style your companion"
       trailing={<HeaderActions />}
+      refreshControl={refreshControl}
     >
       {state.pets.length > 1 ? (
         <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginBottom: 8 }}>
