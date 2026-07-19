@@ -16,6 +16,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
+    // The keyboard's return key (onSubmitEditing) calls this directly, bypassing
+    // the button's disabled-while-loading guard — without this a second Enter
+    // fires a duplicate auth request mid-flight.
+    if (loading) return;
     setError(null);
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });

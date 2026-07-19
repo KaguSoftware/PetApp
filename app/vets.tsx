@@ -26,6 +26,8 @@ export default function VetsPage() {
   const [selected, setSelected] = useState<Vet | null>(null);
 
   const cat = state.pets.find((p) => p.breed === "British Shorthair") ?? state.pets[0];
+  // See activity.tsx — a pet-less household must not render "Checkup — undefined".
+  const petLabel = cat?.name ?? "your pet";
 
   return (
     <PushedScreen title="Find a Vet">
@@ -99,7 +101,7 @@ export default function VetsPage() {
             <Group style={{ marginTop: 20 }}>
               <Row
                 leading={<IconCircle icon="cross" tint={colors.accent} bg={colors.accentSoft} />}
-                title={`Checkup — ${cat?.name}`}
+                title={`Checkup — ${petLabel}`}
                 subtitle="General wellness visit"
               />
               <Row

@@ -143,6 +143,10 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   // the JS refs the GL render loop reads (a UI-thread worklet can't).
   const pan = Gesture.Pan()
     .runOnJS(true)
+    // Require real movement before claiming the touch. Without this the pan
+    // activated on contact and swallowed taps meant for controls layered over
+    // the pet (the cosmetic slot buttons), so they registered inconsistently.
+    .minDistance(8)
     .onBegin(() => {
       dragging.current = true;
       grabX.current = rotY.current;

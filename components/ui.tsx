@@ -116,6 +116,8 @@ export function Row({
   trailing,
   onPress,
   destructive = false,
+  switchValue,
+  interactiveTrailing = false,
 }: {
   leading?: React.ReactNode;
   title: React.ReactNode;
@@ -123,6 +125,20 @@ export function Row({
   trailing?: React.ReactNode;
   onPress?: () => void;
   destructive?: boolean;
+  /**
+   * Set when this row toggles a setting and carries a non-interactive Toggle in
+   * `trailing` — the row is then announced as a switch with this state, which
+   * the indicator itself can no longer report.
+   */
+  switchValue?: boolean;
+  /**
+   * Set when `trailing` holds its own button AND the row has an `onPress` that
+   * does something different. `trailing` renders inside the row's Pressable, so
+   * by default the row can swallow the button's taps (reliably on Android);
+   * this hands the touch to the trailing subtree instead. Leave false for inert
+   * trailing content (chevrons, counts) so the whole row stays tappable.
+   */
+  interactiveTrailing?: boolean;
 }) {
   const inner = (
     <>
@@ -144,14 +160,32 @@ export function Row({
             subtitle
           ))}
       </View>
-      {trailing}
+      {/* flexShrink:0 — rowText is flex:1, so without this a wide trailing
+          control wins the width contest and the numberOfLines={1} title
+          collapses to nothing instead of the trailing shrinking.
+
+          onStartShouldSetResponder claims the touch for the trailing subtree
+          before the enclosing Row Pressable can take it, so an interactive
+          trailing control (Edit, Book, a stepper) reliably wins its own taps
+          instead of the row swallowing them — the usual Android failure. */}
+      {trailing != null ? (
+        <View style={styles.rowTrailing} onStartShouldSetResponder={() => interactiveTrailing}>
+          {trailing}
+        </View>
+      ) : null}
     </>
   );
   if (onPress)
     return (
       // Simple uniform dim on press (no ripple, no background-fill rectangle) so
       // rows feel the same as every other pressable in the app.
-      <Pressable android_ripple={null} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}>
+      <Pressable
+        android_ripple={null}
+        onPress={onPress}
+        accessibilityRole={switchValue === undefined ? "button" : "switch"}
+        accessibilityState={switchValue === undefined ? undefined : { checked: switchValue }}
+        style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}
+      >
         {inner}
       </Pressable>
     );
@@ -324,6 +358,7 @@ const styles = StyleSheet.create({
   sectionHeaderText: { fontSize: 13, fontFamily: font.semibold, letterSpacing: 0.4, color: colors.label2 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 56 },
   rowText: { flex: 1, minWidth: 0, paddingVertical: 2 },
+  rowTrailing: { flexShrink: 0 },
   rowTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
   rowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
   accentButton: {
@@ -436,8 +471,26 @@ export function SelectableChip({
   );
 }
 
-/** iOS-style switch, accent on-state, animated knob. The whole 51×31 control is pressable. */
-export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label?: string }) {
+/**
+ * iOS-style switch, accent on-state, animated knob. The whole 51×31 control is
+ * pressable by default.
+ *
+ * Pass `interactive={false}` when this sits in the `trailing` slot of a Row that
+ * already has its own `onPress` — Row wraps `trailing` inside its Pressable, so
+ * two live handlers on the same pixel fight: the pref flips and immediately
+ * flips back, and the switch looks frozen. One owner per tap.
+ */
+export function Toggle({
+  on,
+  onChange,
+  label,
+  interactive = true,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+  label?: string;
+  interactive?: boolean;
+}) {
   const t = useSharedValue(on ? 1 : 0);
   useEffect(() => {
     t.value = withTiming(on ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
@@ -446,6 +499,14 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
     backgroundColor: t.value > 0.5 ? colors.accent : colors.fill,
   }));
   const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: t.value * 20 }] }));
+  const track = (
+    <Animated.View style={[primStyles.toggleTrack, trackStyle]}>
+      <Animated.View style={[primStyles.toggleKnob, knobStyle]} />
+    </Animated.View>
+  );
+  // Purely visual: the enclosing Row owns the tap and announces the switch
+  // state, so this must not register as a second touch target.
+  if (!interactive) return <View pointerEvents="none">{track}</View>;
   return (
     <Pressable
       onPress={() => {
@@ -457,9 +518,7 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
       accessibilityState={{ checked: on }}
       accessibilityLabel={label}
     >
-      <Animated.View style={[primStyles.toggleTrack, trackStyle]}>
-        <Animated.View style={[primStyles.toggleKnob, knobStyle]} />
-      </Animated.View>
+      {track}
     </Pressable>
   );
 }

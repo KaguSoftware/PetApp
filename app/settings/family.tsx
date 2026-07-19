@@ -339,6 +339,8 @@ export default function FamilySettingsPage() {
               leading={<InitialAvatar name={m.name} gradient={m.gradient} size={38} />}
               title={m.name}
               subtitle={m.role}
+              // "Edit" must win its own taps; the row switches member.
+              interactiveTrailing
               trailing={
                 <View style={styles.rowActions}>
                   <SmallButton label="Edit" tone="gray" onPress={() => openEditMember(m)} />
@@ -414,17 +416,23 @@ export default function FamilySettingsPage() {
       <SectionHeader>Pets</SectionHeader>
       <Group>
         {state.pets.map((p) => (
+          // The row itself opens the pet (the primary, most-expected action) and
+          // "Edit" is the explicit secondary. Previously the row opened the edit
+          // sheet while a nested "View" button tried to navigate — two live
+          // handlers on the same pixels, and on Android the row usually won, so
+          // "View" opened the editor instead of the pet.
           <Row
             key={p.id}
-            onPress={() => openEditPet(p)}
+            onPress={() => router.push(`/pet/${p.id}`)}
             leading={<PetAvatar pet={p} size="sm" />}
             title={p.name}
             subtitle={`${p.breed} · ${formatAge(p.ageYears)} · ${formatWeight(p.weightKg, state.units)}`}
-            trailing={<SmallButton label="View" onPress={() => router.push(`/pet/${p.id}`)} />}
+            interactiveTrailing
+            trailing={<SmallButton label="Edit" tone="gray" onPress={() => openEditPet(p)} />}
           />
         ))}
       </Group>
-      <Text style={styles.footnote}>Tap a pet to edit it, or View for full details.</Text>
+      <Text style={styles.footnote}>Tap a pet for full details, or Edit to change its info.</Text>
 
       <View style={{ height: 16 }} />
 

@@ -48,7 +48,7 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, HIT, radius, withAlpha } from "@/lib/theme";
+import { cardShadow, colors, font, HIT, radius } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
 /* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
@@ -67,6 +67,9 @@ const SPECIES_DEFAULTS: Record<"cat" | "dog", { weightKg: number; cupGrams: numb
 };
 
 const GRID_STEP = 14;
+
+/** How far the slot button overhangs the pet, and the padding petBox adds to contain it. */
+const SLOT_INSET = 8;
 
 /** Arcade backdrop: soft radial glow near the top + faint 14px retro grid. */
 function ArcadeStage({ children, style }: { children: React.ReactNode; style?: object }) {
@@ -405,7 +408,7 @@ export default function PetsScreen() {
                   onPress={() => setOpenSheet(s.slot)}
                   accessibilityRole="button"
                   accessibilityLabel={`${s.label}: ${equippedId ? cosmetic(equippedId)?.name : "empty — tap to add"}`}
-                  style={[styles.slotButtonWrap, { left: -8, top: -8 }]}
+                  style={[styles.slotButtonWrap, { left: 0, top: 0 }]}
                 >
                   <View style={styles.slotButton}>
                     {equippedId ? <PixelCosmetic id={equippedId} size={24} /> : <Icon name="plus" size={19} color={colors.label2} />}
@@ -558,9 +561,24 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   stage: { alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 },
-  petBox: { position: "relative", width: 200, height: 200, marginVertical: 28 },
+  // Sized to the 200pt pet PLUS the slot-button overhang on each side, so the
+  // button sits entirely INSIDE these bounds. It used to be offset to
+  // {left:-8, top:-8}, hanging 8pt outside the parent — and a child rendered
+  // outside its parent's bounds never receives touches on Android, so the hat
+  // slot was simply dead there. Negative margin keeps the pet's visual position
+  // and spacing unchanged.
+  petBox: {
+    position: "relative",
+    width: 200 + SLOT_INSET * 2,
+    height: 200 + SLOT_INSET * 2,
+    marginVertical: 28 - SLOT_INSET,
+    marginHorizontal: -SLOT_INSET,
+  },
+  // Fills petBox so the 200pt pet stays optically centred inside the larger box.
   petCenter: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  slotButtonWrap: { position: "absolute", zIndex: 10 },
+  // elevation pairs with zIndex so Android (which orders by elevation, not
+  // zIndex) also hit-tests this above the GLView surface behind it.
+  slotButtonWrap: { position: "absolute", zIndex: 10, elevation: 10 },
   slotButton: {
     width: HIT,
     height: HIT,

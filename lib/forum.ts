@@ -198,7 +198,15 @@ export async function setVote(target: { postId?: string; answerId?: string }, on
     // end state (a vote exists) already holds.
     if (error && (error as { code?: string }).code !== "23505") throw error;
   } else {
-    let q = supabase.from("forum_votes").delete();
+    // Scope to the caller's own row explicitly. RLS ("delete own") narrows this
+    // today, but relying on a policy for correctness means loosening that policy
+    // later would silently turn this into a mass-delete that decrements the
+    // score by every vote on the target.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    let q = supabase.from("forum_votes").delete().eq("user_id", user.id);
     q = target.postId ? q.eq("post_id", target.postId) : q.eq("answer_id", target.answerId!);
     const { error } = await q;
     if (error) throw error;

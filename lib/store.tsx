@@ -503,6 +503,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Fire-and-forget Supabase writes are optimistic — the UI already updated.
   // persist() only does work on a real error: it rolls the touched slice back
   // and tells the user, so a rejected write can't silently desync until reload.
+  //
+  // bestEffort() is the weaker sibling, for writes with nothing to roll back
+  // (counters, last-seen stamps, deferred deletes). It can't recover, but it
+  // must never swallow the failure — a bare `.then()` attaches no handler at
+  // all, so a PostgREST error resolved normally and vanished without a trace.
+  const bestEffort = useCallback((op: PromiseLike<{ error: unknown }>, what: string) => {
+    op.then(({ error }) => {
+      if (error) console.error(`[petpal] ${what} failed:`, error);
+    });
+  }, []);
+
   const persist = useCallback(
     (
       ops: PromiseLike<{ error: unknown }> | PromiseLike<{ error: unknown }>[],
@@ -642,7 +653,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (pet: Pet, type: ActionType, kind: "over" | "under", remindersSnapshot: Reminder[], ts: number) => {
       const h = hid();
       if (!h) return;
-      const already = remindersSnapshot.some((r) => r.alert && r.petId === pet.id && !r.done && sameCalendarDay(r.due, ts));
+      // Same reasoning as raiseCareAlert: don't test `r.alert`, or a dismissed
+      // (but still open) alert stops suppressing and gets re-inserted.
+      const already = remindersSnapshot.some((r) => r.petId === pet.id && !r.done && sameCalendarDay(r.due, ts));
       if (already) return;
       const what = ALERT_VERB[type];
       const verb = kind === "over" ? `${what} way more than usual` : `${what} far less than usual`;
@@ -684,7 +697,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const title = `Don't forget to ${verb} ${pet.name}`;
       // Match on (pet, kind) — NOT the title — so a rename doesn't orphan the
       // alert or let a duplicate for the new name coexist with the old one.
-      const already = remindersSnapshot.some((r) => r.alert && !r.vetId && r.petId === pet.id && !r.done && r.alertKind === kind);
+      //
+      // Deliberately does NOT test `r.alert`: dismissAllAlerts clears that flag
+      // while leaving `done: false`, so requiring it here let the 15-minute
+      // re-check treat every dismissed alert as absent and insert a brand-new
+      // reminder row for it — alerts the user had just cleared reappeared, and
+      // the table grew a duplicate row on every cycle. An open (not-done) alert
+      // of this kind suppresses a re-raise whether or not it's still showing.
+      const already = remindersSnapshot.some((r) => !r.vetId && r.petId === pet.id && !r.done && r.alertKind === kind);
       if (already) return;
       const id = Crypto.randomUUID();
       const reminder: Reminder = { id, petId: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, alertKind: kind };
@@ -762,7 +782,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-      if (user.id === lastLoadedUserId) return;
+      // Settle any in-flight refresh before bailing. onAuthStateChange calls
+      // load() on every TOKEN_REFRESHED (~hourly) and SIGNED_IN (each
+      // foreground); if one landed while a pull-to-refresh was pending, this
+      // early return left its promise unresolved and the spinner span forever.
+      if (user.id === lastLoadedUserId) {
+        resolvePendingRefreshes();
+        return;
+      }
       lastLoadedUserId = user.id;
       if (cancelled) return;
       userIdRef.current = user.id;
@@ -968,7 +995,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setHydrated(true);
       resolvePendingRefreshes();
       if (computedStreak !== h.streak) {
-        supabase.from("households").update({ streak: computedStreak }).eq("id", h.id).then();
+        bestEffort(supabase.from("households").update({ streak: computedStreak }).eq("id", h.id), "streak update");
       }
 
       // Catch the signed-in member up on what everyone *else* logged in the
@@ -1046,7 +1073,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         });
       });
 
-      supabase.from("households").update({ last_seen_at: Date.now() }).eq("id", h.id).then();
+      bestEffort(supabase.from("households").update({ last_seen_at: Date.now() }).eq("id", h.id), "last_seen_at update");
     }
 
     load();
@@ -1066,7 +1093,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
       clearInterval(careAlertTimer);
     };
-  }, [toast, notifyRecentActivity, raiseFeedingAlert, checkCareAlerts, notifyCareWarnings, reloadNonce]);
+  }, [toast, notifyRecentActivity, raiseFeedingAlert, checkCareAlerts, notifyCareWarnings, reloadNonce, bestEffort]);
 
   // Compensating undo for a just-logged action. The activity insert already
   // fired, so this deletes it back out; coins go through rewardsRef (the sole
@@ -1232,7 +1259,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             reminders: prev.reminders.map((r) => (careAlerts.some((a) => a.id === r.id) ? { ...r, done: true } : r)),
           }));
-          careAlerts.forEach((r) => supabase.from("reminders").update({ done: true }).eq("id", r.id).then());
+          careAlerts.forEach((r) =>
+            bestEffort(supabase.from("reminders").update({ done: true }).eq("id", r.id), "care alert resolve")
+          );
         }
       }
 
@@ -1266,7 +1295,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       return true;
     },
-    [supabase, toast, persist, syncCounters, raiseFeedingAlert, undoLogAction]
+    [supabase, toast, persist, syncCounters, raiseFeedingAlert, undoLogAction, bestEffort]
   );
 
   const switchMember = useCallback(
@@ -1444,11 +1473,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         remove: () => setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== id) })),
         restore: () =>
           setState((prev) => (prev.reminders.some((r) => r.id === id) ? prev : { ...prev, reminders: [...prev.reminders, removed] })),
-        commit: () => supabase.from("reminders").delete().eq("id", id).then(),
+        commit: () => bestEffort(supabase.from("reminders").delete().eq("id", id), "reminder delete"),
         message: "Reminder deleted",
       });
     },
-    [supabase, undoableDelete]
+    [supabase, undoableDelete, bestEffort]
   );
 
   const dismissAllAlerts = useCallback(() => {
@@ -1702,13 +1731,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             ),
           })),
         commit: () => {
-          supabase.from("weights").delete().eq("id", weightId).then();
-          supabase.from("pets").update({ weight_kg: latestKg }).eq("id", petId).then();
+          bestEffort(supabase.from("weights").delete().eq("id", weightId), "weight delete");
+          bestEffort(supabase.from("pets").update({ weight_kg: latestKg }).eq("id", petId), "pet weight update");
         },
         message: "Weight entry deleted",
       });
     },
-    [supabase, undoableDelete, toast]
+    [supabase, undoableDelete, toast, bestEffort]
   );
 
   const addMember = useCallback(

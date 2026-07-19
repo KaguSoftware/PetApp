@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeOutUp, SlideInUp } from "react-native-reanimated";
+import Animated, { FadeOutDown, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
 import { useStore } from "@/lib/store";
@@ -21,11 +21,15 @@ export default function Toasts() {
   const insets = useSafeAreaInsets();
   if (toasts.length === 0) return null;
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
+    // Anchored to the BOTTOM, above the home indicator and tab bar. Toasts used
+    // to sit at `insets.top + 8` — inside the navigation bar's own band — where
+    // each full-width toast card physically covered the header island, making
+    // coins/bell/gear untappable for as long as a toast was on screen.
+    <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
       {/* When several stack up, a small button clears them all at once (and
           cancels any still queued) so overlays don't pile on the screen. */}
       {toasts.length > 1 ? (
-        <Animated.View entering={SlideInUp.duration(200)} exiting={FadeOutUp.duration(160)} style={styles.clearRow}>
+        <Animated.View entering={SlideInDown.duration(200)} exiting={FadeOutDown.duration(160)} style={styles.clearRow}>
           <Pressable
             onPress={stopNotifications}
             accessibilityRole="button"
@@ -38,10 +42,13 @@ export default function Toasts() {
           </Pressable>
         </Animated.View>
       ) : null}
-      {toasts.map((t) => {
+      {/* Cap the visible stack: the wrap is absolutely positioned and doesn't
+          scroll, so an unbounded list would push the oldest toasts off-screen
+          where they can't be read or dismissed. "Clear all" handles the rest. */}
+      {toasts.slice(-MAX_VISIBLE).map((t) => {
         const { tint, bg } = tone(t.icon);
         return (
-          <Animated.View key={t.id} entering={SlideInUp.duration(240)} exiting={FadeOutUp.duration(180)}>
+          <Animated.View key={t.id} entering={SlideInDown.duration(240)} exiting={FadeOutDown.duration(180)}>
             <Pressable style={styles.toast} onPress={() => dismissToast(t.id)} accessibilityRole="alert">
               <View style={[styles.tile, { backgroundColor: bg }]}>
                 <Icon name={t.icon} size={18} color={tint} />
@@ -75,6 +82,17 @@ export default function Toasts() {
     </View>
   );
 }
+
+/**
+ * Toasts float above the tab bar. `insets.bottom` covers the home indicator /
+ * system nav, but not the tab bar itself, so clear it explicitly — 56 is the
+ * standard bar height (matching ANDROID_TAB_BAR_HEIGHT in Screen.tsx) plus a
+ * little breathing room.
+ */
+const TAB_BAR_CLEARANCE = 64;
+
+/** Most toasts shown at once; older ones stay in the store for "Clear all". */
+const MAX_VISIBLE = 3;
 
 const styles = StyleSheet.create({
   wrap: { position: "absolute", left: 12, right: 12, gap: 8, zIndex: 100 },

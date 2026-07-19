@@ -61,7 +61,9 @@ export default function GeneralSettingsPage() {
               leading={<IconCircle icon="bell" tint={colors.label2} bg={colors.fill} />}
               title={n.label}
               onPress={flip}
-              trailing={<Toggle on={!!on} onChange={flip} label={n.label} />}
+              // The row owns the tap; the switch is an indicator (see Toggle).
+              switchValue={!!on}
+              trailing={<Toggle on={!!on} onChange={flip} label={n.label} interactive={false} />}
             />
           );
         })}

@@ -24,7 +24,7 @@ Native rebuild of **PetPal** (family pet-care app: care logging, reminders, heal
 - **Colors/fonts**: theme tokens only; derive tints with `withAlpha(colors.x, a)`. Tab bar is the REAL system UITabBar (expo-router NativeTabs, SF Symbols) — never rebuild it. Press feedback is the standard iOS dim-while-held (PressableScale).
 - **Gotcha**: if typed routes error on valid paths (`/home`), the Metro file-map cache is stale — delete `%LOCALAPPDATA%/Temp/metro-*` and boot `expo start` once.
 
-## Current status (2026-07-18 — ALL PHASES BUILT + native-feel pass + bug-fix batch done; on-device verification pending)
+## Current status (2026-07-19 — ALL PHASES BUILT + native-feel pass + bug-fix rounds 1–5 done; on-device verification pending)
 Every phase (1–6) is implemented, committed, and statically verified: `tsc --noEmit` clean, iOS + Android Metro bundles compile (5.4 MB each). **Not yet exercised on a device** — the owner's next step is a full walkthrough in Expo Go (log care, reminders + local notification firing, dress-up/shop, pet detail health records, family invite, paywall mock purchase, cross-check writes against the web demo).
 
 ### Bug-fix batch (2026-07-18, from owner + Kemal reports) — all landed, needs device verify
@@ -76,7 +76,82 @@ Every phase (1–6) is implemented, committed, and statically verified: `tsc --n
 - **Accessibility now does real things** (`app/settings/accessibility.tsx`, `lib/a11y.tsx`, `components/Sheet.tsx`) — reduce-motion gates animations (already), haptics gates vibrations + a "Test haptics" row, and **reduce-transparency now actually applies** (solidifies the Sheet backdrop). Added a "Text size, bold & contrast" row that deep-links to OS settings (`Linking.openSettings()` / `app-settings:`), grouped In-app vs System.
 - **Delete account** (`app/settings/account.tsx`) — now surfaces the *real* failure honestly instead of "try again in a moment." Root cause unchanged: **the `delete-account` Edge Function isn't deployed** (EAS-cutover item). To make delete actually work: `supabase functions deploy delete-account` (needs the Supabase CLI + service-role env on the project). Until then it shows "deletion unavailable — goes live with the next backend update."
 
+### Bug-fix batch round 5 (2026-07-19, full-system audit — "all buttons click")
+
+Four read-only audit agents swept tabs, pushed screens, shared components and the data layer;
+every finding below was re-verified against source before being fixed. `tsc --noEmit` clean,
+`expo lint` 0 errors, iOS + Android both bundle (8.51 MB each).
+
+- **THE header-button bug, root-caused** (`components/HeaderActions.tsx`, `SettingsButton.tsx`,
+  `app/(tabs)/home/index.tsx`). Two independent causes, neither a styling mistake:
+  1. **`react-native-screens` only hit-tests ONE `headerRight` child.** `headerRight` is wrapped
+     in a single `UIBarButtonItem`; `RNSScreenStackHeaderConfig.mm`'s `hitTest:` (~line 171)
+     iterates `_reactSubviews`, overwrites its `headerComponent` local on each positive hit, and
+     **returns on the first left/right subview**. A fragment of sibling controls therefore leaves
+     only one of them tappable. Home was worst: streak + coins + bell + gear = 4 siblings.
+     **Fix:** `HeaderActions` now renders exactly ONE wrapper `View` (row, gap 12) and takes a
+     `leading` prop — Home passes `StreakPill` *into* the island instead of beside it.
+     **Never return a fragment from `trailing`/`headerRight`.**
+  2. **Toasts painted over the header.** `Toasts` sat at `top: insets.top + 8` — inside the nav
+     bar's band — mounted after `<Stack>`, so each full-width toast card physically covered the
+     island. **Fix:** the stack is now anchored to the bottom (above the tab bar), animates with
+     `SlideInDown`/`FadeOutDown`, and caps at 3 visible.
+  - `SettingsButton` also stopped returning `null` inside `/settings` (that changed the header's
+    subview count between screens).
+- **Sheets** (`components/Sheet.tsx`): `kav` was missing `flex: 1`, so the content-sized
+  `KeyboardAvoidingView` computed a ~zero inset and **the keyboard covered every text-input
+  sheet's Save button**. Also: modal content now gets its own `GestureHandlerRootView` (a RN
+  `Modal` is a separate native window outside the app's root one — swipe-to-dismiss was dead on
+  Android), `useWindowDimensions()` replaces the module-scope `Dimensions.get` (stale after
+  rotation), the hardcoded `maxHeight: maxPanelH - 33` is gone in favour of `flexShrink: 1`, the
+  panel measures its height once (growing content made it jump), the handle zone no longer spans
+  the full width, and the pan gained `failOffsetY(-10)`.
+- **`Row` trailing** (`components/ui.tsx`): `trailing` renders *inside* Row's `Pressable`, so a
+  row with its own `onPress` swallowed taps meant for an interactive trailing control (reliably
+  on Android). Added `interactiveTrailing` (hands the touch to the trailing subtree) and
+  `switchValue` (announces the row as a switch). `Toggle` gained `interactive={false}` for the
+  indicator-only case. Settings toggles flipped twice and cancelled out; Family's "View" opened
+  the edit sheet instead of the pet. Trailing is also `flexShrink: 0` now, so a wide control no
+  longer collapses the title to nothing.
+- **Care alerts resurrected themselves** (`lib/store.tsx`): the dedupe guard required `r.alert`,
+  but `dismissAllAlerts` clears that flag while leaving `done: false` — so the 15-minute
+  re-check treated every dismissed alert as absent and **inserted a new DB row for it**. Cleared
+  alerts came back within 15 min and the table grew duplicates forever. Same bug in
+  `raiseFeedingAlert`. Both now match on `!done && alertKind` only.
+- **Pull-to-refresh could hang forever** (`lib/store.tsx`): `load()`'s
+  `if (user.id === lastLoadedUserId) return` fired before `resolvePendingRefreshes()`;
+  `onAuthStateChange` calls `load()` on every `TOKEN_REFRESHED` (~hourly) / `SIGNED_IN`, so a
+  refresh in flight when one landed never settled and the spinner span until restart.
+- **Hats were unreachable** (`app/(tabs)/pets/index.tsx`): the head-slot button sat at
+  `{left:-8, top:-8}` — partly **outside `petBox`, and a child outside its parent's bounds never
+  receives touches on Android** — with the rest overlapping `Pet3D`'s full-bleed `GLView` pan.
+  `petBox` now sizes to include the overhang (negative margin preserves the layout), the button
+  carries `elevation` as well as `zIndex`, and `Pet3D`'s pan requires `minDistance(8)` so it
+  stops swallowing taps.
+- **Wheel-in-sheet** (`components/WheelPicker.tsx`): columns are `ScrollView`s nested in the
+  sheet's own scroller, and on iOS the outer one won the pan so wheels wouldn't turn
+  (`nestedScrollEnabled` is Android-only). Each column is now wrapped in
+  `Gesture.Native().blocksExternalGesture()`; `EditStatSheet` also passes `scrollable={false}`.
+- **Smaller, verified:** retro-log "Log it" bound `disabled` to HH:MM syntax while the handler
+  required a *past* time — enabled button, no-op tap (now one shared value + an inline hint);
+  `onSubmitEditing` bypassed the auth buttons' loading guard (double signup requests); signup's
+  "Check your email" branch is scrollable + inset (its only exit link could fall off-screen);
+  community `VoteControl` moved out of the card's press region (upvoting navigated instead);
+  breed chips shrink instead of pushing the family label off the card; Home clamps `petIndex`
+  when a pet is deleted and widens the hero swipe threshold to 25 (small chips/dots were losing
+  taps); pet-less households no longer render "checkup — undefined" on Activity/Vets; guide chip
+  labels use `minHeight`; five bare `.then()` calls that swallowed Supabase errors now route
+  through a new `bestEffort()` logger.
+- **Not changed (audit was wrong):** reminder delete already has 5s undo via `undoableDelete`, so
+  it was left one-tap. `@gorhom/bottom-sheet` is a dependency but unused — `Sheet` is hand-rolled
+  on RN `Modal`, so no `BottomSheetModalProvider` is needed. Worth removing the dep.
+
 **Still needs a device / not fully closable statically:**
+
+- **Round 5 needs a full walkthrough** — all of the above is statically verified only. Priority
+  checks: every header button on every tab (then again *while a toast is showing*), the hat slot,
+  settings toggles, Family "View", community upvote, a keyboard-covered sheet footer, and the
+  weight wheel on iOS. Android matters here — several of these failed *only* on Android.
 - iOS "heading not showing", "back button doesn't work", overscroll nav-squish — believed addressed by the SafeAreaProvider fix but must be confirmed on a real iPhone; the NativeTabs overscroll-minimize behavior is system-owned.
 - Delete-account only works once the Edge Function is deployed.
 - Full family-wide (not just actor) push notifications remain an EAS-cutover item (no notifications table yet).

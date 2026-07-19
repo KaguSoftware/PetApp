@@ -555,7 +555,8 @@ const styles = StyleSheet.create({
   guidesSubtitle: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   guidesSeeAll: { flexDirection: "row", alignItems: "center", gap: 2 },
   guidesSeeAllText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
-  guidesRail: { gap: 10, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 2 },
+  // paddingBottom clears the chips' card shadow, which the old 2pt clipped.
+  guidesRail: { gap: 10, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 8 },
   guideChip: {
     width: 108,
     padding: 12,
@@ -566,7 +567,9 @@ const styles = StyleSheet.create({
   },
   guideChipIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   // Reserve two lines so single- and two-line titles keep every chip the same height.
-  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17, height: 34 },
+  // minHeight, not height — keeps the chips aligned on a 2-line grid while
+  // letting a longer title (or larger system text size) grow instead of clip.
+  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17, minHeight: 34 },
   guideChipMeta: { flexDirection: "row", alignItems: "center", gap: 3 },
   guideChipMetaText: { fontSize: 11, fontFamily: font.medium, color: colors.label3 },
   lockedWrap: { alignItems: "center", paddingTop: 40, paddingBottom: 24 },

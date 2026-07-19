@@ -61,6 +61,14 @@ export default function Home() {
 
   const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
 
+  // Deleting the pet you're viewing (or any earlier one) leaves petIndex past
+  // the end of the list; without this the hero silently swaps to a different
+  // pet while every derived count keeps pointing at the old index.
+  const petCount = state.pets.length;
+  useEffect(() => {
+    setPetIndex((i) => (i > petCount - 1 ? Math.max(0, petCount - 1) : i));
+  }, [petCount]);
+
   const pet = state.pets[Math.min(petIndex, state.pets.length - 1)] as (typeof state.pets)[number] | undefined;
 
   const startOfDay = new Date();
@@ -73,8 +81,13 @@ export default function Home() {
 
   // Horizontal swipe on the hero card pages between pets, like the web's
   // pointer swipe. activeOffsetX keeps taps and vertical scrolls untouched.
+  //
+  // The threshold is deliberately generous (25, not 15): this Pan wraps the
+  // whole hero, including the small chips and the 7pt pet dots, and a tap that
+  // drifts past the threshold cancels the press instead of firing it. Small
+  // targets attract exactly that kind of imprecise tap.
   const swipe = Gesture.Pan()
-    .activeOffsetX([-15, 15])
+    .activeOffsetX([-25, 25])
     .failOffsetY([-12, 12])
     .onEnd((e) => {
       if (Math.abs(e.translationX) > 45 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.4) {
@@ -128,12 +141,10 @@ export default function Home() {
     <TabScreen
       title="Home"
       subtitle={greeting}
-      trailing={
-        <>
-          <StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />
-          <HeaderActions />
-        </>
-      }
+      // The streak pill goes INSIDE the island (not beside it) — a fragment of
+      // siblings in `headerRight` leaves only one of them tappable. See
+      // components/HeaderActions.tsx.
+      trailing={<HeaderActions leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
       refreshControl={refreshControl}
     >
       {/* Pet hero card */}

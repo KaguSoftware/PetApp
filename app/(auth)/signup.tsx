@@ -18,6 +18,10 @@ export default function SignupScreen() {
   const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit() {
+    // See login.tsx — onSubmitEditing bypasses the button's loading guard, and
+    // a duplicate signUp surfaces a spurious "already registered" error over a
+    // successful signup.
+    if (loading) return;
     setError(null);
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
@@ -36,14 +40,19 @@ export default function SignupScreen() {
   }
 
   if (confirmSent) {
+    // Scrollable + safe-area inset: "Back to log in" is the ONLY exit from this
+    // state, so at large text sizes it must never end up off-screen.
     return (
-      <View style={[styles.flex, styles.confirmWrap]}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.confirmWrap, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
+      >
         <Text style={styles.confirmTitle}>Check your email</Text>
         <Text style={styles.confirmBody}>We sent a confirmation link to {email}. Confirm it, then log in.</Text>
         <Link href="/(auth)/login" style={styles.footerLink}>
           Back to log in
         </Link>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -101,7 +110,9 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   // Padding lifts the link's tap target to >=44pt without shifting the baseline row.
   footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent, textAlign: "center", paddingVertical: 14, paddingHorizontal: 8 },
-  confirmWrap: { alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 },
+  // flexGrow keeps the content vertically centred when it's shorter than the
+  // screen, while still allowing it to scroll once it outgrows it.
+  confirmWrap: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 },
   confirmTitle: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   confirmBody: { fontSize: 15, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
 });

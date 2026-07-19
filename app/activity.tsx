@@ -56,6 +56,10 @@ export default function ActivityScreen() {
   const member = (id: string) => state.members.find((m) => m.id === id);
   const petById = (id: string) => state.pets.find((p) => p.id === id);
   const cat = state.pets.find((p) => p.breed === "British Shorthair") ?? state.pets[0];
+  // A household can have no pets yet, and this screen (unlike home/logs/plan)
+  // has no empty-state early return — so never interpolate `cat?.name` raw or
+  // the UI reads "6-month checkup — undefined".
+  const petLabel = cat?.name ?? "your pet";
 
   // Needs attention — the outstanding care alerts (same set the bell badges),
   // deduped (the data can hold identical entries) and grouped per pet so a bad
@@ -154,7 +158,7 @@ export default function ActivityScreen() {
             <View style={styles.insightHead}>
               <IconCircle icon="stethoscope" tint={colors.accent} bg={colors.accentSoft} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.insightTitle}>{cat?.name}&apos;s 6-month checkup is due next week</Text>
+                <Text style={styles.insightTitle}>{petLabel}&apos;s 6-month checkup is due next week</Text>
                 <Text style={styles.insightBody}>
                   We recommend {VET.name} at {VET.clinic} — {VET.rating} ★, {VET.distanceKm} km away.
                 </Text>
@@ -285,7 +289,7 @@ export default function ActivityScreen() {
         <Group style={{ marginTop: 20 }}>
           <Row
             leading={<IconCircle icon="stethoscope" tint={colors.accent} bg={colors.accentSoft} />}
-            title={`6-month checkup — ${cat?.name}`}
+            title={`6-month checkup — ${petLabel}`}
             subtitle="Dental check included"
           />
           <Row

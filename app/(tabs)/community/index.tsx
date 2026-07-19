@@ -25,18 +25,25 @@ import { cardShadow, colors, font, radius } from "@/lib/theme";
 
 type SortKey = "top" | "new";
 
-/** One question card in the feed. */
+/**
+ * One question card in the feed. Only the header/title/body region opens the
+ * post — the footer stays outside the Pressable because it holds VoteControl,
+ * and nesting that inside the card's press region meant an upvote navigated to
+ * the post instead of voting (and discarded the optimistic score on the way).
+ */
 function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
   return (
-    <PressableScale onPress={onPress} accessibilityRole="button">
-      <View style={styles.card}>
+    <View style={styles.card}>
+      <PressableScale onPress={onPress} accessibilityRole="button">
         <View style={styles.cardHeader}>
-          <Chip>
-            <Text style={styles.breedChip}>
+          <Chip style={styles.breedChipWrap}>
+            <Text style={styles.breedChip} numberOfLines={1}>
               {speciesEmoji(post.species)} {post.breed}
             </Text>
           </Chip>
-          <Text style={styles.family}>{familyLabel(post.authorHouseholdId)}</Text>
+          <Text style={styles.family} numberOfLines={1}>
+            {familyLabel(post.authorHouseholdId)}
+          </Text>
         </View>
         <Text style={styles.cardTitle} numberOfLines={2}>
           {post.title}
@@ -46,19 +53,19 @@ function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
             {post.body}
           </Text>
         ) : null}
-        <View style={styles.cardFooter}>
-          <VoteControl target={{ postId: post.id }} score={post.score} voted={post.votedByMe} size="sm" />
-          <View style={styles.metaItem}>
-            <Icon name="people" size={14} color={colors.label3} />
-            <Text style={styles.meta}>
-              {post.answerCount} {post.answerCount === 1 ? "answer" : "answers"}
-            </Text>
-          </View>
-          <Text style={styles.dot}>·</Text>
-          <Text style={styles.meta}>{relativeTime(post.createdAt)}</Text>
+      </PressableScale>
+      <View style={styles.cardFooter}>
+        <VoteControl target={{ postId: post.id }} score={post.score} voted={post.votedByMe} size="sm" />
+        <View style={styles.metaItem}>
+          <Icon name="people" size={14} color={colors.label3} />
+          <Text style={styles.meta}>
+            {post.answerCount} {post.answerCount === 1 ? "answer" : "answers"}
+          </Text>
         </View>
+        <Text style={styles.dot}>·</Text>
+        <Text style={styles.meta}>{relativeTime(post.createdAt)}</Text>
       </View>
-    </PressableScale>
+    </View>
   );
 }
 
@@ -255,8 +262,12 @@ const styles = StyleSheet.create({
   feed: { marginTop: 8, gap: 10 },
   card: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 14, ...cardShadow },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
-  breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3 },
+  // The chip yields first and the family label holds its width — otherwise a
+  // long breed name expands the chip past the card and pushes the household
+  // attribution off the right edge entirely.
+  breedChipWrap: { flexShrink: 1, minWidth: 0 },
+  breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2, flexShrink: 1 },
+  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 0 },
   cardTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.label, lineHeight: 21 },
   cardBody: { marginTop: 4, fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
   cardFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },

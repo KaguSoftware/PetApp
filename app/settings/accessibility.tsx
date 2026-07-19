@@ -61,7 +61,9 @@ export default function AccessibilitySettingsPage() {
             title={r.label}
             subtitle={r.hint}
             onPress={() => r.set(!r.on)}
-            trailing={<Toggle on={r.on} onChange={r.set} label={r.label} />}
+            // The row owns the tap; the switch is an indicator (see Toggle).
+            switchValue={r.on}
+            trailing={<Toggle on={r.on} onChange={r.set} label={r.label} interactive={false} />}
           />
         ))}
         <Row

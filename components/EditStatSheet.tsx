@@ -69,7 +69,11 @@ export default function EditStatSheet({
   for (let d = 0; d < scale; d++) decimalValues.push(d);
 
   return (
-    <Sheet open={open} onClose={onClose}>
+    // scrollable={false} while a wheel is up: WheelPicker's columns are
+    // ScrollViews, and nesting them in the sheet's own vertical ScrollView makes
+    // both answer the same pan — on iOS the outer one usually wins and the wheel
+    // won't turn. Wheel content is short enough not to need outer scrolling.
+    <Sheet open={open} onClose={onClose} scrollable={!wheel}>
       <SheetTitle>{title}</SheetTitle>
 
       <FieldLabel>{label}</FieldLabel>

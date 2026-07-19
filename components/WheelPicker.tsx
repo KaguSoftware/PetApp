@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { hapticsEnabled } from "@/lib/a11y";
 import { colors, font } from "@/lib/theme";
@@ -95,30 +96,37 @@ function WheelColumn<T>({
   );
 
   return (
-    <ScrollView
-      ref={ref}
-      style={{ width, height: ITEM_HEIGHT * VISIBLE }}
-      showsVerticalScrollIndicator={false}
-      snapToInterval={ITEM_HEIGHT}
-      snapToAlignment="start"
-      disableIntervalMomentum
-      decelerationRate="fast"
-      nestedScrollEnabled
-      scrollEventThrottle={16}
-      onScrollBeginDrag={() => {
-        scrolling.current = true;
-      }}
-      onScroll={onScroll}
-      onMomentumScrollEnd={settle}
-      onScrollEndDrag={settle}
-      contentContainerStyle={{ paddingVertical: PAD * ITEM_HEIGHT }}
-    >
-      {values.map((v, i) => (
-        <View key={i} style={styles.item}>
-          <Text style={[styles.itemText, i === centerIndex && styles.itemTextActive]}>{format(v)}</Text>
-        </View>
-      ))}
-    </ScrollView>
+    // A wheel is often rendered inside a Sheet's own vertical ScrollView, where
+    // both scrollers answer the same pan — on iOS the outer one usually wins and
+    // the wheel refuses to turn. `blocksExternalGesture` makes the ancestor
+    // scroll wait on this column, so the wheel gets the drag. (nestedScrollEnabled
+    // below only covers the Android side of the same problem.)
+    <GestureDetector gesture={Gesture.Native().blocksExternalGesture()}>
+      <ScrollView
+        ref={ref}
+        style={{ width, height: ITEM_HEIGHT * VISIBLE }}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM_HEIGHT}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        decelerationRate="fast"
+        nestedScrollEnabled
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => {
+          scrolling.current = true;
+        }}
+        onScroll={onScroll}
+        onMomentumScrollEnd={settle}
+        onScrollEndDrag={settle}
+        contentContainerStyle={{ paddingVertical: PAD * ITEM_HEIGHT }}
+      >
+        {values.map((v, i) => (
+          <View key={i} style={styles.item}>
+            <Text style={[styles.itemText, i === centerIndex && styles.itemTextActive]}>{format(v)}</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </GestureDetector>
   );
 }
 

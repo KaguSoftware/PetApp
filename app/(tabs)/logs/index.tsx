@@ -155,14 +155,19 @@ export default function LogsScreen() {
     return { hh, mm };
   })();
   // Timestamp for the retro-log sheet — null while incomplete or in the future.
-  const retroTs = () => {
+  // Computed once per render so the submit button's `disabled` and its handler
+  // can't disagree about whether the entry is loggable.
+  const retroTimestamp = (() => {
     if (!parsedRetroTime) return null;
     const d = new Date();
     if (retroDay === "yesterday") d.setDate(d.getDate() - 1);
     d.setHours(parsedRetroTime.hh, parsedRetroTime.mm, 0, 0);
     const ts = d.getTime();
     return ts > Date.now() ? null : ts;
-  };
+  })();
+  // A syntactically valid time that simply hasn't happened yet — the button is
+  // disabled, so say why inline rather than leaving the user to guess.
+  const retroTimeIsFuture = parsedRetroTime != null && retroTimestamp == null;
 
   // Every outstanding alert type for this pet — drives the red "!" badge on the
   // matching log box.
@@ -323,17 +328,17 @@ export default function LogsScreen() {
           returnKeyType="done"
           style={{ marginTop: 10 }}
         />
+        {retroTimeIsFuture ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
 
         <SheetFooter>
           <AccentButton
-            disabled={!retroType || !parsedRetroTime}
+            // Bound to the SAME value the handler acts on. `parsedRetroTime`
+            // only checks HH:MM syntax, so a future time (23:00 typed at 10am)
+            // rendered this enabled while the press did nothing but toast.
+            disabled={!retroType || retroTimestamp == null}
             onPress={() => {
-              const ts = retroTs();
-              if (!retroType) return;
-              if (ts == null) {
-                toast("alert", "That time hasn't happened yet", "Pick a time in the past");
-                return;
-              }
+              const ts = retroTimestamp;
+              if (!retroType || ts == null) return;
               if (logAction(pet.id, retroType, undefined, ts)) {
                 successHaptic();
                 setRetroOpen(false);
@@ -402,6 +407,7 @@ export default function LogsScreen() {
 }
 
 const styles = StyleSheet.create({
+  retroHint: { marginTop: 8, fontSize: 13, fontFamily: font.regular, color: colors.red },
   petSwitcher: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
   petSwitcherName: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

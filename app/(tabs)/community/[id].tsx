@@ -225,12 +225,14 @@ export default function PostDetail() {
       {/* Question header */}
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
-          <Chip>
-            <Text style={styles.breedChip}>
+          <Chip style={styles.breedChipWrap}>
+            <Text style={styles.breedChip} numberOfLines={1}>
               {speciesEmoji(post.species)} {post.breed}
             </Text>
           </Chip>
-          <Text style={styles.family}>{familyLabel(post.authorHouseholdId)}</Text>
+          <Text style={styles.family} numberOfLines={1}>
+            {familyLabel(post.authorHouseholdId)}
+          </Text>
         </View>
         <Text style={styles.postTitle}>{post.title}</Text>
         {post.body ? <Text style={styles.postBody}>{post.body}</Text> : null}
@@ -274,8 +276,10 @@ export default function PostDetail() {
 const styles = StyleSheet.create({
   postCard: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 16, ...cardShadow },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 },
-  breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3 },
+  // A long breed must shrink the chip, not push the family label off the card.
+  breedChipWrap: { flexShrink: 1, minWidth: 0 },
+  breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2, flexShrink: 1 },
+  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 0 },
   postTitle: { fontSize: 19, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label, lineHeight: 25 },
   postBody: { marginTop: 8, fontSize: 15, fontFamily: font.regular, color: colors.label, lineHeight: 21 },
   postFooter: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 12 },

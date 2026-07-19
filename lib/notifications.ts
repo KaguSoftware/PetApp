@@ -71,11 +71,19 @@ export async function syncScheduledNotifications(reminders: Reminder[], pets: Pe
       .sort((a, b) => a.at - b.at)
       .slice(0, MAX_SCHEDULED);
 
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    if (upcoming.length === 0) return;
+    // Check permission BEFORE cancelling. This runs on every reminder change
+    // and every foreground, so cancelling first meant a user who denied
+    // notifications had their OS queue wiped on each pass — and if permission
+    // was later granted, everything scheduled before the denial was long gone.
+    if (upcoming.length === 0) {
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      return;
+    }
 
     const ok = await ensurePermissions();
     if (!ok) return;
+
+    await Notifications.cancelAllScheduledNotificationsAsync();
 
     for (const { reminder, at } of upcoming) {
       const pet = pets.find((p) => p.id === reminder.petId);
