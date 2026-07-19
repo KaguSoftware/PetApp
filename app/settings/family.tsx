@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
+import BreedField from "@/components/BreedField";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -24,7 +25,18 @@ import {
   SmallButton,
   TextField,
 } from "@/components/ui";
-import { formatAge, formatWeight, isAdminRole, kgToUnit, unitToKg, weightUnitLabel, type Member, type Pet } from "@/lib/data";
+import {
+  BREEDS_BY_SPECIES,
+  formatAge,
+  formatWeight,
+  isAdminRole,
+  kgToUnit,
+  OTHER_BREED,
+  unitToKg,
+  weightUnitLabel,
+  type Member,
+  type Pet,
+} from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { colors, font, radius } from "@/lib/theme";
 
@@ -189,7 +201,8 @@ export default function FamilySettingsPage() {
 
   const [editingPet, setEditingPet] = useState<Pet | null>(null);
   const [editPetName, setEditPetName] = useState("");
-  const [editPetBreed, setEditPetBreed] = useState("");
+  const [editPetBreed, setEditPetBreed] = useState<string>(OTHER_BREED);
+  const [editPetCustomBreed, setEditPetCustomBreed] = useState("");
   const [editPetAge, setEditPetAge] = useState("");
   const [editPetWeight, setEditPetWeight] = useState("");
   const [editPetCup, setEditPetCup] = useState("");
@@ -201,7 +214,13 @@ export default function FamilySettingsPage() {
   const openEditPet = (p: Pet) => {
     setEditingPet(p);
     setEditPetName(p.name);
-    setEditPetBreed(p.breed);
+    if (BREEDS_BY_SPECIES[p.species].includes(p.breed)) {
+      setEditPetBreed(p.breed);
+      setEditPetCustomBreed("");
+    } else {
+      setEditPetBreed(OTHER_BREED);
+      setEditPetCustomBreed(p.breed);
+    }
     setEditPetAge(String(Math.round(p.ageYears * 10) / 10));
     setEditPetWeight(String(kgToUnit(p.weightKg, state.units)));
     setEditPetCup(String(p.cupGrams));
@@ -224,6 +243,11 @@ export default function FamilySettingsPage() {
     setEditMemberName(m.name);
     setEditMemberRole(m.role);
   };
+
+  const resolvedEditBreed =
+    editPetBreed === OTHER_BREED
+      ? editPetCustomBreed.trim() || (editingPet?.species === "dog" ? "Mixed breed" : "House cat")
+      : editPetBreed;
 
   if (!hydrated) {
     return (
@@ -411,7 +435,15 @@ export default function FamilySettingsPage() {
             <SheetTitle>Edit {editingPet.name}</SheetTitle>
 
             <Field label="Name" value={editPetName} onChangeText={setEditPetName} />
-            <Field label="Breed" value={editPetBreed} onChangeText={setEditPetBreed} />
+
+            <FieldLabel>Breed</FieldLabel>
+            <BreedField
+              species={editingPet.species}
+              breed={editPetBreed}
+              customBreed={editPetCustomBreed}
+              onChangeBreed={setEditPetBreed}
+              onChangeCustomBreed={setEditPetCustomBreed}
+            />
 
             <View style={styles.twoCol}>
               <Field style={{ flex: 1 }} label="Age (years)" value={editPetAge} onChangeText={setEditPetAge} keyboardType="decimal-pad" />
@@ -466,7 +498,7 @@ export default function FamilySettingsPage() {
 
             <View style={{ marginTop: 28 }}>
               <AccentButton
-                disabled={!editPetName.trim() || !editPetBreed.trim()}
+                disabled={!editPetName.trim()}
                 onPress={() => {
                   // The stepper clamps at today, but quick chips + stale state
                   // keep the guard worth having.
@@ -476,7 +508,7 @@ export default function FamilySettingsPage() {
                   }
                   editPet(editingPet.id, {
                     name: editPetName.trim(),
-                    breed: editPetBreed.trim(),
+                    breed: resolvedEditBreed,
                     ageYears: Number(editPetAge) || editingPet.ageYears,
                     weightKg: unitToKg(Number(editPetWeight) || kgToUnit(editingPet.weightKg, state.units), state.units),
                     cupGrams: Math.round(Number(editPetCup)) || editingPet.cupGrams,

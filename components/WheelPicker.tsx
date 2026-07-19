@@ -26,37 +26,35 @@ const PAD = (VISIBLE - 1) / 2;
  * external value change re-aligns the scroll only when it differs from where the
  * wheel already sits.
  */
-function WheelColumn({
+function WheelColumn<T>({
   values,
   value,
   onChange,
-  format = (v) => String(v),
+  format = (v: T) => String(v),
   width,
+  findIndex,
 }: {
-  values: number[];
-  value: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => string;
+  values: T[];
+  value: T;
+  onChange: (v: T) => void;
+  format?: (v: T) => string;
   width: number;
+  /** How to map an external `value` to a row index. Defaults to exact match
+   *  (used for string wheels); the numeric wheel passes a closest-distance
+   *  matcher since decimal values don't always land exactly on the grid. */
+  findIndex?: (values: T[], value: T) => number;
 }) {
   const ref = useRef<ScrollView>(null);
   const scrolling = useRef(false);
   const lastHaptic = useRef(-1);
 
   const indexOf = useCallback(
-    (v: number) => {
-      let best = 0;
-      let bestDist = Infinity;
-      for (let i = 0; i < values.length; i++) {
-        const d = Math.abs(values[i] - v);
-        if (d < bestDist) {
-          bestDist = d;
-          best = i;
-        }
-      }
-      return best;
+    (v: T) => {
+      if (findIndex) return findIndex(values, v);
+      const i = values.indexOf(v);
+      return i >= 0 ? i : 0;
     },
-    [values],
+    [values, findIndex],
   );
 
   const targetIndex = useMemo(() => indexOf(value), [indexOf, value]);
@@ -159,10 +157,54 @@ export default function WheelPicker({
       {/* selection band, sized to the measured content row */}
       <View pointerEvents="none" style={[styles.band, { width: rowW || "70%" }]} />
       <View style={styles.row} onLayout={onRowLayout}>
-        <WheelColumn values={whole} value={wholePart} onChange={setWhole} width={80} />
+        <WheelColumn values={whole} value={wholePart} onChange={setWhole} width={80} findIndex={closestIndex} />
         <Text style={styles.dot}>.</Text>
-        <WheelColumn values={decimals} value={decPart} onChange={setDec} width={56} />
+        <WheelColumn values={decimals} value={decPart} onChange={setDec} width={56} findIndex={closestIndex} />
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+/** Snaps to the nearest value rather than requiring an exact match, since
+ *  decimal rounding can put `value` slightly off the grid. */
+function closestIndex(values: number[], v: number) {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < values.length; i++) {
+    const d = Math.abs(values[i] - v);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Single-column wheel for picking a string out of a fixed list (e.g. breed
+ * names). Shares the same snap/haptics/selection-band behavior as the
+ * numeric WheelPicker above, just with one column instead of two.
+ */
+export function SingleWheelPicker({
+  values,
+  value,
+  onChange,
+  width = 260,
+}: {
+  values: string[];
+  value: string;
+  onChange: (v: string) => void;
+  width?: number;
+}) {
+  const [rowW, setRowW] = useState(0);
+  const onRowLayout = (e: LayoutChangeEvent) => setRowW(e.nativeEvent.layout.width);
+
+  return (
+    <View style={styles.wrap}>
+      <View pointerEvents="none" style={[styles.band, { width: rowW || "70%" }]} />
+      <View style={styles.row} onLayout={onRowLayout}>
+        <WheelColumn values={values} value={value} onChange={onChange} width={width} />
       </View>
     </View>
   );

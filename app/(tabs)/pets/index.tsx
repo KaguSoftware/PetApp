@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
-import { useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
 import EditStatSheet from "@/components/EditStatSheet";
@@ -11,6 +11,7 @@ import { PixelCosmetic } from "@/components/pixel/PixelPet";
 import Pet3D from "@/components/pixel/Pet3D";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import PixelSprite from "@/components/pixel/PixelSprite";
+import BreedField from "@/components/BreedField";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -39,6 +40,7 @@ import {
   formatAge,
   formatWeight,
   kgToUnit,
+  OTHER_BREED,
   unitToKg,
   weightUnitLabel,
   type Cosmetic,
@@ -47,9 +49,6 @@ import {
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, HIT, radius, withAlpha } from "@/lib/theme";
-
-/** TextField forwards every prop to TextInput; React 19 delivers `ref` as a
- *  regular prop, so this alias just teaches the types about it. */
 
 /* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
 const MAIN_SLOTS: { slot: CosmeticSlot; label: string; hint: string }[] = [{ slot: "head", label: "Hat", hint: "Hats & headwear" }];
@@ -165,15 +164,14 @@ export default function PetsScreen() {
   const [addPetOpen, setAddPetOpen] = useState(false);
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
-  const [breed, setBreed] = useState("");
-  const [breedFocus, setBreedFocus] = useState(false);
+  const [breed, setBreed] = useState(BREEDS_BY_SPECIES.cat[0]);
+  const [customBreed, setCustomBreed] = useState("");
   const [sex, setSex] = useState<"female" | "male">("female");
   const [ageInput, setAgeInput] = useState("1");
   const [weightInput, setWeightInput] = useState("");
   const [cupInput, setCupInput] = useState("");
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
-  const breedRef = useRef<TextInput>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
   const bump = useSharedValue(1);
@@ -204,8 +202,8 @@ export default function PetsScreen() {
   };
   const openAddPet = () => {
     setSpecies("cat");
-    setBreed("");
-    setBreedFocus(false);
+    setBreed(BREEDS_BY_SPECIES.cat[0]);
+    setCustomBreed("");
     setSex("female");
     setAgeInput("1");
     prefillFor("cat");
@@ -216,15 +214,11 @@ export default function PetsScreen() {
     setPetName("");
   };
 
-  // Resolve the typed breed against the known list case-insensitively, so a
-  // match (however the user capitalised it) is saved under its canonical name
-  // and picks up the vet-built CARE_PLANS entry; anything else is a custom breed.
-  const breedQuery = breed.trim().toLowerCase();
-  const canonicalBreed = BREEDS_BY_SPECIES[species].find((b) => b.toLowerCase() === breedQuery);
-  const breedSuggestions = breedQuery
-    ? BREEDS_BY_SPECIES[species].filter((b) => b.toLowerCase().includes(breedQuery) && b.toLowerCase() !== breedQuery)
-    : [];
-  const resolvedBreed = canonicalBreed ?? (breed.trim() || (species === "cat" ? "House cat" : "Mixed breed"));
+  // A picklist match is saved under its canonical name so it picks up the
+  // vet-built CARE_PLANS entry; "Other" falls back to the typed custom name,
+  // or a species default if that's left blank.
+  const isOtherBreed = breed === OTHER_BREED;
+  const resolvedBreed = isOtherBreed ? customBreed.trim() || (species === "cat" ? "House cat" : "Mixed breed") : breed;
   const parsedAge = Number(ageInput);
   const parsedWeightUnit = Number(weightInput);
   const parsedCup = Number(cupInput);
@@ -248,14 +242,7 @@ export default function PetsScreen() {
       <SheetTitle>Add a pet</SheetTitle>
 
       <FieldLabel>Name</FieldLabel>
-      <TextField
-        value={petName}
-        onChangeText={setPetName}
-        placeholder="e.g. Mochi"
-        returnKeyType="next"
-        submitBehavior="submit"
-        onSubmitEditing={() => breedRef.current?.focus()}
-      />
+      <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
 
       <FieldLabel>Species</FieldLabel>
       <Segmented
@@ -266,47 +253,19 @@ export default function PetsScreen() {
         value={species}
         onChange={(s) => {
           setSpecies(s);
-          setBreed("");
-          setBreedFocus(false);
+          setBreed(BREEDS_BY_SPECIES[s][0]);
+          setCustomBreed("");
           prefillFor(s);
         }}
       />
 
       <FieldLabel>Breed</FieldLabel>
-      <TextField
-        ref={breedRef}
-        value={breed}
-        onChangeText={setBreed}
-        onFocus={() => setBreedFocus(true)}
-        onBlur={() => setBreedFocus(false)}
-        placeholder="Start typing a breed…"
-        autoComplete="off"
-        autoCorrect={false}
-        returnKeyType="done"
-      />
-      {breedFocus && breedSuggestions.length > 0 ? (
-        <View style={styles.suggestions}>
-          {breedSuggestions.slice(0, 6).map((b) => (
-            <Pressable
-              key={b}
-              onPress={() => {
-                setBreed(b);
-                setBreedFocus(false);
-              }}
-              style={({ pressed }) => [styles.suggestionRow, pressed && { backgroundColor: colors.fill }]}
-            >
-              <Text style={styles.suggestionLabel}>{b}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-      {breed.trim().length > 0 ? (
-        <Text style={styles.breedHint}>
-          {canonicalBreed
-            ? "This breed has a vet-built care plan."
-            : "Not on the list — you'll set custom feeding/water/care targets on the Care tab."}
-        </Text>
-      ) : null}
+      <BreedField species={species} breed={breed} customBreed={customBreed} onChangeBreed={setBreed} onChangeCustomBreed={setCustomBreed} />
+      <Text style={styles.breedHint}>
+        {isOtherBreed
+          ? "Not on the list — you'll set custom feeding/water/care targets on the Care tab."
+          : "This breed has a vet-built care plan."}
+      </Text>
 
       <FieldLabel>Sex</FieldLabel>
       <Segmented
@@ -646,16 +605,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   itemButtonLabel: { fontSize: 13, fontFamily: font.semibold },
-  suggestions: {
-    marginTop: 6,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingVertical: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-    ...cardShadow,
-  },
-  suggestionRow: { paddingHorizontal: 16, paddingVertical: 10, minHeight: 40, justifyContent: "center" },
-  suggestionLabel: { fontSize: 15, fontFamily: font.medium, color: colors.label },
   breedHint: { marginTop: 6, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
 });

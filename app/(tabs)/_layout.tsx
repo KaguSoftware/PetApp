@@ -21,7 +21,8 @@ export default function TabsLayout() {
   const { session } = useSession();
   if (!session) return <Redirect href="/(auth)/login" />;
 
-  // Tab order: Logs (leftmost), Care, Home (center), Pets, Settings.
+  // Tab order: Logs (leftmost), Care, Home (center), Pets, Community.
+  // Settings moved off the tab bar to the gear icon in HeaderActions.
   return (
     <NativeTabs
       tintColor={colors.accent}
@@ -44,9 +45,9 @@ export default function TabsLayout() {
         <Icon sf={{ default: "pawprint", selected: "pawprint.fill" }} androidSrc={androidIcon("paw")} />
         <Label>Pets</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} androidSrc={androidIcon("settings")} />
-        <Label>Settings</Label>
+      <NativeTabs.Trigger name="community">
+        <Icon sf={{ default: "bubble.left.and.bubble.right", selected: "bubble.left.and.bubble.right.fill" }} androidSrc={androidIcon("chatbubbles")} />
+        <Label>Community</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

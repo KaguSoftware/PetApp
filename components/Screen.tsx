@@ -42,6 +42,16 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * On iOS, UITabBarController participates in the safe-area chain, so
+ * `insets.bottom` already accounts for the real tab bar height. On Android,
+ * `NativeTabs` (expo-router/unstable-native-tabs) paints its own opaque bar
+ * above the system nav bar, but the safe-area inset it reports only reflects
+ * the system nav/gesture inset underneath it — not the bar itself. Without
+ * this, the last ~56dp of scrollable content sits behind the opaque tab bar.
+ */
+const ANDROID_TAB_BAR_HEIGHT = 56;
+
+/**
  * Top-level tab page scaffold. The big page title is rendered as in-content
  * text (reliable everywhere), while the small native header carries only the
  * trailing accessories (coins + bell). Content starts just below that header.
@@ -82,7 +92,8 @@ export function TabScreen({
         // below it — just a little breathing room, no header-height offset
         // (that offset was the huge empty gap on Android).
         paddingTop: 8,
-        paddingBottom: contentBottomPad + Math.max(insets.bottom, 12),
+        paddingBottom:
+          contentBottomPad + Math.max(insets.bottom, 12) + (Platform.OS === "android" ? ANDROID_TAB_BAR_HEIGHT : 0),
         paddingHorizontal: 16,
       }}
       {...scrollProps}

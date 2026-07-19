@@ -3,7 +3,7 @@
 -- registered from EAS dev/production builds only (Expo Go can't get one) and
 -- consumed by the send-due-reminders Edge Function.
 
-create table push_tokens (
+create table if not exists push_tokens (
   user_id uuid not null references auth.users (id) on delete cascade,
   expo_token text not null,
   platform text not null check (platform in ('ios', 'android')),
@@ -14,6 +14,9 @@ create table push_tokens (
 alter table push_tokens enable row level security;
 
 -- Owner-only: a user manages exactly their own device tokens.
+-- Postgres has no "create policy if not exists", so drop-then-create makes
+-- this migration safe to run twice.
+drop policy if exists "own push tokens" on push_tokens;
 create policy "own push tokens" on push_tokens
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);

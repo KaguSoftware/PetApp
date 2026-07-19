@@ -1,13 +1,14 @@
 import { useRouter } from "expo-router";
 import NotificationBell from "@/components/NotificationBell";
+import SettingsButton from "@/components/SettingsButton";
 import { CoinPill } from "@/components/ui";
 import { useStore } from "@/lib/store";
 
 /**
  * The standard top-right header island for every tab: the coin balance (taps
- * through to the coins screen) next to the notification bell. Kept in one place
- * so the "island" is identical on every tab — coins show everywhere, never a
- * lone bell in a coin-shaped gap.
+ * through to the coins screen), the notification bell, and the settings gear
+ * (Settings isn't a bottom tab — Community took its slot). Kept in one place
+ * so the "island" is identical on every tab.
  */
 export default function HeaderActions() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function HeaderActions() {
     <>
       <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
       <NotificationBell />
+      <SettingsButton />
     </>
   );
 }

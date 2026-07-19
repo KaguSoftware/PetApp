@@ -348,6 +348,15 @@ export const BREEDS_BY_SPECIES: Record<"cat" | "dog", string[]> = {
   dog: DOG_BREEDS,
 };
 
+/** Sentinel picked when a pet's breed isn't in the picklist above; the wheel
+ *  always renders it as the last row and reveals a free-text field for it. */
+export const OTHER_BREED = "Other";
+
+/** Breed wheel options for a species, with "Other" pinned at the end. */
+export function breedWheelOptions(species: "cat" | "dog"): string[] {
+  return [...BREEDS_BY_SPECIES[species], OTHER_BREED];
+}
+
 export const CARE_PLANS: Record<string, { intro: string; items: PlanItem[] }> = {
   "British Shorthair": {
     intro:
