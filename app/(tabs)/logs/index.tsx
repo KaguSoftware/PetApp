@@ -18,6 +18,7 @@ import { TimeWheelPicker } from "@/components/WheelPicker";
 import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
+  Chevron,
   FieldLabel,
   Group,
   IconCircle,
@@ -102,6 +103,15 @@ export default function LogsScreen() {
       status: careItemStatus(pet, item.type, item.medId, state.schedules, state.activities, now),
     }));
   }, [pet, state.schedules, state.activities, now]);
+
+  // Open reminders for this pet, so the Reminders row can say how many are
+  // waiting instead of being a blind link. Overdue is called out separately —
+  // that's the number that should pull someone in.
+  const reminderSummary = useMemo(() => {
+    if (!pet) return { open: 0, overdue: 0 };
+    const open = state.reminders.filter((r) => !r.done && r.petId === pet.id);
+    return { open: open.length, overdue: open.filter((r) => r.due < now).length };
+  }, [state.reminders, pet, now]);
 
   // "All caught up today" — fires once when every scheduled/targeted item for
   // the selected pet flips to done (or has met its daily count).
@@ -241,6 +251,35 @@ export default function LogsScreen() {
         />
       </Group>
       <Text style={styles.scheduleHint}>Tap any row to set its times — everyone gets reminded, and a ✓ shows until the next one.</Text>
+
+      {/* Reminders and the vet marketplace used to be reachable ONLY from the
+          bell (Activity), which put them two taps behind an icon most people
+          read as "notifications". They belong next to the care actions they
+          relate to, so they're surfaced here as well — Activity keeps its own
+          copies; these are additional doors to the same routes. */}
+      <SectionHeader>Tasks &amp; care</SectionHeader>
+      <Group>
+        <Row
+          onPress={() => router.push("/reminders")}
+          leading={<IconCircle icon="bell" tint={colors.orange} bg={colors.orangeSoft} />}
+          title="Reminders"
+          subtitle={
+            reminderSummary.open === 0
+              ? "Nothing scheduled — tap to add one"
+              : reminderSummary.overdue > 0
+                ? `${reminderSummary.overdue} overdue · ${reminderSummary.open} open for ${pet.name}`
+                : `${reminderSummary.open} open for ${pet.name}`
+          }
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={() => router.push("/vets")}
+          leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}
+          title="Find a vet"
+          subtitle="Browse clinics and request an appointment"
+          trailing={<Chevron />}
+        />
+      </Group>
 
       <PressableScale
         onPress={() => {
