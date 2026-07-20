@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { cosmetic, type Pet } from "@/lib/data";
 import PixelSprite from "./PixelSprite";
-import { COSMETIC_SPRITES, type CosmeticSprite } from "./cosmeticSprites";
+import { COSMETIC_SPRITES, placementFor, type CosmeticSprite } from "./cosmeticSprites";
 import { CAT_FUR, CAT_SPRITE, DOG_FUR, DOG_SPRITE, furSprite } from "./petSprites";
 
 /**
@@ -57,14 +57,17 @@ export default function PixelPet({
   const body = (
     <View style={{ position: "relative", width: size, height: size }}>
       <PixelSprite sprite={sprite} size={size} />
-      {equipped.map(({ id, cos }) => (
-        <PixelSprite
-          key={id}
-          sprite={cos.sprite}
-          size={size * cos.place.widthFrac}
-          style={{ position: "absolute", left: size * cos.place.left, top: size * cos.place.top }}
-        />
-      ))}
+      {equipped.map(({ id, cos }) => {
+        const place = placementFor(cos, pet.species);
+        return (
+          <PixelSprite
+            key={id}
+            sprite={cos.sprite}
+            size={size * place.widthFrac}
+            style={{ position: "absolute", left: size * place.left, top: size * place.top }}
+          />
+        );
+      })}
     </View>
   );
   return idle ? <IdleWrap size={size}>{body}</IdleWrap> : body;

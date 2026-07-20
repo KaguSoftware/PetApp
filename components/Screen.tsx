@@ -42,6 +42,19 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Android draws edge-to-edge (`android.edgeToEdgeEnabled` in app.json), so the
+ * window starts behind the status bar. `headerStatusBarHeight` tells
+ * react-native-screens how much room to reserve above the header content;
+ * without it the header's own accessories overlap the clock and battery.
+ * iOS's UINavigationBar already accounts for the notch, so this only applies
+ * on Android.
+ */
+export function useHeaderStatusBarInset(): { headerStatusBarHeight?: number } {
+  const insets = useSafeAreaInsets();
+  return Platform.OS === "android" ? { headerStatusBarHeight: insets.top } : {};
+}
+
+/**
  * On iOS, UITabBarController participates in the safe-area chain, so
  * `insets.bottom` already accounts for the real tab bar height. On Android,
  * `NativeTabs` (expo-router/unstable-native-tabs) paints its own opaque bar
@@ -73,13 +86,16 @@ export function TabScreen({
 } & ScrollViewProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const statusBarInset = useHeaderStatusBarInset();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: "",
+      ...statusBarInset,
       headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-  }, [navigation, trailing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, trailing, statusBarInset.headerStatusBarHeight]);
 
   return (
     <ScrollView
@@ -122,13 +138,16 @@ export function PushedScreen({
 }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const statusBarInset = useHeaderStatusBarInset();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       title: title ?? "",
+      ...statusBarInset,
       headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-  }, [navigation, title, trailing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, title, trailing, statusBarInset.headerStatusBarHeight]);
 
   if (!scroll) {
     return <View style={[styles.root, { paddingTop: 10 }]}>{children}</View>;

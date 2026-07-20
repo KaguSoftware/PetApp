@@ -18,7 +18,10 @@ export default function SettingsButton() {
     <Pressable
       onPress={() => router.push("/settings")}
       accessibilityLabel="Settings"
-      hitSlop={8}
+      accessibilityRole="button"
+      // 38pt pill + 6pt each side = a 50pt touch target (>= the 44pt minimum),
+      // sized so it can't overlap the neighbouring control.
+      hitSlop={6}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
       <Icon name="gear" size={21} color={colors.label} />

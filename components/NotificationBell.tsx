@@ -25,7 +25,11 @@ export default function NotificationBell() {
     <Pressable
       onPress={() => router.push("/activity")}
       accessibilityLabel={count > 0 ? `Activity, ${count} alerts` : "Activity"}
-      hitSlop={8}
+      accessibilityRole="button"
+      // The pill is 38pt; 6pt on every side brings the real touch target to
+      // 50pt, comfortably past the 44pt minimum, without overlapping its
+      // neighbours (the island's gap is 8).
+      hitSlop={6}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
       <Icon name="bell" size={21} color={colors.label} />

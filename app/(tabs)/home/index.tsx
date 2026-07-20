@@ -1,8 +1,16 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  interpolateColor,
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
@@ -20,9 +28,6 @@ import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
-/** How far the hero card travels when paging between pets. */
-const HERO_SLIDE = 90;
-
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
   return (
@@ -36,6 +41,31 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
         <Icon name="flame" size={14} color={colors.orange} />
         <Text style={styles.streakPillLabel}>{streak}</Text>
       </View>
+    </PressableScale>
+  );
+}
+
+const DOT_SIZE = 7;
+const DOT_ACTIVE_W = 20;
+
+/**
+ * One page dot, driven by the carousel's live track value so it stretches and
+ * darkens continuously as the finger moves — not in a jump after the swipe
+ * lands. At track === index the dot is the wide "active" pill; a slide away it
+ * is a small faint circle, and it interpolates between the two.
+ */
+function PetDot({ index, track, onPress, label }: { index: number; track: SharedValue<number>; onPress: () => void; label: string }) {
+  const style = useAnimatedStyle(() => {
+    // 1 when this dot's page is centered, 0 when a full slide away or more.
+    const nearness = Math.max(0, 1 - Math.abs(track.value - index));
+    return {
+      width: DOT_SIZE + (DOT_ACTIVE_W - DOT_SIZE) * nearness,
+      backgroundColor: interpolateColor(nearness, [0, 1], [withAlpha(colors.label, 0.18), colors.label]),
+    };
+  });
+  return (
+    <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={onPress} accessibilityLabel={label} hitSlop={10}>
+      <Animated.View style={[styles.petDot, style]} />
     </PressableScale>
   );
 }
@@ -66,40 +96,29 @@ export default function Home() {
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
 
-  // Hero paging animation. The content swaps instantly on index change, so the
-  // motion is played around it: the outgoing card slides/fades out in the swipe
-  // direction, the index flips at the midpoint, and the incoming card slides in
-  // from the opposite edge. Reduce-motion collapses this to a plain swap.
+  // Hero carousel. The card itself is a fixed frame that never moves; inside it
+  // a track holding every pet slides horizontally, so one pet pushes the next
+  // one out of the way. No fading — pure translation, like a paged scroller.
+  //
+  // `track` is measured in slides: 0 = first pet centered, 1 = second, and
+  // fractional values while a finger is dragging.
   const reduceMotion = useReduceMotion();
-  const heroShift = useSharedValue(0); // -1..1, card offset as a fraction of SLIDE
-  const heroFade = useSharedValue(1);
-  const heroStyle = useAnimatedStyle(() => ({
-    opacity: heroFade.value,
-    transform: [{ translateX: heroShift.value * HERO_SLIDE }],
+  const [heroW, setHeroW] = useState(0);
+  const track = useSharedValue(0);
+  const dragStart = useSharedValue(0);
+  const trackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -track.value * heroW }],
   }));
 
-  const applyPetChange = (dir: 1 | -1) =>
-    setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
-
-  const changePet = (dir: 1 | -1) => {
-    // Nothing to page to — rubber-band back instead of animating a swap that
-    // can't happen (otherwise a finger-tracked card stays stuck off-center).
-    const atEdge = dir === 1 ? petIndex >= state.pets.length - 1 : petIndex <= 0;
-    if (atEdge || reduceMotion) {
-      heroShift.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
-      if (!atEdge) applyPetChange(dir);
+  // Keep the track aligned when the index changes from outside the gesture
+  // (the dots, a pet being deleted, the switch-pet sheet).
+  useEffect(() => {
+    if (reduceMotion) {
+      track.value = petIndex;
       return;
     }
-    // Out: follow the finger. Then swap and come in from the far side.
-    heroShift.value = withTiming(-dir * 0.5, { duration: 130, easing: Easing.in(Easing.quad) });
-    heroFade.value = withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }, (done) => {
-      if (!done) return;
-      runOnJS(applyPetChange)(dir);
-      heroShift.value = dir * 0.6;
-      heroShift.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
-      heroFade.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
-    });
-  };
+    track.value = withTiming(petIndex, { duration: 280, easing: Easing.out(Easing.cubic) });
+  }, [petIndex, reduceMotion, track]);
 
   // Deleting the pet you're viewing (or any earlier one) leaves petIndex past
   // the end of the list; without this the hero silently swaps to a different
@@ -113,11 +132,6 @@ export default function Home() {
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const todays = useMemo(
-    () => (pet ? state.activities.filter((a) => a.petId === pet.id && a.ts >= startOfDay.getTime()) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.activities, pet?.id]
-  );
 
   // Horizontal swipe on the hero card pages between pets, like the web's
   // pointer swipe. activeOffsetX keeps taps and vertical scrolls untouched.
@@ -126,23 +140,33 @@ export default function Home() {
   // whole hero, including the small chips and the 7pt pet dots, and a tap that
   // drifts past the threshold cancels the press instead of firing it. Small
   // targets attract exactly that kind of imprecise tap.
+  const lastIndex = Math.max(0, state.pets.length - 1);
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-12, 12])
+    .onBegin(() => {
+      dragStart.value = track.value;
+    })
     .onUpdate((e) => {
-      if (reduceMotion) return;
-      // Track the finger with resistance so the card feels attached to the drag.
-      heroShift.value = (e.translationX / HERO_SLIDE) * 0.4;
+      if (reduceMotion || heroW === 0) return;
+      let next = dragStart.value - e.translationX / heroW;
+      // Rubber-band past the ends instead of letting the track run off.
+      if (next < 0) next = next * 0.3;
+      else if (next > lastIndex) next = lastIndex + (next - lastIndex) * 0.3;
+      track.value = next;
     })
     .onEnd((e) => {
-      const paged =
-        Math.abs(e.translationX) > 45 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.4;
-      if (paged) {
-        runOnJS(changePet)(e.translationX < 0 ? 1 : -1);
-        return;
-      }
-      // Not far enough (or at the end of the list) — spring back to center.
-      heroShift.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
+      if (reduceMotion || heroW === 0) return;
+      // Decide the target slide from where the drag ended plus its velocity, so
+      // a quick flick pages even when it didn't travel far.
+      const projected = track.value - (e.velocityX / heroW) * 0.15;
+      const target = Math.max(0, Math.min(lastIndex, Math.round(projected)));
+      track.value = withTiming(target, { duration: 280, easing: Easing.out(Easing.cubic) }, (done) => {
+        // Commit the index once the slide lands — the rest of the page (meals
+        // bar, reminders) reads off petIndex, so flipping it mid-flight would
+        // swap content under the moving track.
+        if (done) runOnJS(setPetIndex)(target);
+      });
     });
 
   if (!hydrated || !pet) {
@@ -169,12 +193,19 @@ export default function Home() {
   }
 
   const me = state.members.find((m) => m.id === state.currentMemberId);
+  // Meals for ANY pet — every slide in the carousel renders its own bar, so this
+  // can't be derived from the selected pet alone.
+  //
   // The pet's feeding schedule (when set on the Logs tab) is the source of
   // truth for meals per day; otherwise the canonical daily target (breed plan
   // → species default) so a plan-less cat targets 3 meals, not a hardcoded 2.
-  const fedTarget = effectiveDailyTarget(pet, "fed", state.schedules) ?? 2;
-  const fedCount = todays.filter((a) => a.type === "fed").length;
-  const fedPct = Math.min(100, Math.round((fedCount / fedTarget) * 100));
+  const mealsFor = (p: (typeof state.pets)[number]) => {
+    const target = effectiveDailyTarget(p, "fed", state.schedules) ?? 2;
+    const count = state.activities.filter(
+      (a) => a.petId === p.id && a.type === "fed" && a.ts >= startOfDay.getTime()
+    ).length;
+    return { target, count, pct: Math.min(100, Math.round((count / target) * 100)) };
+  };
 
   // Household-wide outstanding alerts, deduped by pet+title (the data can hold
   // duplicates) — Home shows one calm summary line, the details live on /activity.
@@ -198,91 +229,97 @@ export default function Home() {
       trailing={<HeaderActions leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
       refreshControl={refreshControl}
     >
-      {/* Pet hero card — slides/fades between pets on swipe (see changePet) */}
-      <GestureDetector gesture={swipe}>
-        <Animated.View style={[styles.hero, heroStyle]}>
-          <View style={styles.heroTop}>
-            <PressableScale
-              onPress={() => router.push(`/pet/${pet.id}`)}
-              accessibilityLabel={`Open ${pet.name}'s details`}
-              hitSlop={6}
-            >
-              <PetAvatar pet={pet} size="lg" idle />
-            </PressableScale>
-            {/* Visible switch affordance next to the swipe gesture: the name
-                row opens the same switch-pet sheet the other tabs use. */}
-            <PressableScale
-              scaleTo={0.99}
-              onPress={() => (multiPet ? setPetPickerOpen(true) : router.push(`/pet/${pet.id}`))}
-              accessibilityLabel={multiPet ? "Switch pet" : `Open ${pet.name}'s details`}
-              style={styles.heroText}
-            >
-              <View style={styles.heroTextInner}>
-                <View style={styles.heroNameRow}>
-                  <Text numberOfLines={1} style={styles.heroName}>
-                    {pet.name}
-                  </Text>
-                  <Chevron />
+      {/* Pet hero — a FIXED card frame; the pets themselves ride a track that
+          slides inside it, so one pet pushes the next out of the way. */}
+      <View style={styles.hero} onLayout={(e) => setHeroW(e.nativeEvent.layout.width)}>
+        <GestureDetector gesture={swipe}>
+          <View style={styles.heroViewport}>
+            {/* Before the frame is measured, render ONLY the current pet at full
+                width. Rendering every slide with an undefined width lays them
+                out side by side at content width, which overflows the frame and
+                thrashes layout on the first pass. */}
+            <Animated.View style={[styles.heroTrack, trackStyle]}>
+              {(heroW === 0 ? [pet] : state.pets).map((p) => (
+                <View key={p.id} style={[styles.heroSlide, heroW === 0 ? styles.heroSlideFull : { width: heroW }]}>
+                  <View style={styles.heroTop}>
+                    <PressableScale
+                      onPress={() => router.push(`/pet/${p.id}`)}
+                      accessibilityLabel={`Open ${p.name}'s details`}
+                      hitSlop={6}
+                    >
+                      <PetAvatar pet={p} size="lg" idle />
+                    </PressableScale>
+                    {/* Visible switch affordance next to the swipe gesture: the
+                        name row opens the same switch-pet sheet other tabs use. */}
+                    <PressableScale
+                      scaleTo={0.99}
+                      onPress={() => (multiPet ? setPetPickerOpen(true) : router.push(`/pet/${p.id}`))}
+                      accessibilityLabel={multiPet ? "Switch pet" : `Open ${p.name}'s details`}
+                      style={styles.heroText}
+                    >
+                      <View style={styles.heroTextInner}>
+                        <View style={styles.heroNameRow}>
+                          <Text numberOfLines={1} style={styles.heroName}>
+                            {p.name}
+                          </Text>
+                          <Chevron />
+                        </View>
+                        <Text numberOfLines={1} style={styles.heroBreed}>
+                          {p.breed}
+                        </Text>
+                      </View>
+                    </PressableScale>
+                  </View>
+
+                  <View style={styles.chipsRow}>
+                    <PressableScale
+                      scaleTo={PRESS_SCALE_SMALL}
+                      onPress={() => setEditingStat("age")}
+                      accessibilityLabel="Edit age"
+                      hitSlop={10}
+                    >
+                      <Chip>
+                        <Text style={styles.chipText}>{formatAge(p.ageYears)}</Text>
+                        <Icon name="chevron-right" size={9} color={colors.label3} />
+                      </Chip>
+                    </PressableScale>
+                    <PressableScale
+                      scaleTo={PRESS_SCALE_SMALL}
+                      onPress={() => setEditingStat("weight")}
+                      accessibilityLabel="Edit weight"
+                      hitSlop={10}
+                    >
+                      <Chip>
+                        <Text style={styles.chipText}>{formatWeight(p.weightKg, state.units)}</Text>
+                        <Icon name="chevron-right" size={9} color={colors.label3} />
+                      </Chip>
+                    </PressableScale>
+                  </View>
+
+                  <View style={{ marginTop: 16 }}>
+                    <View style={styles.mealsRow}>
+                      <Text style={styles.mealsLabel}>Meals today</Text>
+                      <Text style={styles.mealsCount}>
+                        {mealsFor(p).count} <Text style={{ color: colors.label3 }}>of {mealsFor(p).target}</Text>
+                      </Text>
+                    </View>
+                    <MealsBar pct={mealsFor(p).pct} />
+                  </View>
                 </View>
-                <Text numberOfLines={1} style={styles.heroBreed}>
-                  {pet.breed}
-                </Text>
-              </View>
-            </PressableScale>
-          </View>
-
-          <View style={styles.chipsRow}>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("age")}
-              accessibilityLabel="Edit age"
-              hitSlop={10}
-            >
-              <Chip>
-                <Text style={styles.chipText}>{formatAge(pet.ageYears)}</Text>
-                <Icon name="chevron-right" size={9} color={colors.label3} />
-              </Chip>
-            </PressableScale>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("weight")}
-              accessibilityLabel="Edit weight"
-              hitSlop={10}
-            >
-              <Chip>
-                <Text style={styles.chipText}>{formatWeight(pet.weightKg, state.units)}</Text>
-                <Icon name="chevron-right" size={9} color={colors.label3} />
-              </Chip>
-            </PressableScale>
-          </View>
-
-          <View style={{ marginTop: 16 }}>
-            <View style={styles.mealsRow}>
-              <Text style={styles.mealsLabel}>Meals today</Text>
-              <Text style={styles.mealsCount}>
-                {fedCount} <Text style={{ color: colors.label3 }}>of {fedTarget}</Text>
-              </Text>
-            </View>
-            <MealsBar pct={fedPct} />
-          </View>
-
-          {multiPet && (
-            <View style={styles.dotsRow}>
-              {state.pets.map((p, i) => (
-                <PressableScale
-                  key={p.id}
-                  scaleTo={PRESS_SCALE_SMALL}
-                  onPress={() => setPetIndex(i)}
-                  accessibilityLabel={`Show ${p.name}`}
-                  hitSlop={10}
-                >
-                  <View style={[styles.petDot, i === petIndex && styles.petDotActive]} />
-                </PressableScale>
               ))}
-            </View>
-          )}
-        </Animated.View>
-      </GestureDetector>
+            </Animated.View>
+          </View>
+        </GestureDetector>
+
+        {/* Dots sit OUTSIDE the viewport — part of the fixed frame, not the slide. */}
+        {multiPet && (
+          <View style={styles.dotsRow}>
+            {state.pets.map((p, i) => (
+              <PetDot key={p.id} index={i} track={track} onPress={() => setPetIndex(i)} label={`Show ${p.name}`} />
+            ))}
+          </View>
+        )}
+      </View>
 
       {/* One calm entry point for everything that needs attention */}
       {alertCount > 0 && (
@@ -447,7 +484,15 @@ const styles = StyleSheet.create({
   streakPillLabel: { fontSize: 14, fontFamily: font.bold, color: colors.orange },
   loadingWrap: { marginTop: 40, alignItems: "center" },
   loadingText: { fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
-  hero: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 20, ...cardShadow },
+  // The frame is fixed and clips the sliding track. Padding lives on each slide
+  // (not here) so the track spans the full card width and a pet slides edge to
+  // edge instead of stopping inside the padding.
+  hero: { borderRadius: radius.lg, backgroundColor: colors.card, paddingBottom: 20, overflow: "hidden", ...cardShadow },
+  heroViewport: { overflow: "hidden" },
+  heroTrack: { flexDirection: "row" },
+  heroSlide: { paddingHorizontal: 20, paddingTop: 20 },
+  // Pre-measurement: fill the frame instead of sizing to content.
+  heroSlideFull: { width: "100%" },
   heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
   heroText: { flex: 1, minWidth: 0 },
   heroTextInner: { minHeight: 44, justifyContent: "center" },
@@ -462,8 +507,8 @@ const styles = StyleSheet.create({
   barTrack: { marginTop: 6, height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 3 },
   dotsRow: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  petDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: withAlpha(colors.label, 0.18) },
-  petDotActive: { width: 20, backgroundColor: colors.label },
+  // Width/color are animated by PetDot; this carries the constant geometry.
+  petDot: { width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2 },
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",

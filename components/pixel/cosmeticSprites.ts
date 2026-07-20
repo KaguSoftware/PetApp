@@ -6,10 +6,24 @@ import type { Sprite } from "./PixelSprite";
  * same data drives both the dress-up stage and the small avatar badge.
  * . = transparent.
  */
+export type Placement = { left: number; top: number; widthFrac: number };
+
 export interface CosmeticSprite {
   sprite: Sprite;
   /** placement as fractions of the pet box: left/top of the sprite's top-left */
-  place: { left: number; top: number; widthFrac: number };
+  place: Placement;
+  /**
+   * Per-species override. The cat and dog sprites do not share facial geometry
+   * — the cat's eyes sit on rows 7-8 spanning cols 3-12 (wide-set, two rows
+   * tall), the dog's on row 7 spanning cols 3-10 — so a single placement can't
+   * sit correctly on both. Only face items need this today.
+   */
+  placeBySpecies?: Partial<Record<"cat" | "dog", Placement>>;
+}
+
+/** The placement to use for a given species, falling back to the shared one. */
+export function placementFor(cos: CosmeticSprite, species: "cat" | "dog"): Placement {
+  return cos.placeBySpecies?.[species] ?? cos.place;
 }
 
 const P = (rows: string[], palette: Record<string, string>): Sprite => ({ rows, palette });
@@ -55,24 +69,40 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   },
 
   /* ---------- FACE ---------- */
+  // Face items are authored on a 9-wide grid so each lens is 4px across — at
+  // 7 wide the lenses rendered as 2px specks that read as smudges, not glasses.
+  // The cat's eyes span cols 3-12 of 16 (rows 7-8), so the frame covers the
+  // full width of both eyes; the dog's are narrower and one row higher.
   sunglasses: {
-    place: { left: 0.14, top: 0.42, widthFrac: 0.72 },
+    place: { left: 0.125, top: 0.4, widthFrac: 0.75 },
+    placeBySpecies: {
+      cat: { left: 0.125, top: 0.395, widthFrac: 0.75 },
+      dog: { left: 0.135, top: 0.35, widthFrac: 0.72 },
+    },
     sprite: P(
-      ["BBB.BBB", "BBBBBBB", ".B...B."],
+      ["BBBB.BBBB", "BBBB.BBBB", "BBBBBBBBB", ".B.....B."],
       { B: "#1c1c26" }
     ),
   },
   glasses: {
-    place: { left: 0.14, top: 0.42, widthFrac: 0.72 },
+    place: { left: 0.125, top: 0.4, widthFrac: 0.75 },
+    placeBySpecies: {
+      cat: { left: 0.125, top: 0.395, widthFrac: 0.75 },
+      dog: { left: 0.135, top: 0.35, widthFrac: 0.72 },
+    },
     sprite: P(
-      ["OOO.OOO", "O.O.O.O", "OOOOOOO"],
+      ["OOOO.OOOO", "O..O.O..O", "OOOO.OOOO", ".O.....O."],
       { O: "#3a3a48" }
     ),
   },
   monocle: {
-    place: { left: 0.46, top: 0.42, widthFrac: 0.32 },
+    place: { left: 0.5, top: 0.4, widthFrac: 0.3 },
+    placeBySpecies: {
+      cat: { left: 0.56, top: 0.4, widthFrac: 0.3 },
+      dog: { left: 0.5, top: 0.36, widthFrac: 0.28 },
+    },
     sprite: P(
-      ["GGG", "G.G", "GGG", ".C."],
+      ["GGGG", "G..G", "GGGG", "..C."],
       { G: "#c9a227", C: "#c9a227" }
     ),
   },

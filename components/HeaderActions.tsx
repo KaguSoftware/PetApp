@@ -18,10 +18,17 @@ import { useStore } from "@/lib/store";
  * only one ever receives touches — the rest read as dead buttons. One wrapper
  * View keeps every control tappable. Extra items (e.g. Home's streak pill)
  * belong INSIDE this island via `leading`, not beside it.
+ *
+ * The island is deliberately transparent and gap-free: each control paints its
+ * own pill, so the space BETWEEN them is not part of any button. Tapping there
+ * used to feel like hitting a dead button; now there is simply nothing to hit.
  */
 export default function HeaderActions({ leading }: { leading?: React.ReactNode }) {
   const router = useRouter();
   const { state } = useStore();
+  // The status-bar inset is handled once, at the header level
+  // (useHeaderStatusBarInset in components/Screen.tsx) — not here, or the
+  // offset would be applied twice on Android.
   return (
     <View style={styles.island}>
       {leading}
@@ -33,5 +40,8 @@ export default function HeaderActions({ leading }: { leading?: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  island: { flexDirection: "row", alignItems: "center", gap: 12 },
+  // gap 8 (not 12): the controls now carry their own 44pt touch targets via
+  // hitSlop, and a wide visual gap made the dead space between them look
+  // tappable. Tighter spacing reads as one island of real buttons.
+  island: { flexDirection: "row", alignItems: "center", gap: 8 },
 });
