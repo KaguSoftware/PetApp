@@ -61,7 +61,6 @@ export default function Home() {
   const [streakOpen, setStreakOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
-  const [nextUpExpanded, setNextUpExpanded] = useState(false);
 
   const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
 
@@ -257,36 +256,19 @@ export default function Home() {
       <SectionHeader style={{ marginTop: 32 }}>Reminders</SectionHeader>
       <Group>
         <Row
-          onPress={() => setNextUpExpanded((v) => !v)}
-          interactiveTrailing
+          onPress={() => setRemindersOpen(true)}
           leading={
             <View style={styles.nextUpIcon}>
               <Icon name="clock" size={19} color={colors.accent} />
             </View>
           }
-          title={
-            <Text numberOfLines={nextUpExpanded ? undefined : 1} style={styles.remindersRowTitle}>
-              {nextReminder ? nextReminder.title : "No upcoming reminders"}
-            </Text>
-          }
+          title={nextReminder ? nextReminder.title : "No upcoming reminders"}
           subtitle={
-            <Text numberOfLines={nextUpExpanded ? undefined : 1} style={styles.remindersRowSubtitle}>
-              {nextReminder
-                ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
-                : "Tap to add one for the family"}
-            </Text>
+            nextReminder
+              ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
+              : "Tap to add one for the family"
           }
-          trailing={
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setRemindersOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="See all reminders"
-              hitSlop={8}
-            >
-              <Chevron />
-            </PressableScale>
-          }
+          trailing={<Chevron />}
         />
       </Group>
 

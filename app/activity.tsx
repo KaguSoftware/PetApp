@@ -133,6 +133,9 @@ export default function ActivityScreen() {
                       />
                       {expanded ? (
                         <FadeInItem style={styles.alertExpand}>
+                          <Text style={styles.alertExpandBody}>
+                            {pet.name} needs attention: {r.title.toLowerCase()} — due {dueLabel(r.due).toLowerCase()}.
+                          </Text>
                           <AccentButton size="sm" onPress={go}>
                             {goLabel}
                           </AccentButton>
