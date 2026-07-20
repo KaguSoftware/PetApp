@@ -224,6 +224,35 @@ reminder occurrences under the 60 cap.
 - Verified: `tsc --noEmit` clean, `expo lint` clean, iOS + Android bundles compile (8.57 MB).
   **Not yet exercised on a device** — the wheels especially need a real-finger check.
 
+### Phase 8 fixes + THE silent-crash root cause (2026-07-20) — **crash fix CONFIRMED on device**
+
+Five owner-reported issues; 4 of 5 landed (scheduling-optional is still open, see Roadmap).
+
+- **App closed silently on DB fetch — ROOT-CAUSED AND FIXED (owner-verified working).** Two
+  separate bugs wearing the same costume, both "Expo Go vanishes, empty Metro log":
+  1. `d1de0cc` — `WheelPicker`'s `requestAnimationFrame` → `scrollTo` fired against a torn-down
+     native `ScrollView` when a sheet closed in the same tick. Fixed with `cancelAnimationFrame`
+     in the effect cleanup.
+  2. `069e61a`+ — the Home hero carousel's worklets **captured plain JS values** (`heroW`,
+     `lastIndex`, `reduceMotion`) that all change at the exact moment the Supabase promise
+     resolves, and `PetDot` **called `withAlpha()` inside `useAnimatedStyle`**. Fixed by mirroring
+     into shared values, hoisting the color range to module scope, and marking every callback
+     `"worklet"`. **See the Reanimated rule in Gotchas — this is the one to not repeat.**
+  Diagnosis only became possible from the **iOS crash report**; three rounds of reading the source
+  and asserting a cause were all wrong. Get the report first next time.
+- **Header hit targets**: `hitSlop={6}` on bell/gear (38pt pill → 50pt target), island gap 12→8 so
+  the dead space between controls no longer reads as tappable, `hitSlop` on `CoinPill` (~26pt tall).
+- **Android status-bar overlap**: `useHeaderStatusBarInset()` (`components/Screen.tsx`) feeds
+  `headerStatusBarHeight` from safe-area insets on Android only (edge-to-edge draws under the bar);
+  wired into both `TabScreen` and `PushedScreen`.
+- **Cat cosmetics**: face items re-authored on a 9-wide grid (4px lenses — at 7 wide they rendered
+  as 2px smudges) + a `placeBySpecies` override, because cat eyes span cols 3-12 rows 7-8 and the
+  dog's are narrower and a row higher. `placementFor(cos, species)` is now the single accessor,
+  used by both `PixelPet` and `Pet3D`.
+- **Home hero is a real carousel** (no fade): fixed outer frame with `overflow:hidden`, an inner
+  track holding every pet translating by `-track * heroW`, velocity-projected paging, rubber-band
+  at the ends, and page dots that stretch/darken continuously off the live track value.
+
 **Still needs a device / not fully closable statically:**
 
 - **Round 5 needs a full walkthrough** — all of the above is statically verified only. Priority
@@ -250,9 +279,16 @@ What exists:
 - `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
 ## Roadmap
-1. **← ACTIVE: owner verifies the full app in Expo Go on iPhone** (walkthrough above; reload between checks to confirm DB persistence).
-2. Fix whatever the walkthrough surfaces; visual polish pass on-device.
-3. EAS cutover (checklist below), TestFlight, App Store.
+1. **← ACTIVE: make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
+   "for all the tasks that you schedule, you can also not schedule and just track it normal."
+   Plumbing already supports it (`careItemStatus` returns `state:"unscheduled"` with count-based
+   `progress` when no schedule exists; `ScheduleEditorSheet` has "Remove schedule") — the work is
+   making that path **explicit and discoverable** rather than implicit. Agree the UX with the owner
+   first; this system was designed collaboratively.
+2. Owner verifies the full app in Expo Go on iPhone (walkthrough above; reload between checks to
+   confirm DB persistence). Migration 0017 still needs applying by someone with project access.
+3. Fix whatever the walkthrough surfaces; visual polish pass on-device.
+4. EAS cutover (checklist below), TestFlight, App Store.
 
 ## EAS cutover checklist (when the app is ready for real builds)
 1. `npm i -g eas-cli && eas login && eas init` (sets `extra.eas.projectId` — unlocks push token registration in `lib/pushTokens.ts`).
@@ -278,6 +314,49 @@ What exists:
 | Emergency card | Text share only | Print/PDF variant (needs expo-print) | Optional |
 
 ## Gotchas
+
+### ⚠️ Reanimated worklets — the silent-crash rule (READ BEFORE WRITING ANY ANIMATION)
+
+**A worklet must never close over a plain JS value that changes, and must never call a JS
+function.** Violating this crashes the app with **no red screen and nothing in the Metro log** —
+Expo Go just disappears. This cost two full debugging sessions (2026-07-20); don't rediscover it.
+
+**Why it's silent:** an uncaught error on the JS thread is a red screen. On the **UI (worklet)
+thread there is no handler** — it propagates into C++, hits `__cxa_throw` with nothing to catch it,
+and calls `abort()`. `SIGABRT`, process gone, log empty.
+
+**The signature in an iOS crash report** (Settings › Privacy & Security › Analytics Data ›
+`Expo Go-…`) — if you see these two together, it is this bug:
+```
+Thread 0 (main):  worklets::UIScheduler::triggerUI()
+                    → HermesRuntimeImpl::call → throwPendingError() → __cxa_throw → abort()
+Thread N (JS):    "(Data Abort) byte write Translation fault", far: 0x0   ← null write
+                    → HermesValue32::encodeHermesValue → JSObject::addOwnProperty
+                    → putComputedWithReceiver_RJS → Runtime::drainJobs()  ← a promise resolving
+```
+Both threads inside Hermes at once = a JS-thread promise mutating objects while the UI thread
+re-serializes a worklet closure. **It reproduces on DB fetch** because that's when a promise
+resolution coincides with layout/state changes feeding an animation.
+
+**Rules:**
+1. **Mirror JS values into shared values.** Anything a worklet reads that can change — a measured
+   width, a list length, a flag — goes through `useSharedValue` + a `useEffect` that assigns it.
+   Never read the render-scope variable directly.
+2. **No JS function calls inside a worklet.** Precompute at module scope. `withAlpha(...)` inside
+   `useAnimatedStyle` was a real instance of this (in `PetDot`) — hoisted to a `DOT_RANGE` const.
+3. **Mark them: `"worklet";`** as the first line of every animated callback, so a capture that
+   can't be serialized fails at build time instead of aborting at runtime.
+4. **Guard every `runOnJS` in an animation callback** with an `alive` shared value set false on
+   unmount, and `cancelAnimation(sv)` in the cleanup. (Separate, also-real bug — see `d1de0cc`,
+   where an unguarded `requestAnimationFrame` → `scrollTo` on a torn-down `ScrollView` in
+   `WheelPicker` caused the same silent close.)
+
+The canonical correct example is the Home hero carousel (`app/(tabs)/home/index.tsx`): `heroWSV` /
+`lastIndexSV` mirrors, `DOT_RANGE` hoisted, `alive` guard, `"worklet"` on every callback. Copy that
+shape. **When an animation crashes silently, get the crash report first — do not guess from the
+source.** Guessing failed three times running; the stack trace identified it in one pass.
+
+### Everything else
 - **Web demo is production truth**: never rename/drop/retighten schema it queries; new migrations start at 0015 (no 0008 upstream).
 - Expo Go: never install `react-native-purchases` before the cutover step; typed-route regeneration only happens on `expo start`/`export` — if a new route 404s in types, boot the dev server once.
 - Store hydration falls back to a legacy select when health migrations are missing — keep that path intact.

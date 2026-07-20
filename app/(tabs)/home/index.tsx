@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  cancelAnimation,
   Easing,
   interpolateColor,
   runOnJS,
@@ -47,6 +48,9 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
 
 const DOT_SIZE = 7;
 const DOT_ACTIVE_W = 20;
+// Precomputed OUTSIDE the worklet. Calling withAlpha() inside useAnimatedStyle
+// would run a JS function on the UI thread every frame, per dot.
+const DOT_RANGE: readonly [string, string] = [withAlpha(colors.label, 0.18), colors.label];
 
 /**
  * One page dot, driven by the carousel's live track value so it stretches and
@@ -56,11 +60,12 @@ const DOT_ACTIVE_W = 20;
  */
 function PetDot({ index, track, onPress, label }: { index: number; track: SharedValue<number>; onPress: () => void; label: string }) {
   const style = useAnimatedStyle(() => {
+    "worklet";
     // 1 when this dot's page is centered, 0 when a full slide away or more.
     const nearness = Math.max(0, 1 - Math.abs(track.value - index));
     return {
       width: DOT_SIZE + (DOT_ACTIVE_W - DOT_SIZE) * nearness,
-      backgroundColor: interpolateColor(nearness, [0, 1], [withAlpha(colors.label, 0.18), colors.label]),
+      backgroundColor: interpolateColor(nearness, [0, 1], DOT_RANGE as unknown as string[]),
     };
   });
   return (
@@ -74,8 +79,11 @@ function PetDot({ index, track, onPress, label }: { index: number; track: Shared
 function MealsBar({ pct }: { pct: number }) {
   const [barW, setBarW] = useState(0);
   const progress = useSharedValue(0);
+  // One MealsBar renders per carousel slide, and slides mount/unmount as the
+  // hero frame measures — cancel so no tween outlives its view.
   useEffect(() => {
     progress.value = withTiming(pct, { duration: 250, easing: Easing.out(Easing.quad) });
+    return () => cancelAnimation(progress);
   }, [pct, progress]);
   const fillStyle = useAnimatedStyle(() => ({ width: (barW * progress.value) / 100 }));
   return (
@@ -106,19 +114,63 @@ export default function Home() {
   const [heroW, setHeroW] = useState(0);
   const track = useSharedValue(0);
   const dragStart = useSharedValue(0);
-  const trackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -track.value * heroW }],
-  }));
+  // heroW and lastIndex are MIRRORED into shared values rather than captured
+  // from the render closure. A worklet that closes over a plain JS number has to
+  // be re-created and re-serialized across the JS/UI thread boundary every time
+  // that number changes — and both of these change at exactly the moment the
+  // Supabase fetch resolves (layout measures, state.pets fills in). Doing that
+  // while a promise continuation is mutating JS objects is what aborted the
+  // process: the crash report shows a null write in Hermes' property store on
+  // the JS thread and a worklet throwing on the UI thread, simultaneously.
+  // Shared values are owned by the UI thread, so reading them costs no capture.
+  const heroWSV = useSharedValue(0);
+  const lastIndexSV = useSharedValue(0);
+  const trackStyle = useAnimatedStyle(() => {
+    "worklet";
+    return { transform: [{ translateX: -track.value * heroWSV.value }] };
+  });
+
+  // Guards every animation completion callback that hops back to JS. A timing
+  // animation started here can still be running when Home unmounts or swaps
+  // render path (it mounts unhydrated, returns the empty state, then re-renders
+  // once Supabase data lands) — and a runOnJS callback that fires against a
+  // torn-down component is a native crash, not a catchable JS error, so the app
+  // just closes with nothing in the Metro log. Same failure class as the
+  // WheelPicker scrollTo fix in d1de0cc.
+  const alive = useSharedValue(true);
+  useEffect(() => {
+    alive.value = true;
+    return () => {
+      alive.value = false;
+      // Stop anything mid-flight so its callback can never run post-unmount.
+      cancelAnimation(track);
+    };
+  }, [alive, track]);
+
+  // Keep the UI-thread mirrors in step with the JS-side values. Reduce-motion
+  // is folded into heroW: zero disables the gesture entirely, which is exactly
+  // the reduced-motion behavior (no finger tracking, instant index swap).
+  useEffect(() => {
+    heroWSV.value = reduceMotion ? 0 : heroW;
+  }, [heroW, reduceMotion, heroWSV]);
+
+  useEffect(() => {
+    lastIndexSV.value = Math.max(0, state.pets.length - 1);
+  }, [state.pets.length, lastIndexSV]);
 
   // Keep the track aligned when the index changes from outside the gesture
   // (the dots, a pet being deleted, the switch-pet sheet).
+  //
+  // Skips animating until the frame is measured: before that the track renders
+  // a single full-width slide, so tweening toward a multi-slide offset would
+  // animate against a width that is about to change.
   useEffect(() => {
-    if (reduceMotion) {
+    if (reduceMotion || heroW === 0) {
       track.value = petIndex;
       return;
     }
     track.value = withTiming(petIndex, { duration: 280, easing: Easing.out(Easing.cubic) });
-  }, [petIndex, reduceMotion, track]);
+  }, [petIndex, reduceMotion, heroW, track]);
 
   // Deleting the pet you're viewing (or any earlier one) leaves petIndex past
   // the end of the list; without this the hero silently swaps to a different
@@ -140,32 +192,43 @@ export default function Home() {
   // whole hero, including the small chips and the 7pt pet dots, and a tap that
   // drifts past the threshold cancels the press instead of firing it. Small
   // targets attract exactly that kind of imprecise tap.
-  const lastIndex = Math.max(0, state.pets.length - 1);
+  // Every worklet below reads ONLY shared values and its own event argument —
+  // no captured JS state — so the gesture object never needs rebuilding when
+  // the pet list or the measured width changes.
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-12, 12])
     .onBegin(() => {
+      "worklet";
       dragStart.value = track.value;
     })
     .onUpdate((e) => {
-      if (reduceMotion || heroW === 0) return;
-      let next = dragStart.value - e.translationX / heroW;
+      "worklet";
+      const w = heroWSV.value;
+      if (w === 0) return;
+      const last = lastIndexSV.value;
+      let next = dragStart.value - e.translationX / w;
       // Rubber-band past the ends instead of letting the track run off.
       if (next < 0) next = next * 0.3;
-      else if (next > lastIndex) next = lastIndex + (next - lastIndex) * 0.3;
+      else if (next > last) next = last + (next - last) * 0.3;
       track.value = next;
     })
     .onEnd((e) => {
-      if (reduceMotion || heroW === 0) return;
+      "worklet";
+      const w = heroWSV.value;
+      if (w === 0) return;
+      const last = lastIndexSV.value;
       // Decide the target slide from where the drag ended plus its velocity, so
       // a quick flick pages even when it didn't travel far.
-      const projected = track.value - (e.velocityX / heroW) * 0.15;
-      const target = Math.max(0, Math.min(lastIndex, Math.round(projected)));
+      const projected = track.value - (e.velocityX / w) * 0.15;
+      const target = Math.max(0, Math.min(last, Math.round(projected)));
       track.value = withTiming(target, { duration: 280, easing: Easing.out(Easing.cubic) }, (done) => {
+        "worklet";
         // Commit the index once the slide lands — the rest of the page (meals
         // bar, reminders) reads off petIndex, so flipping it mid-flight would
-        // swap content under the moving track.
-        if (done) runOnJS(setPetIndex)(target);
+        // swap content under the moving track. `alive` gates the hop back to
+        // JS: without it an unmount during the 280ms slide crashes natively.
+        if (done && alive.value) runOnJS(setPetIndex)(target);
       });
     });
 
