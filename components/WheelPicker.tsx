@@ -77,10 +77,15 @@ function WheelColumn<T>({
     scrollIndex.current = targetIndex;
     // Defer past layout: scrollTo before the ScrollView has measured its content
     // is silently dropped on both platforms.
-    requestAnimationFrame(() => {
+    //
+    // The frame MUST be cancelled on unmount. A sheet that closes in the same
+    // tick as this schedules leaves the callback to run against a torn-down
+    // native view, which is a crash rather than a catchable JS error.
+    const raf = requestAnimationFrame(() => {
       ref.current?.scrollTo({ y: targetIndex * ITEM_HEIGHT, animated: false });
     });
     setCenterIndex(targetIndex);
+    return () => cancelAnimationFrame(raf);
   }, [targetIndex]);
 
   const onScroll = useCallback(

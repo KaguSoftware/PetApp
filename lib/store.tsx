@@ -514,6 +514,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Resolvers for in-flight refresh() calls (pull-to-refresh) — settled once
   // the reloadNonce-triggered re-hydration below reaches a terminal state.
   const pendingRefreshResolversRef = useRef<Set<() => void>>(new Set());
+  // Reminder ids with a delete in flight to Supabase. A refresh (pull-to-
+  // refresh, or an auth-driven reload) can re-SELECT before that DELETE has
+  // committed server-side, which would otherwise resurrect the row the user
+  // just cleared. Filtered out of every fresh load until the delete settles.
+  const pendingDeletedReminderIdsRef = useRef<Set<string>>(new Set());
+  // Suppresses re-raising auto-generated care/health alerts after the user
+  // explicitly clears them. Keyed by `${petId}|${kind}` (care) or
+  // `${petId}|__health__` (over/under-feeding), value is a "suppress until"
+  // timestamp. Without this, clearing an alert whose underlying condition is
+  // still true (pet still overdue for care) would regenerate it as a brand-new
+  // row on the very next load — with a fresh id our delete-tracking can't catch.
+  const alertCooldownRef = useRef<Map<string, number>>(new Map());
   const resolvePendingRefreshes = () => {
     pendingRefreshResolversRef.current.forEach((resolve) => resolve());
     pendingRefreshResolversRef.current.clear();
@@ -703,6 +715,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // (but still open) alert stops suppressing and gets re-inserted.
       const already = remindersSnapshot.some((r) => r.petId === pet.id && !r.done && sameCalendarDay(r.due, ts));
       if (already) return;
+      // Honor an explicit "Clear all" of this pet's health alerts.
+      const cooldownUntil = alertCooldownRef.current.get(`${pet.id}|__health__`);
+      if (cooldownUntil != null && cooldownUntil > ts) return;
       const what = ALERT_VERB[type];
       const verb = kind === "over" ? `${what} way more than usual` : `${what} far less than usual`;
       const title = `${pet.name} is ${verb} today — worth a vet visit`;
@@ -752,6 +767,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // of this kind suppresses a re-raise whether or not it's still showing.
       const already = remindersSnapshot.some((r) => !r.vetId && r.petId === pet.id && !r.done && r.alertKind === kind);
       if (already) return;
+      // Honor an explicit "Clear all" of this pet's alert of this kind.
+      const cooldownUntil = alertCooldownRef.current.get(`${pet.id}|${kind}`);
+      if (cooldownUntil != null && cooldownUntil > ts) return;
       const id = Crypto.randomUUID();
       const reminder: Reminder = { id, petId: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, alertKind: kind };
       setState((prev) => ({ ...prev, reminders: [...prev.reminders, reminder] }));
@@ -1021,21 +1039,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         membershipList.length > 0
           ? membershipList.map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household" }))
           : [{ id: h.id, name: h.name }];
-      const reminderList: Reminder[] = reminders.map((r) => ({
-        id: r.id,
-        petId: r.pet_id,
-        title: r.title,
-        emoji: r.emoji,
-        due: Number(r.due),
-        done: r.done,
-        source: r.source,
-        alert: r.alert ?? false,
-        vetId: r.vet_id ?? undefined,
-        alertKind: r.alert_kind ?? undefined,
-        repeatKind: r.repeat_kind && r.repeat_kind !== "none" ? r.repeat_kind : undefined,
-        repeatInterval: r.repeat_interval ?? undefined,
-        vaccinationId: r.vaccination_id ?? undefined,
-      }));
+      const reminderList: Reminder[] = reminders
+        .filter((r) => !pendingDeletedReminderIdsRef.current.has(r.id))
+        .map((r) => ({
+          id: r.id,
+          petId: r.pet_id,
+          title: r.title,
+          emoji: r.emoji,
+          due: Number(r.due),
+          done: r.done,
+          source: r.source,
+          alert: r.alert ?? false,
+          vetId: r.vet_id ?? undefined,
+          alertKind: r.alert_kind ?? undefined,
+          repeatKind: r.repeat_kind && r.repeat_kind !== "none" ? r.repeat_kind : undefined,
+          repeatInterval: r.repeat_interval ?? undefined,
+          vaccinationId: r.vaccination_id ?? undefined,
+        }));
       // Derive the streak from real history so the headline always matches the
       // calendar's lit days; persist it back if the stored value drifted.
       const computedStreak = computeStreak(activityList);
@@ -1116,6 +1136,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         p.vaccinations.forEach((v) => {
           if (v.nextDue == null || v.nextDue > vaccSoon || v.nextDue < vaccGrace) return;
           if (reminderList.some((r) => r.vaccinationId === v.id)) return;
+          // Don't recreate one the user just cleared today.
+          const vaccCooldown = alertCooldownRef.current.get(`vacc|${v.id}`);
+          if (vaccCooldown != null && vaccCooldown > Date.now()) return;
           const rid = Crypto.randomUUID();
           const reminder: Reminder = {
             id: rid,
@@ -1196,7 +1219,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                   ? {
                       ...p,
                       supplies: p.supplies.map((s) =>
-                        s.id === refill.supply!.id ? { ...s, level: Math.min(100, s.level + refill.amount) } : s
+                        s.id === refill.supply!.id ? { ...s, level: Math.round(Math.min(100, s.level + refill.amount)) } : s
                       ),
                     }
                   : p
@@ -1206,7 +1229,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       syncCounters();
       const ops: PromiseLike<{ error: unknown }>[] = [supabase.from("activities").delete().eq("id", activityId)];
       if (refill?.supply != null) {
-        const level = Math.min(100, refill.supply.level + refill.amount);
+        const level = Math.round(Math.min(100, refill.supply.level + refill.amount));
         ops.push(supabase.from("supplies").update({ level }).eq("pet_id", removed.petId).eq("supply_key", refill.supply.id));
       }
       Promise.all(ops).then((results) => {
@@ -1245,7 +1268,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Feeding through the portion picker drains the food supply (icon
       // "bowl") proportionally to the portion — a full cup drains 10%.
       const foodSupply = type === "fed" && grams != null ? pet.supplies.find((s) => s.icon === "bowl") : undefined;
-      const foodLevel = foodSupply ? Math.max(0, foodSupply.level - 10 * (grams! / pet.cupGrams)) : null;
+      const foodLevel = foodSupply ? Math.round(Math.max(0, foodSupply.level - 10 * (grams! / pet.cupGrams))) : null;
 
       // Coins via the synchronous shadow ref so rapid taps each build on the
       // previous increment instead of the same stale render value.
@@ -1569,22 +1592,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toast("check", "All caught up", `Cleared ${ids.length} notification${ids.length === 1 ? "" : "s"}`);
   }, [supabase, persist, toast]);
 
+  // ConfirmRow's tap-twice gesture is already the confirmation step, so this
+  // commits right away instead of going through undoableDelete's few-second
+  // grace window. The DELETE is still a fire-and-forget network call though,
+  // so a pull-to-refresh fired right after can race ahead of it and re-SELECT
+  // the not-yet-deleted rows — pendingDeletedReminderIdsRef filters those back
+  // out of every load until the delete actually settles server-side.
   const clearOverdueReminders = useCallback(() => {
     const now = Date.now();
     const overdue = stateRef.current.reminders.filter((r) => !r.done && r.due < now);
     if (overdue.length === 0) return;
     const ids = overdue.map((r) => r.id);
-    undoableDelete({
-      remove: () => setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => !ids.includes(r.id)) })),
-      restore: () =>
+    ids.forEach((id) => pendingDeletedReminderIdsRef.current.add(id));
+    // Suppress the auto-generated reminders we're clearing from regenerating for
+    // the rest of the day — otherwise load() re-raises any whose condition still
+    // holds (pet still overdue for care, vaccine still due) as a brand-new row on
+    // the very next refresh. Plain manual/plan reminders match no branch here, so
+    // they're simply deleted with no cooldown.
+    const suppressUntil = new Date();
+    suppressUntil.setHours(0, 0, 0, 0);
+    const suppressTs = suppressUntil.getTime() + 86_400_000;
+    for (const r of overdue) {
+      if (r.alert && r.alertKind) alertCooldownRef.current.set(`${r.petId}|${r.alertKind}`, suppressTs);
+      else if (r.alert && r.vetId) alertCooldownRef.current.set(`${r.petId}|__health__`, suppressTs);
+      else if (r.vaccinationId) alertCooldownRef.current.set(`vacc|${r.vaccinationId}`, suppressTs);
+    }
+    setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => !ids.includes(r.id)) }));
+    const op = Promise.resolve(supabase.from("reminders").delete().in("id", ids));
+    persist(op, {
+      rollback: () => {
+        ids.forEach((id) => pendingDeletedReminderIdsRef.current.delete(id));
         setState((prev) => ({
           ...prev,
           reminders: [...prev.reminders, ...overdue.filter((r) => !prev.reminders.some((x) => x.id === r.id))],
-        })),
-      commit: () => bestEffort(supabase.from("reminders").delete().in("id", ids), "overdue reminders clear"),
-      message: `Cleared ${ids.length} overdue reminder${ids.length === 1 ? "" : "s"}`,
+        }));
+      },
+      message: "Couldn't clear reminders",
     });
-  }, [supabase, undoableDelete, bestEffort]);
+    op.then(() => ids.forEach((id) => pendingDeletedReminderIdsRef.current.delete(id)));
+    toast("check", "Cleared", `Removed ${ids.length} overdue reminder${ids.length === 1 ? "" : "s"}`);
+  }, [supabase, persist, toast]);
 
   const addPet = useCallback(
     (input: {
