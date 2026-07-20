@@ -14,6 +14,7 @@ import PetSelectorRow from "@/components/PetSelectorRow";
 import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
+import { TimeWheelPicker } from "@/components/WheelPicker";
 import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
@@ -171,25 +172,18 @@ export default function LogsScreen() {
     }
   };
 
-  // Parsed "HH:MM" from the retro sheet — null while incomplete/invalid.
-  const parsedRetroTime = (() => {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(retroTime.trim());
-    if (!m) return null;
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh > 23 || mm > 59) return null;
-    return { hh, mm };
-  })();
-  // Timestamp for the retro-log sheet — null while incomplete or in the future.
+  // Timestamp for the retro-log sheet. The wheel always yields a valid "HH:MM",
+  // so the only failure left is picking a time that hasn't happened yet.
   const retroTimestamp = (() => {
-    if (!parsedRetroTime) return null;
+    const m = /^(\d{1,2}):(\d{2})$/.exec(retroTime);
+    if (!m) return null;
     const d = new Date();
     if (retroDay === "yesterday") d.setDate(d.getDate() - 1);
-    d.setHours(parsedRetroTime.hh, parsedRetroTime.mm, 0, 0);
+    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
     const ts = d.getTime();
     return ts > Date.now() ? null : ts;
   })();
-  const retroTimeIsFuture = parsedRetroTime != null && retroTimestamp == null;
+  const retroTimeIsFuture = retroTimestamp == null;
   const retroNeedsMed = retroType === "meds" && pet.meds.length > 1 && retroMedId == null;
 
   // Every outstanding alert type for this pet — drives the red "!" badge on
@@ -253,7 +247,10 @@ export default function LogsScreen() {
           setRetroType(null);
           setRetroMedId(null);
           setRetroDay("today");
-          setRetroTime("");
+          // Seed the wheel at the current time — the common case is "I did this
+          // a little while ago", so the user spins back rather than starting blank.
+          const d = new Date();
+          setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
           setRetroOpen(true);
         }}
         accessibilityRole="button"
@@ -351,14 +348,7 @@ export default function LogsScreen() {
           value={retroDay}
           onChange={setRetroDay}
         />
-        <TextField
-          value={retroTime}
-          onChangeText={setRetroTime}
-          placeholder="HH:MM — e.g. 14:30"
-          keyboardType="numbers-and-punctuation"
-          returnKeyType="done"
-          style={{ marginTop: 10 }}
-        />
+        <TimeWheelPicker value={retroTime} onChange={setRetroTime} minuteStep={1} />
         {retroTimeIsFuture ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
 
         <SheetFooter>

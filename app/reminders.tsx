@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
+import { TimeWheelPicker } from "@/components/WheelPicker";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import {
@@ -120,12 +121,6 @@ export default function RemindersScreen() {
     if (n === 0) return "Today";
     if (n === 1) return "Tomorrow";
     return new Date(startOfToday.getTime() + n * DAY_MS).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  };
-
-  const stepTime = (dir: 1 | -1) => {
-    const total = (hour * 60 + minute + dir * 15 + 1440) % 1440;
-    setHour(Math.floor(total / 60));
-    setMinute(total % 60);
   };
 
   // One calm row per reminder — alerts get red title text only (the red wall,
@@ -271,13 +266,17 @@ export default function RemindersScreen() {
               decDisabled={pickDay === 0}
               accessibilityLabel="Due date"
             />
-            <Stepper
-              label={`${pad(hour)}:${pad(minute)}`}
-              onDec={() => stepTime(-1)}
-              onInc={() => stepTime(1)}
-              accessibilityLabel="Time of day"
-            />
           </View>
+        ) : null}
+        {pickDate ? (
+          <TimeWheelPicker
+            value={`${pad(hour)}:${pad(minute)}`}
+            onChange={(t) => {
+              const [h, m] = t.split(":");
+              setHour(Number(h));
+              setMinute(Number(m));
+            }}
+          />
         ) : null}
 
         <FieldLabel>Repeat</FieldLabel>

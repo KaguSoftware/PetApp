@@ -15,9 +15,13 @@ import { Icon } from "@/components/Icons";
 import { Chevron, Chip, ConfirmRow, Group, PressableScale, PRESS_SCALE_SMALL, Row, SectionHeader, SheetTitle } from "@/components/ui";
 import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { effectiveDailyTarget } from "@/lib/careStatus";
+import { useReduceMotion } from "@/lib/a11y";
 import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
+
+/** How far the hero card travels when paging between pets. */
+const HERO_SLIDE = 90;
 
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
@@ -62,7 +66,40 @@ export default function Home() {
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
 
-  const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
+  // Hero paging animation. The content swaps instantly on index change, so the
+  // motion is played around it: the outgoing card slides/fades out in the swipe
+  // direction, the index flips at the midpoint, and the incoming card slides in
+  // from the opposite edge. Reduce-motion collapses this to a plain swap.
+  const reduceMotion = useReduceMotion();
+  const heroShift = useSharedValue(0); // -1..1, card offset as a fraction of SLIDE
+  const heroFade = useSharedValue(1);
+  const heroStyle = useAnimatedStyle(() => ({
+    opacity: heroFade.value,
+    transform: [{ translateX: heroShift.value * HERO_SLIDE }],
+  }));
+
+  const applyPetChange = (dir: 1 | -1) =>
+    setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
+
+  const changePet = (dir: 1 | -1) => {
+    // Nothing to page to — rubber-band back instead of animating a swap that
+    // can't happen (otherwise a finger-tracked card stays stuck off-center).
+    const atEdge = dir === 1 ? petIndex >= state.pets.length - 1 : petIndex <= 0;
+    if (atEdge || reduceMotion) {
+      heroShift.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
+      if (!atEdge) applyPetChange(dir);
+      return;
+    }
+    // Out: follow the finger. Then swap and come in from the far side.
+    heroShift.value = withTiming(-dir * 0.5, { duration: 130, easing: Easing.in(Easing.quad) });
+    heroFade.value = withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }, (done) => {
+      if (!done) return;
+      runOnJS(applyPetChange)(dir);
+      heroShift.value = dir * 0.6;
+      heroShift.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+      heroFade.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) });
+    });
+  };
 
   // Deleting the pet you're viewing (or any earlier one) leaves petIndex past
   // the end of the list; without this the hero silently swaps to a different
@@ -92,10 +129,20 @@ export default function Home() {
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-12, 12])
+    .onUpdate((e) => {
+      if (reduceMotion) return;
+      // Track the finger with resistance so the card feels attached to the drag.
+      heroShift.value = (e.translationX / HERO_SLIDE) * 0.4;
+    })
     .onEnd((e) => {
-      if (Math.abs(e.translationX) > 45 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.4) {
+      const paged =
+        Math.abs(e.translationX) > 45 && Math.abs(e.translationX) > Math.abs(e.translationY) * 1.4;
+      if (paged) {
         runOnJS(changePet)(e.translationX < 0 ? 1 : -1);
+        return;
       }
+      // Not far enough (or at the end of the list) — spring back to center.
+      heroShift.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
     });
 
   if (!hydrated || !pet) {
@@ -151,9 +198,9 @@ export default function Home() {
       trailing={<HeaderActions leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
       refreshControl={refreshControl}
     >
-      {/* Pet hero card */}
+      {/* Pet hero card — slides/fades between pets on swipe (see changePet) */}
       <GestureDetector gesture={swipe}>
-        <View style={styles.hero}>
+        <Animated.View style={[styles.hero, heroStyle]}>
           <View style={styles.heroTop}>
             <PressableScale
               onPress={() => router.push(`/pet/${pet.id}`)}
@@ -234,7 +281,7 @@ export default function Home() {
               ))}
             </View>
           )}
-        </View>
+        </Animated.View>
       </GestureDetector>
 
       {/* One calm entry point for everything that needs attention */}

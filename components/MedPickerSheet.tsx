@@ -13,6 +13,7 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
+import { DEFAULT_MED_FREQUENCY, MED_FREQUENCIES, SingleWheelPicker } from "@/components/WheelPicker";
 import { careItemStatus } from "@/lib/careStatus";
 import type { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
@@ -43,7 +44,7 @@ export default function MedPickerSheet({
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [dosage, setDosage] = useState("");
-  const [frequency, setFrequency] = useState("");
+  const [frequency, setFrequency] = useState(DEFAULT_MED_FREQUENCY);
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +52,7 @@ export default function MedPickerSheet({
     setAdding(initialAdding || pet.meds.length === 0);
     setName("");
     setDosage("");
-    setFrequency("");
+    setFrequency(DEFAULT_MED_FREQUENCY);
   }, [open, pet.meds.length, initialAdding]);
 
   const valid = name.trim() !== "";
@@ -62,7 +63,7 @@ export default function MedPickerSheet({
     setAdding(false);
     setName("");
     setDosage("");
-    setFrequency("");
+    setFrequency(DEFAULT_MED_FREQUENCY);
   };
 
   return (
@@ -79,13 +80,7 @@ export default function MedPickerSheet({
           <TextField value={dosage} onChangeText={setDosage} placeholder="e.g. 16 mg (optional)" returnKeyType="done" onSubmitEditing={saveNew} />
 
           <FieldLabel>Frequency</FieldLabel>
-          <TextField
-            value={frequency}
-            onChangeText={setFrequency}
-            placeholder="e.g. Twice daily (optional)"
-            returnKeyType="done"
-            onSubmitEditing={saveNew}
-          />
+          <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
 
           <SheetFooter>
             <View style={{ gap: 10 }}>

@@ -186,6 +186,44 @@ reminder occurrences under the 60 cap.
 - **Meds.tsx**: med rows tap → schedule editor; subtitle shows `describeSchedule` when set.
 - Verified: `tsc --noEmit` clean, `expo lint` clean, iOS+Android bundles compile (8.56 MB).
 
+### Wheel pickers everywhere + hero swipe animation (2026-07-20) — built, statically verified
+
+- **`TimeWheelPicker`** (`components/WheelPicker.tsx`) — iPhone clock-style hour · minute · AM/PM
+  wheels sharing one selection band. Value is 24h `"HH:MM"` (the `CareScheduleSlot.time` format), so
+  it drops in anywhere a time-of-day is edited. `minuteStep` prop (5 default, 1 for exact times).
+  Replaced EVERY time selector: schedule editor slot times (meals/meds/vet/grooming), the reminders
+  add sheet, and the Logs retro-log (which was the only place you had to *type* `HH:MM` — it now
+  seeds to the current time and the "invalid format" failure mode is gone).
+  - Schedule editor shows a tappable time chip per slot; tapping expands ONE wheel at a time
+    (`openWheel` state) so a 10-meal schedule isn't ten stacked pickers.
+  - `TimeStepper` (the −/+ control) is now unused by app code but `Stepper` is still used for
+    day-offset / interval-days / grace-minutes in reminders + schedule editor.
+- **Med frequency is no longer free text** — `SingleWheelPicker` over `MED_FREQUENCIES`
+  ("Once daily", "Twice daily", "Monthly", …), defaulting to `DEFAULT_MED_FREQUENCY`. Applies to
+  both add-med forms (`components/Meds.tsx`, `components/MedPickerSheet.tsx`). Still stored as the
+  same `meds.frequency` string, so nothing downstream changed.
+- **Fixed three real wheel bugs** (the "insanely buggy" weight/age report), all in shared code:
+  1. **Wheels never scrolled to their initial value.** `centerIndex` was *initialized* to
+     `targetIndex`, so the align effect's `centerIndex !== targetIndex` guard was false on mount and
+     the imperative `scrollTo` never fired — the column sat parked at row 0 while highlighting a
+     different row. Now tracked via a separate `scrollIndex` ref (actual scroll position, distinct
+     from the highlight index) and deferred through `requestAnimationFrame` (a `scrollTo` before
+     layout is silently dropped). This affected every wheel: weight, age, and breed.
+  2. **0.0 dead-end on weight.** The whole column started at `floor(min)`, so `min=0.1` still put a
+     selectable `0` on the wheel; picking 0 with decimal 0 gave `0.0`, which failed
+     EditStatSheet's `> 0` check and greyed out Save with nothing explaining why. Columns are now
+     range-aware (`ceil(min)`, and the decimal column trims values outside [min,max] at boundary
+     rows), so an invalid value is unselectable and `valid` is just `isFinite`. Side effect: age
+     `0.0` (a newborn) is now saveable — it wasn't before.
+  3. **Out-of-range composition.** Spinning the whole column to `max` with a leftover decimal
+     emitted e.g. `120.7`. `WheelPicker` now clamps its composed output to the columns' own range.
+- **Home pet hero swipe animation** (`app/(tabs)/home/index.tsx`) — the card follows the finger
+  (damped), then slides+fades out in the swipe direction, swaps the pet at the midpoint, and slides
+  in from the opposite edge (130ms out / 260ms in, ease-out). Rubber-bands back at the ends of the
+  list and on a too-short swipe. Reduce-motion collapses it to a plain swap.
+- Verified: `tsc --noEmit` clean, `expo lint` clean, iOS + Android bundles compile (8.57 MB).
+  **Not yet exercised on a device** — the wheels especially need a real-finger check.
+
 **Still needs a device / not fully closable statically:**
 
 - **Round 5 needs a full walkthrough** — all of the above is statically verified only. Priority

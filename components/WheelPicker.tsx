@@ -60,21 +60,35 @@ function WheelColumn<T>({
 
   const targetIndex = useMemo(() => indexOf(value), [indexOf, value]);
   const [centerIndex, setCenterIndex] = useState(targetIndex);
+  // Where the scroll view is actually parked. Tracked separately from
+  // centerIndex (which only drives highlighting) because a mounted-but-
+  // unscrolled column sits at row 0 no matter what centerIndex says.
+  const scrollIndex = useRef<number | null>(null);
 
   // Align the scroll to the external value on mount and whenever it changes to a
   // row we're not already parked on — but never while the user is mid-scroll.
+  //
+  // The mount case matters: initializing centerIndex to targetIndex used to make
+  // this a no-op, so a wheel opened on any value but the first rendered parked at
+  // row 0 while highlighting a different row — the "insanely buggy" symptom.
   useEffect(() => {
     if (scrolling.current) return;
-    if (centerIndex !== targetIndex) {
+    if (scrollIndex.current === targetIndex) return;
+    scrollIndex.current = targetIndex;
+    // Defer past layout: scrollTo before the ScrollView has measured its content
+    // is silently dropped on both platforms.
+    requestAnimationFrame(() => {
       ref.current?.scrollTo({ y: targetIndex * ITEM_HEIGHT, animated: false });
-      setCenterIndex(targetIndex);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    });
+    setCenterIndex(targetIndex);
   }, [targetIndex]);
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const idx = Math.max(0, Math.min(values.length - 1, Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
+      // Keep the parked position in sync with the finger so the align effect
+      // doesn't yank the wheel back mid-scroll.
+      scrollIndex.current = idx;
       if (idx !== centerIndex) setCenterIndex(idx);
       if (idx !== lastHaptic.current) {
         lastHaptic.current = idx;
@@ -88,6 +102,7 @@ function WheelColumn<T>({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrolling.current = false;
       const idx = Math.max(0, Math.min(values.length - 1, Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
+      scrollIndex.current = idx;
       setCenterIndex(idx);
       const next = values[idx];
       if (next !== value) onChange(next);
@@ -154,8 +169,19 @@ export default function WheelPicker({
   const wholePart = Math.floor(value + 1e-9);
   const decPart = Math.round((value - wholePart) * scale);
 
-  const setWhole = (w: number) => onChange(Number((w + decPart / scale).toFixed(decimalPlaces)));
-  const setDec = (d: number) => onChange(Number((wholePart + d / scale).toFixed(decimalPlaces)));
+  // Compose from the two columns, then clamp into the range the columns
+  // describe. Spinning the whole column to a boundary row (e.g. max 120 with a
+  // leftover .7) would otherwise emit an out-of-range 120.7.
+  const lo = whole.length > 0 ? whole[0] : 0;
+  const hi = whole.length > 0 ? whole[whole.length - 1] + (decimals[decimals.length - 1] ?? 0) / scale : 0;
+  const emit = (w: number, d: number) => {
+    const composed = Number((w + d / scale).toFixed(decimalPlaces));
+    const clamped = Math.min(hi, Math.max(lo, composed));
+    onChange(Number(clamped.toFixed(decimalPlaces)));
+  };
+
+  const setWhole = (w: number) => emit(w, decPart);
+  const setDec = (d: number) => emit(wholePart, d);
 
   const [rowW, setRowW] = useState(0);
   const onRowLayout = (e: LayoutChangeEvent) => setRowW(e.nativeEvent.layout.width);
@@ -188,6 +214,101 @@ function closestIndex(values: number[], v: number) {
   }
   return best;
 }
+
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1..12
+const MERIDIEM = ["AM", "PM"];
+
+function pad2(n: number) {
+  return n.toString().padStart(2, "0");
+}
+
+/** Parse 24h "HH:MM" into wheel parts. Falls back to 9:00 AM on bad input. */
+function parseTime(value: string): { hour12: number; minute: number; pm: boolean } {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value?.trim() ?? "");
+  const h24 = m ? Math.min(23, Number(m[1])) : 9;
+  const minute = m ? Math.min(59, Number(m[2])) : 0;
+  return { hour12: h24 % 12 === 0 ? 12 : h24 % 12, minute, pm: h24 >= 12 };
+}
+
+/** Wheel parts back to 24h "HH:MM". */
+function toTimeString(hour12: number, minute: number, pm: boolean): string {
+  const h24 = (hour12 % 12) + (pm ? 12 : 0);
+  return `${pad2(h24)}:${pad2(minute)}`;
+}
+
+/**
+ * iPhone clock-style time picker: hour · minute · AM/PM wheels sharing one
+ * selection band. Value is 24h "HH:MM" (the CareScheduleSlot.time format), so
+ * it drops into anywhere a time-of-day is edited.
+ */
+export function TimeWheelPicker({
+  value,
+  onChange,
+  minuteStep = 5,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  /** Minute granularity — 5 by default; pass 1 for exact times. */
+  minuteStep?: number;
+}) {
+  const { hour12, minute, pm } = parseTime(value);
+  const minutes = useMemo(
+    () => Array.from({ length: Math.ceil(60 / minuteStep) }, (_, i) => i * minuteStep),
+    [minuteStep],
+  );
+
+  const [rowW, setRowW] = useState(0);
+  const onRowLayout = (e: LayoutChangeEvent) => setRowW(e.nativeEvent.layout.width);
+
+  return (
+    <View style={styles.wrap}>
+      <View pointerEvents="none" style={[styles.band, { width: rowW || "70%" }]} />
+      <View style={styles.row} onLayout={onRowLayout}>
+        <WheelColumn
+          values={HOURS_12}
+          value={hour12}
+          onChange={(h) => onChange(toTimeString(h, minute, pm))}
+          width={58}
+          findIndex={closestIndex}
+        />
+        <Text style={styles.colon}>:</Text>
+        <WheelColumn
+          values={minutes}
+          value={minute}
+          onChange={(mi) => onChange(toTimeString(hour12, mi, pm))}
+          format={pad2}
+          width={58}
+          findIndex={closestIndex}
+        />
+        <WheelColumn
+          values={MERIDIEM}
+          value={pm ? "PM" : "AM"}
+          onChange={(mer) => onChange(toTimeString(hour12, minute, mer === "PM"))}
+          width={62}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Starting row for the frequency wheel — the most common real-world answer. */
+export const DEFAULT_MED_FREQUENCY = "Once daily";
+
+/** How often a medication is taken — the wheel values for the frequency picker. */
+export const MED_FREQUENCIES = [
+  "As needed",
+  "Once daily",
+  "Twice daily",
+  "Three times daily",
+  "Four times daily",
+  "Every other day",
+  "Weekly",
+  "Every 2 weeks",
+  "Monthly",
+  "Every 3 months",
+  "Every 6 months",
+  "Yearly",
+];
 
 /**
  * Single-column wheel for picking a string out of a fixed list (e.g. breed
@@ -232,5 +353,6 @@ const styles = StyleSheet.create({
   itemText: { fontSize: 22, fontFamily: font.medium, color: colors.label3 },
   itemTextActive: { color: colors.label, fontFamily: font.semibold },
   dot: { fontSize: 22, fontFamily: font.bold, color: colors.label, marginHorizontal: 2 },
+  colon: { fontSize: 22, fontFamily: font.bold, color: colors.label, marginHorizontal: 1 },
   unit: { fontSize: 17, fontFamily: font.medium, color: colors.label2, marginLeft: 10 },
 });

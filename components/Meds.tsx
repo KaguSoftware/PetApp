@@ -18,6 +18,7 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
+import { DEFAULT_MED_FREQUENCY, MED_FREQUENCIES, SingleWheelPicker } from "@/components/WheelPicker";
 import { describeSchedule, findSchedule } from "@/lib/careStatus";
 import { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
@@ -32,12 +33,14 @@ export default function Meds({ pet }: { pet: Pet }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [name, setName] = useState("");
   const [dosage, setDosage] = useState("");
-  const [frequency, setFrequency] = useState("");
+  // The wheel always shows a row, so seed the state to match what's displayed
+  // rather than "" (which would save an empty frequency for an untouched wheel).
+  const [frequency, setFrequency] = useState(DEFAULT_MED_FREQUENCY);
 
   const reset = () => {
     setName("");
     setDosage("");
-    setFrequency("");
+    setFrequency(DEFAULT_MED_FREQUENCY);
   };
 
   const valid = name.trim() !== "";
@@ -135,13 +138,7 @@ export default function Meds({ pet }: { pet: Pet }) {
         />
 
         <FieldLabel>Frequency</FieldLabel>
-        <TextField
-          value={frequency}
-          onChangeText={setFrequency}
-          placeholder="e.g. Monthly (optional)"
-          returnKeyType="done"
-          onSubmitEditing={save}
-        />
+        <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
 
         <SheetFooter>
           <AccentButton disabled={!valid} onPress={save}>

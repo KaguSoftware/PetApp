@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
-import { Stepper, TimeStepper } from "@/components/TimeStepper";
+import { Stepper } from "@/components/TimeStepper";
+import { TimeWheelPicker } from "@/components/WheelPicker";
 import {
   AccentButton,
   FieldLabel,
@@ -17,7 +18,7 @@ import {
   SmallButton,
   TextField,
 } from "@/components/ui";
-import { careItemLabel, findSchedule } from "@/lib/careStatus";
+import { careItemLabel, findSchedule, formatSlotTime } from "@/lib/careStatus";
 import {
   EVERY_DAY_MASK,
   PORTIONS,
@@ -27,7 +28,7 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { cardShadow, colors, font, radius } from "@/lib/theme";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const MAX_SLOTS = 12;
@@ -74,10 +75,13 @@ export default function ScheduleEditorSheet({
   const [cadence, setCadence] = useState<"weekly" | "interval">("weekly");
   const [intervalDays, setIntervalDays] = useState(30);
   const [grace, setGrace] = useState(30);
+  // Which slot's time wheel is expanded (only one at a time). Null = none.
+  const [openWheel, setOpenWheel] = useState<number | null>(null);
 
   // Re-seed the form from the stored schedule each time the sheet opens.
   useEffect(() => {
     if (!open) return;
+    setOpenWheel(null);
     if (existing) {
       setSlots(existing.slots.length > 0 ? existing.slots : [{ time: "08:00" }]);
       setDaysMask(existing.daysMask);
@@ -139,11 +143,20 @@ export default function ScheduleEditorSheet({
         {slots.map((slot, i) => (
           <View key={i} style={styles.slotBlock}>
             <View style={styles.slotRow}>
-              <TimeStepper
-                value={slot.time}
-                onChange={(time) => updateSlot(i, { time })}
-                accessibilityLabel={`Time ${i + 1}`}
-              />
+              {/* Tap the time to spin it — one wheel is open at a time so a
+                  10-meal schedule doesn't become ten stacked pickers. */}
+              <PressableScale
+                onPress={() => setOpenWheel((w) => (w === i ? null : i))}
+                accessibilityRole="button"
+                accessibilityLabel={`Time ${i + 1}: ${formatSlotTime(slot.time)}. Tap to change`}
+                accessibilityState={{ expanded: openWheel === i }}
+              >
+                <View style={[styles.timeChip, openWheel === i && styles.timeChipActive]}>
+                  <Text style={[styles.timeChipLabel, openWheel === i && styles.timeChipLabelActive]}>
+                    {formatSlotTime(slot.time)}
+                  </Text>
+                </View>
+              </PressableScale>
               <TextField
                 value={slot.label ?? ""}
                 onChangeText={(t) => updateSlot(i, { label: t || undefined })}
@@ -164,6 +177,9 @@ export default function ScheduleEditorSheet({
                 </PressableScale>
               ) : null}
             </View>
+            {openWheel === i ? (
+              <TimeWheelPicker value={slot.time} onChange={(time) => updateSlot(i, { time })} />
+            ) : null}
             {type === "fed" ? (
               <View style={styles.portionRow}>
                 {PORTIONS.map((p) => {
@@ -266,6 +282,21 @@ const styles = StyleSheet.create({
   slotList: { gap: 14 },
   slotBlock: { gap: 8 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  timeChip: {
+    minWidth: 92,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: radius.sm,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+    ...cardShadow,
+  },
+  timeChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
+  timeChipLabelActive: { color: colors.accent },
   slotName: { flex: 1, marginTop: 0 },
   removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
   portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 2 },
