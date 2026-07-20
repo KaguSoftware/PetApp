@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import EmptyState from "@/components/EmptyState";
+import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
 import {
@@ -17,6 +18,7 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
+import { describeSchedule, findSchedule } from "@/lib/careStatus";
 import { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
 import { colors, font } from "@/lib/theme";
@@ -26,6 +28,8 @@ export default function Meds({ pet }: { pet: Pet }) {
   // Light adherence signal — the most recent "meds" activity for this pet.
   const lastGiven = state.activities.find((a) => a.petId === pet.id && a.type === "meds")?.ts;
   const [addOpen, setAddOpen] = useState(false);
+  const [scheduleMedId, setScheduleMedId] = useState<string | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [name, setName] = useState("");
   const [dosage, setDosage] = useState("");
   const [frequency, setFrequency] = useState("");
@@ -68,27 +72,38 @@ export default function Meds({ pet }: { pet: Pet }) {
 
       {pet.meds.length > 0 ? (
         <Group>
-          {pet.meds.map((m) => (
-            <Row
-              key={m.id}
-              leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
-              title={m.name}
-              subtitle={[m.dosage, m.frequency].filter(Boolean).join(" · ") || undefined}
-              trailing={
-                <PressableScale
-                  scaleTo={PRESS_SCALE_SMALL}
-                  onPress={() => deleteMed(pet.id, m.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${m.name}`}
-                  hitSlop={10}
-                >
-                  <View style={styles.deleteButton}>
-                    <Icon name="xmark" size={15} color={colors.label3} />
-                  </View>
-                </PressableScale>
-              }
-            />
-          ))}
+          {pet.meds.map((m) => {
+            const schedule = findSchedule(state.schedules, pet.id, "meds", m.id);
+            return (
+              <Row
+                key={m.id}
+                onPress={() => {
+                  setScheduleMedId(m.id);
+                  setScheduleOpen(true);
+                }}
+                interactiveTrailing
+                leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
+                title={m.name}
+                subtitle={
+                  [m.dosage, schedule ? describeSchedule(schedule) : m.frequency].filter(Boolean).join(" · ") ||
+                  "Tap to set a dose schedule"
+                }
+                trailing={
+                  <PressableScale
+                    scaleTo={PRESS_SCALE_SMALL}
+                    onPress={() => deleteMed(pet.id, m.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${m.name}`}
+                    hitSlop={10}
+                  >
+                    <View style={styles.deleteButton}>
+                      <Icon name="xmark" size={15} color={colors.label3} />
+                    </View>
+                  </PressableScale>
+                }
+              />
+            );
+          })}
           {lastGiven != null ? (
             <Text style={styles.lastGiven}>Last given {timeAgo(lastGiven)} — log doses from the Logs tab</Text>
           ) : null}
@@ -134,6 +149,16 @@ export default function Meds({ pet }: { pet: Pet }) {
           </AccentButton>
         </SheetFooter>
       </Sheet>
+
+      {scheduleMedId != null ? (
+        <ScheduleEditorSheet
+          pet={pet}
+          type="meds"
+          medId={scheduleMedId}
+          open={scheduleOpen}
+          onClose={() => setScheduleOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

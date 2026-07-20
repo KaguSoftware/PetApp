@@ -13,7 +13,8 @@ import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
 import { Chevron, Chip, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitle } from "@/components/ui";
-import { dailyTarget, formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
+import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
+import { effectiveDailyTarget } from "@/lib/careStatus";
 import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
@@ -119,10 +120,10 @@ export default function Home() {
   }
 
   const me = state.members.find((m) => m.id === state.currentMemberId);
-  // Use the canonical daily target (breed plan → species default) so a
-  // plan-less cat targets 3 meals here, matching the rest of the app, not a
-  // hardcoded 2.
-  const fedTarget = dailyTarget(pet, "fed") ?? 2;
+  // The pet's feeding schedule (when set on the Logs tab) is the source of
+  // truth for meals per day; otherwise the canonical daily target (breed plan
+  // → species default) so a plan-less cat targets 3 meals, not a hardcoded 2.
+  const fedTarget = effectiveDailyTarget(pet, "fed", state.schedules) ?? 2;
   const fedCount = todays.filter((a) => a.type === "fed").length;
   const fedPct = Math.min(100, Math.round((fedCount / fedTarget) * 100));
 

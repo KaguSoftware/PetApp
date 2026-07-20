@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { AccentButton, Segmented, SheetSubtitle, SheetTitle } from "@/components/ui";
@@ -13,16 +13,27 @@ export default function FeedPortionSheet({
   open,
   onClose,
   onLogged,
+  presetGrams,
 }: {
   pet: Pet;
   open: boolean;
   onClose: () => void;
   /** Called after a feeding was successfully logged (not for treats). */
   onLogged?: () => void;
+  /** Preselect the portion nearest this many grams — the upcoming meal slot's portion. */
+  presetGrams?: number;
 }) {
   const { logAction, useSupply: consumeSupply, toast } = useStore();
   const [fraction, setFraction] = useState<(typeof PORTIONS)[number]["value"]>("1");
   const treatsSupply = pet.supplies.find((s) => s.icon === "star");
+
+  // When the sheet opens with a scheduled portion, start from it.
+  useEffect(() => {
+    if (!open || presetGrams == null || pet.cupGrams <= 0) return;
+    const frac = presetGrams / pet.cupGrams;
+    const nearest = PORTIONS.reduce((best, p) => (Math.abs(p.frac - frac) < Math.abs(best.frac - frac) ? p : best));
+    setFraction(nearest.value);
+  }, [open, presetGrams, pet.cupGrams]);
 
   const confirmFeed = () => {
     const frac = PORTIONS.find((p) => p.value === fraction)?.frac ?? 1;

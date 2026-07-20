@@ -127,6 +127,43 @@ export interface Activity {
   note?: string;
   /** Grams fed — set only for "fed" activities logged through the portion picker. */
   grams?: number;
+  /** Which medication a "meds" activity was for. Absent on legacy rows. */
+  medId?: string;
+}
+
+/** One scheduled time within a care schedule. */
+export interface CareScheduleSlot {
+  /** 24h local time "HH:MM". */
+  time: string;
+  /** Optional name shown in the UI and in notifications ("Breakfast"). */
+  label?: string;
+  /** Optional portion for "fed" slots — preselects the Fed portion picker. */
+  grams?: number;
+}
+
+/** A per-pet schedule for one care action (or one medication when medId is set). */
+export interface CareSchedule {
+  id: string;
+  petId: string;
+  type: ActionType;
+  /** Set only for type "meds": the medication this schedule tracks. */
+  medId?: string;
+  slots: CareScheduleSlot[];
+  /** Days-of-week bitmask, bit i = Date.getDay() i (bit 0 = Sunday). 127 = every day. */
+  daysMask: number;
+  /** Every-N-days cadence (grooming/vet). When set, daysMask is ignored. */
+  intervalDays?: number;
+  /** ms epoch anchor for intervalDays cadences. */
+  anchorTs?: number;
+  /** Show as done until this many minutes before the next slot. */
+  graceMinutes: number;
+}
+
+/** Every day of the week, as a daysMask. */
+export const EVERY_DAY_MASK = 127;
+
+export function maskHasDay(mask: number, jsDay: number): boolean {
+  return (mask & (1 << jsDay)) !== 0;
 }
 
 /** Portion choices offered by the Fed picker, as a fraction of one full cup. */
@@ -204,6 +241,8 @@ export interface AppState {
   members: Member[];
   activities: Activity[];
   reminders: Reminder[];
+  /** Care schedules for every pet in the household (feeding times, med doses, …). */
+  schedules: CareSchedule[];
   bookedVet: boolean;
   bookedVetIds: string[];
   seenWelcome: boolean;

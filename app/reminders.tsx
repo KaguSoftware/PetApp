@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
+import { Stepper } from "@/components/TimeStepper";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui";
 import { RepeatKind, Reminder, nextRepeatDue } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+import { colors, font, withAlpha } from "@/lib/theme";
 
 const DAY_MS = 86_400_000;
 
@@ -32,51 +33,6 @@ const REPEAT_LABEL: Record<RepeatKind, string> = {
 
 function repeatLabel(kind: RepeatKind, interval?: number) {
   return kind === "every_n_days" ? `every ${Math.max(1, Math.round(interval ?? 1))} days` : REPEAT_LABEL[kind];
-}
-
-/** −/+ stepper with a centered value label — the no-dependency date/time picker control. */
-function Stepper({
-  label,
-  onDec,
-  onInc,
-  decDisabled = false,
-  accessibilityLabel,
-}: {
-  label: string;
-  onDec: () => void;
-  onInc: () => void;
-  decDisabled?: boolean;
-  accessibilityLabel: string;
-}) {
-  return (
-    <View style={styles.stepper} accessibilityLabel={accessibilityLabel}>
-      <PressableScale
-        scaleTo={PRESS_SCALE_SMALL}
-        onPress={onDec}
-        disabled={decDisabled}
-        accessibilityRole="button"
-        accessibilityLabel={`${accessibilityLabel} — decrease`}
-        accessibilityState={{ disabled: decDisabled }}
-      >
-        <View style={[styles.stepperButton, decDisabled && { opacity: 0.3 }]}>
-          <Text style={styles.stepperSign}>−</Text>
-        </View>
-      </PressableScale>
-      <Text numberOfLines={1} style={styles.stepperValue}>
-        {label}
-      </Text>
-      <PressableScale
-        scaleTo={PRESS_SCALE_SMALL}
-        onPress={onInc}
-        accessibilityRole="button"
-        accessibilityLabel={`${accessibilityLabel} — increase`}
-      >
-        <View style={styles.stepperButton}>
-          <Text style={styles.stepperSign}>+</Text>
-        </View>
-      </PressableScale>
-    </View>
-  );
 }
 
 function pad(n: number) {
@@ -419,24 +375,4 @@ const styles = StyleSheet.create({
   emptyBody: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   pickerRow: { marginTop: 10, flexDirection: "row", gap: 8 },
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: radius.sm,
-    backgroundColor: colors.card,
-    minHeight: 44,
-    flexShrink: 1,
-    ...cardShadow,
-  },
-  stepperButton: { width: 44, height: 44, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
-  stepperSign: { fontSize: 20, fontFamily: font.semibold, color: colors.accent, lineHeight: 22 },
-  stepperValue: {
-    minWidth: 56,
-    paddingHorizontal: 4,
-    textAlign: "center",
-    fontSize: 15,
-    fontFamily: font.medium,
-    color: colors.label,
-    flexShrink: 1,
-  },
 });

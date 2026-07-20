@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
 import { supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CareSchedule, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -86,8 +86,9 @@ interface Store {
   toasts: Toast[];
   dismissToast: (id: number) => void;
   stopNotifications: () => void;
-  /** Log a care action. `ts` (default now) allows retro logging — earlier today or yesterday. */
-  logAction: (petId: string, type: ActionType, grams?: number, ts?: number) => boolean;
+  /** Log a care action. `ts` (default now) allows retro logging — earlier today or yesterday.
+   *  `medId` records which medication a "meds" log was for. */
+  logAction: (petId: string, type: ActionType, grams?: number, ts?: number, medId?: string) => boolean;
   /** Compensating undo for a just-logged action: removes the activity, takes back the coins, recomputes the streak. */
   undoLogAction: (activityId: string) => void;
   switchMember: (id: string) => void;
@@ -140,6 +141,9 @@ interface Store {
   useSupply: (petId: string, supplyId: string) => void;
   addMed: (petId: string, name: string, dosage?: string, frequency?: string) => void;
   deleteMed: (petId: string, medId: string) => void;
+  /** Create or replace a care schedule (matched by id). */
+  setCareSchedule: (schedule: CareSchedule) => void;
+  deleteCareSchedule: (scheduleId: string) => void;
   /** Record a vaccination; when `nextDue` is set a linked reminder is created with it. */
   addVaccination: (petId: string, input: { name: string; dateGiven: number; nextDue?: number; notes?: string }) => void;
   deleteVaccination: (petId: string, vaccinationId: string) => void;
@@ -172,6 +176,7 @@ const EMPTY_STATE: AppState = {
   members: [],
   activities: [],
   reminders: [],
+  schedules: [],
   bookedVet: false,
   bookedVetIds: [],
   seenWelcome: true,
@@ -442,10 +447,36 @@ type HouseholdRow = {
     notify_vet_suggestions: boolean;
   }[];
   pets: (PetRow & { created_at: string })[];
-  activities: { id: string; pet_id: string; member_id: string; type: ActionType; ts: number; note: string | null; grams: number | null }[];
+  activities: { id: string; pet_id: string; member_id: string; type: ActionType; ts: number; note: string | null; grams: number | null; med_id?: string | null }[];
   reminders: { id: string; pet_id: string; title: string; emoji: string; due: number; done: boolean; source: "manual" | "plan"; alert: boolean | null; vet_id: string | null; alert_kind: string | null; repeat_kind: RepeatKind | "none" | null; repeat_interval: number | null; vaccination_id: string | null }[];
   booked_vets: { vet_id: string }[];
 };
+
+type CareScheduleRow = {
+  id: string;
+  pet_id: string;
+  action_type: ActionType;
+  med_id: string | null;
+  slots: CareSchedule["slots"] | null;
+  days_mask: number;
+  interval_days: number | null;
+  anchor_ts: number | null;
+  grace_minutes: number;
+};
+
+function mapScheduleRow(r: CareScheduleRow): CareSchedule {
+  return {
+    id: r.id,
+    petId: r.pet_id,
+    type: r.action_type,
+    medId: r.med_id ?? undefined,
+    slots: Array.isArray(r.slots) ? r.slots : [],
+    daysMask: r.days_mask,
+    intervalDays: r.interval_days ?? undefined,
+    anchorTs: r.anchor_ts != null ? Number(r.anchor_ts) : undefined,
+    graceMinutes: r.grace_minutes,
+  };
+}
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(EMPTY_STATE);
@@ -469,6 +500,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // True when hydration had to fall back to the pre-0013 select — reminder
   // inserts then omit the v2 columns so they still succeed on the old schema.
   const legacySchemaRef = useRef(false);
+  // True when the care_schedules table (migration 0017) is missing — schedule
+  // CRUD then stays local-only and activity inserts omit med_id, so the app
+  // degrades to the count-target behavior instead of failing writes.
+  const scheduleSchemaRef = useRef(false);
   const notifiedActivityIdsRef = useRef<Set<string>>(new Set());
   // setTimeout ids for the staggered "what everyone else did" toast batch
   // (see notifyRecentActivity below) — lets stopNotifications cancel any
@@ -836,13 +871,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         return res;
       };
+      // care_schedules is fetched separately (not embedded in HOUSEHOLD_SELECT):
+      // on a pre-0017 DB an embed error would over-degrade the whole household
+      // query to the legacy select, losing health data. A standalone query
+      // degrades scheduling alone.
+      const fetchSchedules = async (id: string): Promise<CareSchedule[]> => {
+        const res = await supabase.from("care_schedules").select("*").eq("household_id", id);
+        if (res.error) {
+          console.warn("[petpal] care_schedules unavailable — apply migration 0017; schedules disabled for now");
+          scheduleSchemaRef.current = true;
+          return [];
+        }
+        scheduleSchemaRef.current = false;
+        return ((res.data as CareScheduleRow[] | null) ?? []).map(mapScheduleRow);
+      };
 
       let household: HouseholdRow | null = null;
       let householdErr: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+      let schedules: CareSchedule[] = [];
       if (activeId) {
-        const res = await fetchHousehold(activeId);
+        const [res, sched] = await Promise.all([fetchHousehold(activeId), fetchSchedules(activeId)]);
         household = res.data;
         householdErr = res.error;
+        schedules = sched;
       }
       if (householdErr) console.error("[petpal] household fetch failed:", describeErr(householdErr) ?? householdErr);
 
@@ -869,6 +920,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       const h = finalHousehold;
       householdIdRef.current = h.id;
+      // Bootstrap (or a household-id change) skipped the parallel schedules
+      // fetch above — probe now so scheduleSchemaRef reflects this DB.
+      if (h.id !== activeId) schedules = await fetchSchedules(h.id);
 
       const members = [...(h.members ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
       const petRows = [...(h.pets ?? [])].sort((a: PetRow & { created_at: string }, b: PetRow & { created_at: string }) =>
@@ -947,6 +1001,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ts: Number(a.ts),
         note: a.note ?? undefined,
         grams: a.grams ?? undefined,
+        medId: a.med_id ?? undefined,
       }));
       // Per-user "view as": prefer the current user's own linked member card,
       // then the household's shared pointer, then the first member. This keeps
@@ -992,6 +1047,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         members: mappedMembers,
         activities: activityList,
         reminders: reminderList,
+        schedules,
         bookedVet: bookedVets.length > 0,
         bookedVetIds: bookedVets.map((b) => b.vet_id),
         seenWelcome: h.seen_welcome,
@@ -1161,7 +1217,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logAction = useCallback(
-    (petId: string, type: ActionType, grams?: number, tsArg?: number): boolean => {
+    (petId: string, type: ActionType, grams?: number, tsArg?: number, medId?: string): boolean => {
       const h = hid();
       if (!h) return false;
       const pet = stateRef.current.pets.find((p) => p.id === petId);
@@ -1194,7 +1250,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const newCoins = rewardsRef.current.coins + 5;
       rewardsRef.current = { coins: newCoins };
 
-      const newActivity: Activity = { id, petId, memberId, type, ts, grams };
+      const newActivity: Activity = { id, petId, memberId, type, ts, grams, medId };
       const newStreak = computeStreak([newActivity, ...stateRef.current.activities]);
 
       // Snapshot for rollback if the DB rejects the write.
@@ -1237,8 +1293,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Persist the activity (+ any supply drain) per-row; on failure roll the
       // whole slice back. Coins/streak go through the debounced syncCounters
       // so rapid taps can't race at the DB.
+      // med_id only exists from migration 0017 — omit it entirely on older DBs
+      // so the insert still succeeds.
+      const medIdCols = medId != null && !scheduleSchemaRef.current ? { med_id: medId } : {};
       const ops: PromiseLike<{ error: unknown }>[] = [
-        supabase.from("activities").insert({ id, household_id: h, pet_id: petId, member_id: memberId, type, ts, grams: grams ?? null }),
+        supabase.from("activities").insert({ id, household_id: h, pet_id: petId, member_id: memberId, type, ts, grams: grams ?? null, ...medIdCols }),
       ];
       if (litterSupply && litterLevel != null) {
         ops.push(supabase.from("supplies").update({ level: litterLevel }).eq("pet_id", petId).eq("supply_key", litterSupply.id));
@@ -1935,19 +1994,79 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (petId: string, medId: string) => {
       const removed = stateRef.current.pets.find((p) => p.id === petId)?.meds.find((m) => m.id === medId);
       if (!removed) return;
+      // The DB cascades care_schedules rows on med delete — mirror that in
+      // local state (and put them back on undo, before commit runs).
+      const removedSchedules = stateRef.current.schedules.filter((s) => s.medId === medId);
       undoableDelete({
         remove: () =>
-          setState((prev) => ({ ...prev, pets: prev.pets.map((p) => (p.id === petId ? { ...p, meds: p.meds.filter((m) => m.id !== medId) } : p)) })),
+          setState((prev) => ({
+            ...prev,
+            pets: prev.pets.map((p) => (p.id === petId ? { ...p, meds: p.meds.filter((m) => m.id !== medId) } : p)),
+            schedules: prev.schedules.filter((s) => s.medId !== medId),
+          })),
         restore: () =>
           setState((prev) => ({
             ...prev,
             pets: prev.pets.map((p) => (p.id === petId && !p.meds.some((m) => m.id === medId) ? { ...p, meds: [...p.meds, removed] } : p)),
+            schedules: [...prev.schedules.filter((s) => s.medId !== medId), ...removedSchedules],
           })),
         commit: () => supabase.from("meds").delete().eq("id", medId).then(),
         message: `${removed.name} removed`,
       });
     },
     [supabase, undoableDelete]
+  );
+
+  const setCareSchedule = useCallback(
+    (schedule: CareSchedule) => {
+      const h = hid();
+      if (!h) return;
+      const before = stateRef.current.schedules;
+      setState((prev) => ({
+        ...prev,
+        schedules: [...prev.schedules.filter((s) => s.id !== schedule.id), schedule],
+      }));
+      if (scheduleSchemaRef.current) {
+        // Table missing (migration 0017 not applied) — keep the schedule
+        // locally so the UI works this session, but be honest that it won't
+        // sync to the rest of the family yet.
+        toast("alert", "Schedule saved on this device only", "It'll sync once the app's database is updated");
+        return;
+      }
+      persist(
+        supabase.from("care_schedules").upsert({
+          id: schedule.id,
+          household_id: h,
+          pet_id: schedule.petId,
+          action_type: schedule.type,
+          med_id: schedule.medId ?? null,
+          slots: schedule.slots,
+          days_mask: schedule.daysMask,
+          interval_days: schedule.intervalDays ?? null,
+          anchor_ts: schedule.anchorTs ?? null,
+          grace_minutes: schedule.graceMinutes,
+        }),
+        {
+          rollback: () => setState((prev) => ({ ...prev, schedules: before })),
+          message: "Couldn't save the schedule",
+        }
+      );
+    },
+    [supabase, persist, toast]
+  );
+
+  const deleteCareSchedule = useCallback(
+    (scheduleId: string) => {
+      const removed = stateRef.current.schedules.find((s) => s.id === scheduleId);
+      if (!removed) return;
+      setState((prev) => ({ ...prev, schedules: prev.schedules.filter((s) => s.id !== scheduleId) }));
+      if (scheduleSchemaRef.current) return;
+      persist(supabase.from("care_schedules").delete().eq("id", scheduleId), {
+        rollback: () => setState((prev) => ({ ...prev, schedules: [...prev.schedules, removed] })),
+        message: "Couldn't remove the schedule",
+      });
+    },
+    [supabase, persist]
   );
 
   const addVaccination = useCallback(
@@ -2290,6 +2409,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         useSupply,
         addMed,
         deleteMed,
+        setCareSchedule,
+        deleteCareSchedule,
         addVaccination,
         deleteVaccination,
         addVetVisit,

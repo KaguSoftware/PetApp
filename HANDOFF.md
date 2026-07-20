@@ -146,6 +146,46 @@ every finding below was re-verified against source before being fixed. `tsc --no
   it was left one-tap. `@gorhom/bottom-sheet` is a dependency but unused — `Sheet` is hand-rolled
   on RN `Modal`, so no `BottomSheetModalProvider` is needed. Worth removing the dep.
 
+### Logs redesign + care scheduling system (2026-07-20, plan-mode collab with owner) — built, statically verified, NEEDS device walkthrough + migration 0017
+
+Full redo of the Logs tab (owner request) plus a new scheduling system. Owner decisions locked in
+discovery: status-dashboard-first · avatar-row pet selector · one dashboard row per medication ·
+grace window per schedule (default 30 min) · local per-device notifications for v1 · row-body tap
+opens the schedule editor. Architecture: **schedules are evaluated live** (never written into
+`reminders`) by pure helpers in `lib/careStatus.ts`; notifications merge schedule occurrences with
+reminder occurrences under the 60 cap.
+
+- **DB**: `supabase/migrations/0017_care_schedules.sql` — `care_schedules` table (jsonb `slots`
+  [{time,label,grams}], `days_mask` bit0=Sunday, `interval_days`/`anchor_ts` for groom/vet
+  cadences, `grace_minutes`) + nullable `activities.med_id`. **NOT YET APPLIED** — the local
+  Supabase CLI login only has KaguWebsite/KaguOs, no access to project `mpsyprtnejjbnhyaiidn`.
+  Until applied the app degrades gracefully (`scheduleSchemaRef` in store.tsx: schedules stay
+  local-only with an honest toast, activity inserts omit med_id).
+- **Store**: `schedules` on AppState; parallel hydration fetch (NOT in HOUSEHOLD_SELECT, so a
+  pre-0017 DB degrades scheduling only); `setCareSchedule`/`deleteCareSchedule` (optimistic
+  upsert/rollback); `logAction` gained `medId` 5th param; `deleteMed` cascades schedules locally.
+- **careStatus.ts** state machine: done/due/overdue/upcoming/unscheduled; done = logged since
+  `prev slot − grace` AND before `next slot − grace`; overdue = unlogged >60 min past slot;
+  unscheduled falls back to the old count targets exactly. `effectiveDailyTarget` drives Home's
+  meals bar (home/index.tsx) so it matches the schedule's slot count.
+- **Notifications**: `syncScheduledNotifications(reminders, pets, schedules, activities)` — merged
+  + sorted + capped at 60; slots already logged for their window are skipped; schedule slots
+  respect the member's `notifyCareReminders` toggle (reminders keep old behavior); taps route to
+  `/logs`.
+- **New UI**: `components/PetSelectorRow.tsx` (avatar row, accent ring + scale on selected),
+  `components/CareStatusRow.tsx` ("Fed 7:42 AM by Sara" + "Next Dinner · 6:00 PM", state-colored
+  IconCircle, one-tap Log SmallButton with CoinPop, red ! badge preserved),
+  `components/ScheduleEditorSheet.tsx` (times via TimeStepper, optional slot names, per-slot
+  portions for fed, 7-day chips or every-N-days for groom/vet, grace stepper, remove),
+  `components/MedPickerSheet.tsx` ("which med?" + inline "Add new medication"),
+  `components/TimeStepper.tsx` (Stepper extracted from reminders.tsx — reminders imports it back).
+- **Logs page** (`app/(tabs)/logs/index.tsx`, full rewrite): PetSelectorRow → "Right now" Group of
+  CareStatusRows (species actions, per-med rows, vet, "Add medication" row) → retro-log link
+  (meds chip now asks which med inline) → "Today" timeline (member InitialAvatar · "Sara fed
+  Milo" · time). 60s ticker keeps grace-window flips live. Old tile grid + text pet switcher gone.
+- **Meds.tsx**: med rows tap → schedule editor; subtitle shows `describeSchedule` when set.
+- Verified: `tsc --noEmit` clean, `expo lint` clean, iOS+Android bundles compile (8.56 MB).
+
 **Still needs a device / not fully closable statically:**
 
 - **Round 5 needs a full walkthrough** — all of the above is statically verified only. Priority
@@ -196,6 +236,7 @@ What exists:
 | A11y prefs | Reduce-motion (pref OR OS) + haptics now consumed | Extend gating to more animated surfaces | Polish |
 | Notifications | Local scheduling + immediate local notif on own action | Family-wide remote push (needs notifications table) | EAS cutover |
 | Invite web origin | Placeholder `https://petpal.app` in family.tsx | Real deployed web-demo origin | One-line fix (owner: provide URL) |
+| Care schedules | Full UI + local eval; DB table pending (0017 not applied — CLI lacks project access) | Synced family-wide once 0017 runs; later: server push reads care_schedules | Owner runs 0017 (SQL editor or CLI login with project access) |
 | Emergency card | Text share only | Print/PDF variant (needs expo-print) | Optional |
 
 ## Gotchas
