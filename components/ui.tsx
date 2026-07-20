@@ -340,6 +340,9 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${amount.toLocaleString()} coins. Spend them on your pets.`}
+      // The pill is only ~26pt tall — without slop it's well under the 44pt
+      // minimum and reads as a button that ignores taps.
+      hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
     >
       {pill}
     </PressableScale>

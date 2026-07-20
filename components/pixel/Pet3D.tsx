@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { Pet } from "@/lib/data";
 import { colors } from "@/lib/theme";
 import { equippedCosmetics } from "./PixelPet";
+import { placementFor } from "./cosmeticSprites";
 import { CAT_FUR, CAT_SPRITE, DOG_FUR, DOG_SPRITE, furSprite } from "./petSprites";
 import type { Sprite } from "./PixelSprite";
 
@@ -69,12 +70,15 @@ function buildPetMesh(pet: Pet): { mesh: THREE.InstancedMesh; fit: number } {
   const head = headSpriteFor(pet);
   const hw = head.rows[0]?.length ?? 16;
   const hh = head.rows.length;
-  const overlays = equippedCosmetics(pet).map(({ cos }) => ({
-    sprite: cos.sprite,
-    left: cos.place.left * hw,
-    top: cos.place.top * hh,
-    scale: cos.place.widthFrac,
-  }));
+  const overlays = equippedCosmetics(pet).map(({ cos }) => {
+    const place = placementFor(cos, pet.species);
+    return {
+      sprite: cos.sprite,
+      left: place.left * hw,
+      top: place.top * hh,
+      scale: place.widthFrac,
+    };
+  });
   const { voxels, w, h } = spriteVoxels(head, overlays);
 
   const geo = new THREE.BoxGeometry(1, 1, DEPTH);

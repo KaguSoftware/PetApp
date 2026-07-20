@@ -75,13 +75,14 @@ export default function ScheduleEditorSheet({
   const [cadence, setCadence] = useState<"weekly" | "interval">("weekly");
   const [intervalDays, setIntervalDays] = useState(30);
   const [grace, setGrace] = useState(30);
-  // Which slot's time wheel is expanded (only one at a time). Null = none.
-  const [openWheel, setOpenWheel] = useState<number | null>(null);
+  // Index of the slot whose time is being picked — the sheet swaps to a
+  // dedicated wheel view while this is set. Null = editing the schedule form.
+  const [pickingSlot, setPickingSlot] = useState<number | null>(null);
 
   // Re-seed the form from the stored schedule each time the sheet opens.
   useEffect(() => {
     if (!open) return;
-    setOpenWheel(null);
+    setPickingSlot(null);
     if (existing) {
       setSlots(existing.slots.length > 0 ? existing.slots : [{ time: "08:00" }]);
       setDaysMask(existing.daysMask);
@@ -131,6 +132,29 @@ export default function ScheduleEditorSheet({
     onClose();
   };
 
+  // Time picking takes over the whole sheet instead of expanding a wheel inline
+  // (which stretched the sheet and pushed the form around) and instead of a
+  // nested Sheet (two stacked RN Modals is a known-fragile pattern here).
+  // scrollable={false} while the wheel is up so the wheel's own ScrollView
+  // columns aren't fighting the sheet's scroller for the same pan.
+  if (pickingSlot != null && slots[pickingSlot]) {
+    const slot = slots[pickingSlot];
+    return (
+      <Sheet open={open} onClose={onClose} scrollable={false}>
+        <SheetTitle>{slot.label?.trim() ? slot.label : `Time ${pickingSlot + 1}`}</SheetTitle>
+        <SheetSubtitle>
+          {label} · {pet.name}
+        </SheetSubtitle>
+        <View style={styles.pickerBody}>
+          <TimeWheelPicker value={slot.time} onChange={(time) => updateSlot(pickingSlot, { time })} />
+        </View>
+        <SheetFooter>
+          <AccentButton onPress={() => setPickingSlot(null)}>Done</AccentButton>
+        </SheetFooter>
+      </Sheet>
+    );
+  }
+
   return (
     <Sheet open={open} onClose={onClose}>
       <SheetTitle>{label} schedule</SheetTitle>
@@ -143,18 +167,16 @@ export default function ScheduleEditorSheet({
         {slots.map((slot, i) => (
           <View key={i} style={styles.slotBlock}>
             <View style={styles.slotRow}>
-              {/* Tap the time to spin it — one wheel is open at a time so a
-                  10-meal schedule doesn't become ten stacked pickers. */}
+              {/* Tapping the time opens a small dedicated picker sheet rather
+                  than expanding inline — an inline wheel grew this sheet's
+                  height and shoved the rest of the form around. */}
               <PressableScale
-                onPress={() => setOpenWheel((w) => (w === i ? null : i))}
+                onPress={() => setPickingSlot(i)}
                 accessibilityRole="button"
                 accessibilityLabel={`Time ${i + 1}: ${formatSlotTime(slot.time)}. Tap to change`}
-                accessibilityState={{ expanded: openWheel === i }}
               >
-                <View style={[styles.timeChip, openWheel === i && styles.timeChipActive]}>
-                  <Text style={[styles.timeChipLabel, openWheel === i && styles.timeChipLabelActive]}>
-                    {formatSlotTime(slot.time)}
-                  </Text>
+                <View style={styles.timeChip}>
+                  <Text style={styles.timeChipLabel}>{formatSlotTime(slot.time)}</Text>
                 </View>
               </PressableScale>
               <TextField
@@ -177,9 +199,6 @@ export default function ScheduleEditorSheet({
                 </PressableScale>
               ) : null}
             </View>
-            {openWheel === i ? (
-              <TimeWheelPicker value={slot.time} onChange={(time) => updateSlot(i, { time })} />
-            ) : null}
             {type === "fed" ? (
               <View style={styles.portionRow}>
                 {PORTIONS.map((p) => {
@@ -290,13 +309,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "transparent",
     ...cardShadow,
   },
-  timeChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
-  timeChipLabelActive: { color: colors.accent },
+  pickerBody: { marginTop: 12 },
   slotName: { flex: 1, marginTop: 0 },
   removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
   portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 2 },
