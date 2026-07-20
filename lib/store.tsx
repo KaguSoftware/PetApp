@@ -1569,22 +1569,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toast("check", "All caught up", `Cleared ${ids.length} notification${ids.length === 1 ? "" : "s"}`);
   }, [supabase, persist, toast]);
 
+  // ConfirmRow's tap-twice gesture is already the confirmation step, so this
+  // commits right away instead of going through undoableDelete's few-second
+  // grace window — otherwise a refresh before that timer fires refetches the
+  // still-undeleted rows from Supabase and they reappear.
   const clearOverdueReminders = useCallback(() => {
     const now = Date.now();
     const overdue = stateRef.current.reminders.filter((r) => !r.done && r.due < now);
     if (overdue.length === 0) return;
     const ids = overdue.map((r) => r.id);
-    undoableDelete({
-      remove: () => setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => !ids.includes(r.id)) })),
-      restore: () =>
+    setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => !ids.includes(r.id)) }));
+    persist(supabase.from("reminders").delete().in("id", ids), {
+      rollback: () =>
         setState((prev) => ({
           ...prev,
           reminders: [...prev.reminders, ...overdue.filter((r) => !prev.reminders.some((x) => x.id === r.id))],
         })),
-      commit: () => bestEffort(supabase.from("reminders").delete().in("id", ids), "overdue reminders clear"),
-      message: `Cleared ${ids.length} overdue reminder${ids.length === 1 ? "" : "s"}`,
+      message: "Couldn't clear reminders",
     });
-  }, [supabase, undoableDelete, bestEffort]);
+    toast("check", "Cleared", `Removed ${ids.length} overdue reminder${ids.length === 1 ? "" : "s"}`);
+  }, [supabase, persist, toast]);
 
   const addPet = useCallback(
     (input: {
