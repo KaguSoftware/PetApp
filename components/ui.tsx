@@ -270,7 +270,7 @@ export function AccentButton({
       >
         {loading ? (
           <ActivityIndicator color={labelColor} />
-        ) : typeof children === "string" ? (
+        ) : (Array.isArray(children) ? children : [children]).every((c) => typeof c === "string" || typeof c === "number") ? (
           <Text style={[styles.accentButtonLabel, size === "sm" && { fontSize: 15 }, { color: labelColor }]}>{children}</Text>
         ) : (
           children
