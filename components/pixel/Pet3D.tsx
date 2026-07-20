@@ -103,6 +103,11 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   const dragging = useRef(false);
   const grabX = useRef(0);
   const grabY = useRef(0);
+  // Coin-spin: a flick gives yaw a velocity that friction bleeds back down to the
+  // idle spin. `velY` is sampled during the drag from the last two move events.
+  const velY = useRef(0.6);
+  const lastYaw = useRef(0);
+  const lastMoveT = useRef(0);
   const rafRef = useRef<number | null>(null);
   // Scene refs so the model can be rebuilt when cosmetics change without
   // recreating the whole GL context.
@@ -151,14 +156,25 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
       dragging.current = true;
       grabX.current = rotY.current;
       grabY.current = rotX.current;
+      lastYaw.current = rotY.current;
+      lastMoveT.current = Date.now();
     })
     .onUpdate((e) => {
       // Map horizontal drag → yaw, vertical drag → pitch (clamped).
-      rotY.current = grabX.current + e.translationX * 0.012;
-      rotX.current = Math.max(-0.6, Math.min(0.6, grabY.current - e.translationY * 0.012));
+      const nextYaw = grabX.current + e.translationX * 0.012;
+      // Sample yaw velocity so releasing becomes a coin-flick spin.
+      const now = Date.now();
+      const dt = (now - lastMoveT.current) / 1000;
+      if (dt > 0) velY.current = (nextYaw - lastYaw.current) / dt;
+      lastYaw.current = nextYaw;
+      lastMoveT.current = now;
+      rotY.current = nextYaw;
+      rotX.current = Math.max(-0.6, Math.min(0.6, grabY.current + e.translationY * 0.012));
     })
     .onFinalize(() => {
       dragging.current = false;
+      // Clamp so a hard flick can't spin absurdly fast.
+      velY.current = Math.max(-14, Math.min(14, velY.current));
     });
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
@@ -197,8 +213,11 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
       const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
       last = t;
       if (!dragging.current) {
-        // Constant gentle spin, and ease pitch back to level.
-        rotY.current += idleSpin.current * dt;
+        // Coin-spin: friction bleeds the flick velocity back down to the idle
+        // spin, so a flick spins fast then eases into the constant gentle spin.
+        velY.current += (idleSpin.current - velY.current) * Math.min(1, dt * 1.4);
+        rotY.current += velY.current * dt;
+        // Ease pitch back to level.
         rotX.current += (0 - rotX.current) * Math.min(1, dt * 3);
       }
       group.rotation.y = rotY.current;
