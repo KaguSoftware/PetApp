@@ -101,6 +101,8 @@ interface Store {
   /** Clear the `alert` flag on every outstanding alerting reminder (acknowledge
    *  all notifications at once) without completing or deleting the tasks. */
   dismissAllAlerts: () => void;
+  /** Delete every past-due, not-yet-done reminder in one shot. */
+  clearOverdueReminders: () => void;
   addPet: (input: {
     name: string;
     species: "cat" | "dog";
@@ -1567,6 +1569,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toast("check", "All caught up", `Cleared ${ids.length} notification${ids.length === 1 ? "" : "s"}`);
   }, [supabase, persist, toast]);
 
+  const clearOverdueReminders = useCallback(() => {
+    const now = Date.now();
+    const overdue = stateRef.current.reminders.filter((r) => !r.done && r.due < now);
+    if (overdue.length === 0) return;
+    const ids = overdue.map((r) => r.id);
+    undoableDelete({
+      remove: () => setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => !ids.includes(r.id)) })),
+      restore: () =>
+        setState((prev) => ({
+          ...prev,
+          reminders: [...prev.reminders, ...overdue.filter((r) => !prev.reminders.some((x) => x.id === r.id))],
+        })),
+      commit: () => bestEffort(supabase.from("reminders").delete().in("id", ids), "overdue reminders clear"),
+      message: `Cleared ${ids.length} overdue reminder${ids.length === 1 ? "" : "s"}`,
+    });
+  }, [supabase, undoableDelete, bestEffort]);
+
   const addPet = useCallback(
     (input: {
       name: string;
@@ -2395,6 +2414,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         toggleReminder,
         deleteReminder,
         dismissAllAlerts,
+        clearOverdueReminders,
         addPet,
         editPet,
         deletePet,

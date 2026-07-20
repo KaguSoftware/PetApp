@@ -123,7 +123,7 @@ export default function ActivityScreen() {
                     <View key={r.id}>
                       <Row
                         title={
-                          <Text numberOfLines={1} style={styles.alertTitle}>
+                          <Text numberOfLines={expanded ? undefined : 1} style={styles.alertTitle}>
                             {r.title}
                           </Text>
                         }
@@ -133,9 +133,6 @@ export default function ActivityScreen() {
                       />
                       {expanded ? (
                         <FadeInItem style={styles.alertExpand}>
-                          <Text style={styles.alertExpandBody}>
-                            {pet.name} needs attention: {r.title.toLowerCase()} — due {dueLabel(r.due).toLowerCase()}.
-                          </Text>
                           <AccentButton size="sm" onPress={go}>
                             {goLabel}
                           </AccentButton>
@@ -244,21 +241,35 @@ export default function ActivityScreen() {
                 if (!m || !p) return null;
                 const isYou = m.id === state.currentMemberId;
                 const tile = ACTION_ICON[a.type];
+                const expanded = expandedId === a.id;
                 return (
-                  <Row
-                    key={a.id}
-                    leading={<IconCircle icon={tile.icon} tint={tile.tint} bg={tile.bg} size={32} iconSize={17} />}
-                    title={
-                      <Text numberOfLines={1} style={styles.feedTitle}>
-                        <Text style={styles.feedName}>{isYou ? "You" : m.name}</Text>
-                        <Text style={styles.feedVerb}> {ACTIONS[a.type].verb} </Text>
-                        <Text style={styles.feedName}>{p.name}</Text>
-                      </Text>
-                    }
-                    subtitle={a.note ?? timeAgo(a.ts)}
-                    trailing={<Chevron />}
-                    onPress={() => router.push(`/pet/${p.id}`)}
-                  />
+                  <View key={a.id}>
+                    <Row
+                      leading={<IconCircle icon={tile.icon} tint={tile.tint} bg={tile.bg} size={32} iconSize={17} />}
+                      title={
+                        <Text numberOfLines={expanded ? undefined : 1} style={styles.feedTitle}>
+                          <Text style={styles.feedName}>{isYou ? "You" : m.name}</Text>
+                          <Text style={styles.feedVerb}> {ACTIONS[a.type].verb} </Text>
+                          <Text style={styles.feedName}>{p.name}</Text>
+                        </Text>
+                      }
+                      subtitle={
+                        <Text numberOfLines={expanded ? undefined : 1} style={styles.rowSubtitle}>
+                          {a.note ?? timeAgo(a.ts)}
+                        </Text>
+                      }
+                      trailing={<Chevron />}
+                      onPress={() => setExpandedId(expanded ? null : a.id)}
+                    />
+                    {expanded ? (
+                      <FadeInItem style={styles.alertExpand}>
+                        {a.note ? <Text style={styles.alertExpandBody}>{a.note}</Text> : null}
+                        <AccentButton size="sm" onPress={() => router.push(`/pet/${p.id}`)}>
+                          View {p.name}
+                        </AccentButton>
+                      </FadeInItem>
+                    ) : null}
+                  </View>
                 );
               })}
             </Group>
@@ -360,6 +371,7 @@ const styles = StyleSheet.create({
   upsellBody: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
   filterRow: { marginBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   // Feed text — one 15pt body size across title/name/verb (footnote 13 via Row subtitle)
+  rowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
   feedTitle: { fontSize: 15, color: colors.label },
   feedName: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   feedVerb: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },

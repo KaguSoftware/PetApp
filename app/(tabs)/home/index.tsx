@@ -12,7 +12,7 @@ import Sheet from "@/components/Sheet";
 import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
-import { Chevron, Chip, Group, PressableScale, PRESS_SCALE_SMALL, Row, SheetTitle } from "@/components/ui";
+import { Chevron, Chip, ConfirmRow, Group, PressableScale, PRESS_SCALE_SMALL, Row, SectionHeader, SheetTitle } from "@/components/ui";
 import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { effectiveDailyTarget } from "@/lib/careStatus";
 import { dueLabel, useStore } from "@/lib/store";
@@ -52,13 +52,16 @@ function MealsBar({ pct }: { pct: number }) {
 }
 
 export default function Home() {
-  const { state, hydrated, addWeight, editPet, toast } = useStore();
+  const { state, hydrated, addWeight, editPet, toast, clearOverdueReminders } = useStore();
   const router = useRouter();
   const refreshControl = usePullToRefresh();
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
+  const [nextUpExpanded, setNextUpExpanded] = useState(false);
 
   const changePet = (dir: 1 | -1) => setPetIndex((i) => Math.min(state.pets.length - 1, Math.max(0, i + dir)));
 
@@ -132,6 +135,7 @@ export default function Home() {
   const alertCount = new Set(state.reminders.filter((r) => r.alert && !r.done).map((r) => `${r.petId}|${r.title}`)).size;
 
   const nextReminder = state.reminders.filter((r) => !r.done && r.petId === pet.id).sort((a, b) => a.due - b.due)[0];
+  const overdueReminders = state.reminders.filter((r) => !r.done && r.due < Date.now()).sort((a, b) => a.due - b.due);
 
   const hour = new Date().getHours();
   const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${me?.name}`;
@@ -250,23 +254,85 @@ export default function Home() {
       )}
 
       {/* Next up */}
-      <Group style={{ marginTop: 32 }}>
+      <SectionHeader style={{ marginTop: 32 }}>Reminders</SectionHeader>
+      <Group>
         <Row
-          onPress={() => router.push("/reminders")}
+          onPress={() => setNextUpExpanded((v) => !v)}
+          interactiveTrailing
           leading={
             <View style={styles.nextUpIcon}>
               <Icon name="clock" size={19} color={colors.accent} />
             </View>
           }
-          title={nextReminder ? nextReminder.title : "No upcoming reminders"}
-          subtitle={
-            nextReminder
-              ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
-              : "Tap to add one for the family"
+          title={
+            <Text numberOfLines={nextUpExpanded ? undefined : 1} style={styles.remindersRowTitle}>
+              {nextReminder ? nextReminder.title : "No upcoming reminders"}
+            </Text>
           }
-          trailing={<Chevron />}
+          subtitle={
+            <Text numberOfLines={nextUpExpanded ? undefined : 1} style={styles.remindersRowSubtitle}>
+              {nextReminder
+                ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
+                : "Tap to add one for the family"}
+            </Text>
+          }
+          trailing={
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
+              onPress={() => setRemindersOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="See all reminders"
+              hitSlop={8}
+            >
+              <Chevron />
+            </PressableScale>
+          }
         />
       </Group>
+
+      {/* Reminders overview: past-due items + a one-tap bulk clear */}
+      <Sheet open={remindersOpen} onClose={() => setRemindersOpen(false)}>
+        <View style={{ marginBottom: 12 }}>
+          <SheetTitle>Reminders</SheetTitle>
+        </View>
+        {overdueReminders.length > 0 ? (
+          <Group>
+            {overdueReminders.map((r) => {
+              const expanded = expandedReminderId === r.id;
+              return (
+                <Row
+                  key={r.id}
+                  title={
+                    <Text numberOfLines={expanded ? undefined : 1} style={styles.remindersRowTitle}>
+                      {r.title}
+                    </Text>
+                  }
+                  subtitle={
+                    <Text numberOfLines={expanded ? undefined : 1} style={styles.remindersRowSubtitle}>
+                      {state.pets.find((p) => p.id === r.petId)?.name}
+                    </Text>
+                  }
+                  onPress={() => setExpandedReminderId(expanded ? null : r.id)}
+                />
+              );
+            })}
+          </Group>
+        ) : (
+          <Text style={styles.remindersEmpty}>No past-due reminders.</Text>
+        )}
+        {overdueReminders.length > 0 && (
+          <Group style={{ marginTop: 16 }}>
+            <ConfirmRow
+              label="Clear all"
+              confirmLabel="Tap again to clear all"
+              onConfirm={() => {
+                clearOverdueReminders();
+                setRemindersOpen(false);
+              }}
+            />
+          </Group>
+        )}
+      </Sheet>
 
       {/* Switch pet */}
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
@@ -337,6 +403,9 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
+  remindersEmpty: { fontSize: 15, fontFamily: font.regular, color: colors.label2, paddingHorizontal: 4, paddingVertical: 8 },
+  remindersRowTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+  remindersRowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",

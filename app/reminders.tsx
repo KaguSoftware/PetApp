@@ -53,6 +53,9 @@ export default function RemindersScreen() {
   const [minute, setMinute] = useState(0);
   const [repeat, setRepeat] = useState<"none" | RepeatKind>("none");
   const [intervalDays, setIntervalDays] = useState(3);
+  // Long titles/subtitles are clipped to one line by default; tapping a row
+  // toggles it to show the full text instead of navigating anywhere.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const addButton = (
     <PressableScale
@@ -130,9 +133,12 @@ export default function RemindersScreen() {
   const renderRow = (r: Reminder) => {
     const pet = petOf(r.petId);
     const isAlert = r.alert && !r.done;
+    const expanded = expandedId === r.id;
     return (
       <Row
         key={r.id}
+        onPress={() => setExpandedId(expanded ? null : r.id)}
+        interactiveTrailing
         leading={
           <PressableScale
             scaleTo={PRESS_SCALE_SMALL}
@@ -156,19 +162,22 @@ export default function RemindersScreen() {
           </PressableScale>
         }
         title={
-          <Text numberOfLines={1} style={[styles.rowTitle, r.done ? styles.rowTitleDone : null, isAlert ? { color: colors.red } : null]}>
+          <Text
+            numberOfLines={expanded ? undefined : 1}
+            style={[styles.rowTitle, r.done ? styles.rowTitleDone : null, isAlert ? { color: colors.red } : null]}
+          >
             {r.title}
           </Text>
         }
         subtitle={
           <View style={styles.subtitleRow}>
-            <Text numberOfLines={1} style={styles.rowSubtitle}>
+            <Text numberOfLines={expanded ? undefined : 1} style={styles.rowSubtitle}>
               {`${pet ? `${pet.name} · ` : ""}${r.done ? "completed" : dueLabel(r.due)}`}
             </Text>
             {r.repeatKind && !r.done ? (
               <>
                 <Icon name="repeat" size={11} color={colors.label3} />
-                <Text numberOfLines={1} style={styles.rowSubtitle}>
+                <Text numberOfLines={expanded ? undefined : 1} style={styles.rowSubtitle}>
                   {repeatLabel(r.repeatKind, r.repeatInterval)}
                 </Text>
               </>
