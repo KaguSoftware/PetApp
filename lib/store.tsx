@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CareSchedule, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CareSchedule, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -146,6 +147,9 @@ interface Store {
   /** Create or replace a care schedule (matched by id). */
   setCareSchedule: (schedule: CareSchedule) => void;
   deleteCareSchedule: (scheduleId: string) => void;
+  /** Pin a one-tap logging shortcut to the Home screen. */
+  addShortcut: (input: Omit<Shortcut, "id" | "sort">) => void;
+  deleteShortcut: (shortcutId: string) => void;
   /** Record a vaccination; when `nextDue` is set a linked reminder is created with it. */
   addVaccination: (petId: string, input: { name: string; dateGiven: number; nextDue?: number; notes?: string }) => void;
   deleteVaccination: (petId: string, vaccinationId: string) => void;
@@ -179,6 +183,7 @@ const EMPTY_STATE: AppState = {
   activities: [],
   reminders: [],
   schedules: [],
+  shortcuts: [],
   bookedVet: false,
   bookedVetIds: [],
   seenWelcome: true,
@@ -480,6 +485,40 @@ function mapScheduleRow(r: CareScheduleRow): CareSchedule {
   };
 }
 
+type ShortcutRow = {
+  id: string;
+  pet_ids: string[] | null;
+  action_type: ActionType;
+  med_id: string | null;
+  icon: string;
+  label: string | null;
+  portion_frac: number | null;
+  sort: number | null;
+};
+
+function mapShortcutRow(r: ShortcutRow): Shortcut {
+  return {
+    id: r.id,
+    petIds: Array.isArray(r.pet_ids) ? r.pet_ids : [],
+    type: r.action_type,
+    medId: r.med_id ?? undefined,
+    icon: r.icon,
+    label: r.label ?? undefined,
+    portionFrac: r.portion_frac != null ? Number(r.portion_frac) : undefined,
+    sort: r.sort ?? 0,
+  };
+}
+
+// On-device fallback store for shortcuts, used only when the `shortcuts` table
+// (migration 0018) isn't applied yet. Keyed by household so the tiles survive
+// app restarts — "it stays on the home page" — until the shared table exists.
+const shortcutsLocalKey = (householdId: string) => `petpal.shortcuts.${householdId}`;
+function writeShortcutsLocal(householdId: string, list: Shortcut[]) {
+  AsyncStorage.setItem(shortcutsLocalKey(householdId), JSON.stringify(list)).catch((e) =>
+    console.error("[petpal] shortcuts local cache write failed:", e)
+  );
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(EMPTY_STATE);
   // Bumped to force a full re-hydration (the native stand-in for the web's
@@ -506,6 +545,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // CRUD then stays local-only and activity inserts omit med_id, so the app
   // degrades to the count-target behavior instead of failing writes.
   const scheduleSchemaRef = useRef(false);
+  // True when the shortcuts table (migration 0018) is missing — shortcut CRUD
+  // then persists to an on-device AsyncStorage cache instead of the shared
+  // table, so Home shortcuts still survive restarts (just not shared yet).
+  const shortcutSchemaRef = useRef(false);
   const notifiedActivityIdsRef = useRef<Set<string>>(new Set());
   // setTimeout ids for the staggered "what everyone else did" toast batch
   // (see notifyRecentActivity below) — lets stopNotifications cancel any
@@ -905,15 +948,71 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         scheduleSchemaRef.current = false;
         return ((res.data as CareScheduleRow[] | null) ?? []).map(mapScheduleRow);
       };
+      // Shortcuts are fetched separately too (not embedded in HOUSEHOLD_SELECT)
+      // for the same reason: a pre-0018 DB degrades shortcuts alone, and when
+      // the table is missing we read the on-device cache so Home still shows the
+      // family's most-recent-on-this-device tiles.
+      const fetchShortcuts = async (id: string): Promise<Shortcut[]> => {
+        const res = await supabase.from("shortcuts").select("*").eq("household_id", id);
+        if (res.error) {
+          console.warn("[petpal] shortcuts table unavailable — apply migration 0018; using on-device cache for now");
+          shortcutSchemaRef.current = true;
+          try {
+            const raw = await AsyncStorage.getItem(shortcutsLocalKey(id));
+            return raw ? (JSON.parse(raw) as Shortcut[]) : [];
+          } catch (e) {
+            console.error("[petpal] shortcuts local cache read failed:", e);
+            return [];
+          }
+        }
+        shortcutSchemaRef.current = false;
+        const rows = ((res.data as ShortcutRow[] | null) ?? []).map(mapShortcutRow);
+        // One-time lift: if this device cached shortcuts while the table didn't
+        // exist yet, push the ones the server is missing and drop the cache —
+        // making good on the "syncs once the database is updated" promise. Only
+        // runs when a local cache is actually present, so the normal path is untouched.
+        try {
+          const raw = await AsyncStorage.getItem(shortcutsLocalKey(id));
+          if (raw) {
+            const local = JSON.parse(raw) as Shortcut[];
+            const missing = local.filter((l) => !rows.some((r) => r.id === l.id));
+            if (missing.length > 0) {
+              const { error } = await supabase.from("shortcuts").insert(
+                missing.map((s) => ({
+                  id: s.id,
+                  household_id: id,
+                  pet_ids: s.petIds,
+                  action_type: s.type,
+                  med_id: s.medId ?? null,
+                  icon: s.icon,
+                  label: s.label ?? null,
+                  portion_frac: s.portionFrac ?? null,
+                  sort: s.sort,
+                }))
+              );
+              if (error) throw error;
+              rows.push(...missing);
+            }
+            await AsyncStorage.removeItem(shortcutsLocalKey(id));
+          }
+        } catch (e) {
+          // Keep the cache so the lift retries next load; the rows we already
+          // have still render this session.
+          console.error("[petpal] shortcuts local→shared lift failed (will retry):", e);
+        }
+        return rows.sort((a, b) => a.sort - b.sort);
+      };
 
       let household: HouseholdRow | null = null;
       let householdErr: { code?: string; message?: string; details?: string; hint?: string } | null = null;
       let schedules: CareSchedule[] = [];
+      let shortcuts: Shortcut[] = [];
       if (activeId) {
-        const [res, sched] = await Promise.all([fetchHousehold(activeId), fetchSchedules(activeId)]);
+        const [res, sched, cuts] = await Promise.all([fetchHousehold(activeId), fetchSchedules(activeId), fetchShortcuts(activeId)]);
         household = res.data;
         householdErr = res.error;
         schedules = sched;
+        shortcuts = cuts;
       }
       if (householdErr) console.error("[petpal] household fetch failed:", describeErr(householdErr) ?? householdErr);
 
@@ -940,9 +1039,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       const h = finalHousehold;
       householdIdRef.current = h.id;
-      // Bootstrap (or a household-id change) skipped the parallel schedules
-      // fetch above — probe now so scheduleSchemaRef reflects this DB.
-      if (h.id !== activeId) schedules = await fetchSchedules(h.id);
+      // Bootstrap (or a household-id change) skipped the parallel schedules/
+      // shortcuts fetches above — probe now so the schema refs reflect this DB.
+      if (h.id !== activeId) {
+        [schedules, shortcuts] = await Promise.all([fetchSchedules(h.id), fetchShortcuts(h.id)]);
+      }
 
       const members = [...(h.members ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
       const petRows = [...(h.pets ?? [])].sort((a: PetRow & { created_at: string }, b: PetRow & { created_at: string }) =>
@@ -1070,6 +1171,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         activities: activityList,
         reminders: reminderList,
         schedules,
+        shortcuts,
         bookedVet: bookedVets.length > 0,
         bookedVetIds: bookedVets.map((b) => b.vet_id),
         seenWelcome: h.seen_welcome,
@@ -2060,21 +2162,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (petId: string, medId: string) => {
       const removed = stateRef.current.pets.find((p) => p.id === petId)?.meds.find((m) => m.id === medId);
       if (!removed) return;
-      // The DB cascades care_schedules rows on med delete — mirror that in
-      // local state (and put them back on undo, before commit runs).
+      // The DB cascades care_schedules AND shortcuts rows on med delete — mirror
+      // both in local state (and put them back on undo, before commit runs).
       const removedSchedules = stateRef.current.schedules.filter((s) => s.medId === medId);
+      const removedShortcuts = stateRef.current.shortcuts.filter((s) => s.medId === medId);
       undoableDelete({
         remove: () =>
           setState((prev) => ({
             ...prev,
             pets: prev.pets.map((p) => (p.id === petId ? { ...p, meds: p.meds.filter((m) => m.id !== medId) } : p)),
             schedules: prev.schedules.filter((s) => s.medId !== medId),
+            shortcuts: prev.shortcuts.filter((s) => s.medId !== medId),
           })),
         restore: () =>
           setState((prev) => ({
             ...prev,
             pets: prev.pets.map((p) => (p.id === petId && !p.meds.some((m) => m.id === medId) ? { ...p, meds: [...p.meds, removed] } : p)),
             schedules: [...prev.schedules.filter((s) => s.medId !== medId), ...removedSchedules],
+            shortcuts: [...prev.shortcuts.filter((s) => s.medId !== medId), ...removedShortcuts].sort((a, b) => a.sort - b.sort),
           })),
         commit: () => supabase.from("meds").delete().eq("id", medId).then(),
         message: `${removed.name} removed`,
@@ -2130,6 +2235,62 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       persist(supabase.from("care_schedules").delete().eq("id", scheduleId), {
         rollback: () => setState((prev) => ({ ...prev, schedules: [...prev.schedules, removed] })),
         message: "Couldn't remove the schedule",
+      });
+    },
+    [supabase, persist]
+  );
+
+  const addShortcut = useCallback(
+    (input: Omit<Shortcut, "id" | "sort">) => {
+      const h = hid();
+      if (!h) return;
+      const id = Crypto.randomUUID();
+      const sort = stateRef.current.shortcuts.reduce((max, s) => Math.max(max, s.sort), -1) + 1;
+      const shortcut: Shortcut = { ...input, id, sort };
+      const nextList = [...stateRef.current.shortcuts, shortcut];
+      setState((prev) => ({ ...prev, shortcuts: [...prev.shortcuts, shortcut] }));
+      if (shortcutSchemaRef.current) {
+        // Table missing (migration 0018 not applied) — cache on-device so the
+        // tile survives restarts, and be honest it won't reach the family yet.
+        writeShortcutsLocal(h, nextList);
+        toast("alert", "Shortcut saved on this device", "It'll sync to the family once the app's database is updated");
+        return;
+      }
+      persist(
+        supabase.from("shortcuts").insert({
+          id,
+          household_id: h,
+          pet_ids: shortcut.petIds,
+          action_type: shortcut.type,
+          med_id: shortcut.medId ?? null,
+          icon: shortcut.icon,
+          label: shortcut.label ?? null,
+          portion_frac: shortcut.portionFrac ?? null,
+          sort,
+        }),
+        {
+          rollback: () => setState((prev) => ({ ...prev, shortcuts: prev.shortcuts.filter((s) => s.id !== id) })),
+          message: "Couldn't save the shortcut",
+        }
+      );
+    },
+    [supabase, persist, toast]
+  );
+
+  const deleteShortcut = useCallback(
+    (shortcutId: string) => {
+      const h = hid();
+      const removed = stateRef.current.shortcuts.find((s) => s.id === shortcutId);
+      if (!removed) return;
+      const nextList = stateRef.current.shortcuts.filter((s) => s.id !== shortcutId);
+      setState((prev) => ({ ...prev, shortcuts: prev.shortcuts.filter((s) => s.id !== shortcutId) }));
+      if (shortcutSchemaRef.current) {
+        if (h) writeShortcutsLocal(h, nextList);
+        return;
+      }
+      persist(supabase.from("shortcuts").delete().eq("id", shortcutId), {
+        rollback: () => setState((prev) => ({ ...prev, shortcuts: [...prev.shortcuts, removed].sort((a, b) => a.sort - b.sort) })),
+        message: "Couldn't remove the shortcut",
       });
     },
     [supabase, persist]
@@ -2478,6 +2639,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         deleteMed,
         setCareSchedule,
         deleteCareSchedule,
+        addShortcut,
+        deleteShortcut,
         addVaccination,
         deleteVaccination,
         addVetVisit,

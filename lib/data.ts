@@ -141,6 +141,34 @@ export interface CareScheduleSlot {
   grams?: number;
 }
 
+/**
+ * A one-tap logging shortcut pinned to the Home screen — a repeated care log
+ * reduced to a single tap. Shared across the household when the `shortcuts`
+ * table exists (migration 0018); otherwise cached on-device so the tiles still
+ * survive app restarts until the migration is applied.
+ */
+export interface Shortcut {
+  id: string;
+  /** Every pet this one tap logs for — a single pet, or the whole household
+   *  ("Fed all"). Meds shortcuts are always exactly one pet, since a medication
+   *  belongs to a specific pet. */
+  petIds: string[];
+  type: ActionType;
+  /** Set only for type "meds" when a specific medication was chosen. */
+  medId?: string;
+  /** Chosen glyph — an IconName, kept as string to avoid a data↔icons cycle. */
+  icon: string;
+  /** Custom tile label; when absent the tile derives one from the action/med. */
+  label?: string;
+  /** Portion for a "fed" shortcut, as a fraction of one cup. Grams are derived
+   *  PER PET at log time (cupGrams differs per pet), so one bulk tap feeds a cat
+   *  and a dog their own correct amounts. Absent on a single-pet "fed" shortcut
+   *  means "ask each time" — tapping opens the portion picker instead. */
+  portionFrac?: number;
+  /** Ascending display order on the Home grid. */
+  sort: number;
+}
+
 /** A per-pet schedule for one care action (or one medication when medId is set). */
 export interface CareSchedule {
   id: string;
@@ -243,6 +271,8 @@ export interface AppState {
   reminders: Reminder[];
   /** Care schedules for every pet in the household (feeding times, med doses, …). */
   schedules: CareSchedule[];
+  /** Home-screen one-tap logging shortcuts for the household. */
+  shortcuts: Shortcut[];
   bookedVet: boolean;
   bookedVetIds: string[];
   seenWelcome: boolean;
@@ -266,6 +296,28 @@ export const ACTIONS: Record<ActionType, { label: string; emoji: string; verb: s
   meds: { label: "Meds", emoji: "💊", verb: "gave meds to" },
   vet: { label: "Vet", emoji: "🩺", verb: "took to the vet" },
 };
+
+/** The pets a shortcut actually logs for, filtered to ones that still exist. */
+export function shortcutPets(shortcut: Shortcut, pets: Pet[]): Pet[] {
+  return pets.filter((p) => shortcut.petIds.includes(p.id));
+}
+
+/** The tile label for a shortcut: its custom label, else the med name, else the
+ *  action label ("Fed", "Water", …) with "all" appended when it covers every
+ *  pet. Pet identity is carried by the tile's avatar badges, so the label names
+ *  the action, not each pet. */
+export function shortcutTileLabel(shortcut: Shortcut, pets: Pet[]): string {
+  const custom = shortcut.label?.trim();
+  if (custom) return custom;
+  const covered = shortcutPets(shortcut, pets);
+  if (shortcut.type === "meds" && shortcut.medId) {
+    const med = covered[0]?.meds.find((m) => m.id === shortcut.medId);
+    if (med) return med.name;
+  }
+  const base = ACTIONS[shortcut.type].label;
+  if (pets.length > 1 && covered.length === pets.length) return `${base} all`;
+  return base;
+}
 
 export const COSMETICS: Cosmetic[] = [
   { id: "tophat", name: "Top Hat", emoji: "🎩", price: 120, slot: "head" },

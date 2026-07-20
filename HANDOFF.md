@@ -271,6 +271,36 @@ What exists:
 - **Phase 5** Pet detail (identity/weight chart/supplies/meds/vaccinations/vet visits/delete), emergency card with native Share, Care Plan tab (checklist, breed guides, custom plans, premium gate), Home (swipeable hero, meals bar, attention banner), Welcome, settings hub + family/account/general/accessibility, vets marketplace, join landing.
 - **Phase 6** `PurchasesGateway` + mock (`providers/purchases/`), Paywall through the gateway, migration 0015, Edge Functions (`delete-account`, `send-due-reminders`, `rc-webhook`), `lib/pushTokens.ts`.
 
+### Home shortcuts + tagged reminders + supply highlights (2026-07-20, owner request) — built, statically verified, NEEDS device walkthrough + migration 0018
+
+Three Home additions (owner: "/impeccable + /ui-ux-pro-max"). `tsc --noEmit` clean, `expo lint`
+clean, iOS + Android both bundle (8.63 MB each).
+
+- **Shortcuts** (`components/ShortcutsSection.tsx` + `ShortcutBuilderSheet.tsx`, new): a launcher
+  grid of one-tap care logs pinned to Home. Builder = pick pet(s) → action → (portion / med) →
+  icon → label. **Multi-select pets** — one tile can bulk-log the whole household ("Fed all");
+  grams are sized to EACH pet's own `cupGrams` at log time (a cat and a dog get their own correct
+  amounts). Fed offers a baked portion (true 1-tap) OR, single-pet only, "Ask each time" → opens
+  `FeedPortionSheet`. Edit toggle reveals per-tile remove badges; tiles show up to 2 pet avatars +
+  "+N". Teaching empty state. Tap logs via `logAction` (per pet), 900 ms check flash (reduce-motion
+  aware).
+- **Reminders unlocked from the hero pet** (`app/(tabs)/home/index.tsx`): the section now lists the
+  next 3 upcoming reminders across ALL pets, each row tagged with a pet avatar + a name chip. "See
+  all" → `/reminders`. Removed the old single-pet next-reminder row + overdue sheet (the attention
+  banner still summarizes alerts).
+- **Highlights** (`components/HighlightsSection.tsx`, new): collective Food + Litter levels across
+  every pet (grouped by supply icon bowl/broom). Each card shows the worst-off supply's meter +
+  status band (Well stocked / Getting low / Restock soon) as the "next purchase" cue; tap → that
+  pet's detail (where restock lives). Hidden when a category has no supplies.
+- **Store/schema**: `Shortcut` type + `state.shortcuts` (`lib/data.ts`); `addShortcut` /
+  `deleteShortcut`, hydration `fetchShortcuts` (`lib/store.tsx`). **Migration `0018_shortcuts.sql`
+  NOT YET APPLIED** (same CLI-access blocker as 0017). Degrades exactly like schedules: when the
+  table is missing, shortcuts persist to an on-device AsyncStorage cache (keyed by household) so
+  they still survive restarts, with an honest toast. When the table later appears, a one-time
+  local→shared lift in `fetchShortcuts` uploads the cached rows and clears the cache. `pet_ids` is
+  a `uuid[]` (not an FK column) so one tile can cover many pets; deleteMed cascades shortcuts
+  locally, deleted-pet rows are pruned by a render guard.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
 - `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.

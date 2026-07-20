@@ -15,13 +15,15 @@ import Animated, {
 import EmptyState from "@/components/EmptyState";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
+import HighlightsSection from "@/components/HighlightsSection";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
+import ShortcutsSection from "@/components/ShortcutsSection";
 import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
-import { Chevron, Chip, ConfirmRow, Group, PressableScale, PRESS_SCALE_SMALL, Row, SectionHeader, SheetTitle } from "@/components/ui";
+import { Chevron, Chip, Group, IconCircle, PressableScale, PRESS_SCALE_SMALL, Row, SectionHeader, SheetTitle } from "@/components/ui";
 import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
 import { effectiveDailyTarget } from "@/lib/careStatus";
 import { useReduceMotion } from "@/lib/a11y";
@@ -94,15 +96,13 @@ function MealsBar({ pct }: { pct: number }) {
 }
 
 export default function Home() {
-  const { state, hydrated, addWeight, editPet, toast, clearOverdueReminders } = useStore();
+  const { state, hydrated, addWeight, editPet, toast } = useStore();
   const router = useRouter();
   const refreshControl = usePullToRefresh();
   const [petIndex, setPetIndex] = useState(0);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
-  const [remindersOpen, setRemindersOpen] = useState(false);
-  const [expandedReminderId, setExpandedReminderId] = useState<string | null>(null);
 
   // Hero carousel. The card itself is a fixed frame that never moves; inside it
   // a track holding every pet slides horizontally, so one pet pushes the next
@@ -274,8 +274,9 @@ export default function Home() {
   // duplicates) — Home shows one calm summary line, the details live on /activity.
   const alertCount = new Set(state.reminders.filter((r) => r.alert && !r.done).map((r) => `${r.petId}|${r.title}`)).size;
 
-  const nextReminder = state.reminders.filter((r) => !r.done && r.petId === pet.id).sort((a, b) => a.due - b.due)[0];
-  const overdueReminders = state.reminders.filter((r) => !r.done && r.due < Date.now()).sort((a, b) => a.due - b.due);
+  // Reminders are household-wide, NOT scoped to the pet in the hero — every
+  // pet's next few items share one list, each row tagged with whose it is.
+  const upcomingReminders = state.reminders.filter((r) => !r.done).sort((a, b) => a.due - b.due).slice(0, 3);
 
   const hour = new Date().getHours();
   const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${me?.name}`;
@@ -399,69 +400,77 @@ export default function Home() {
         </PressableScale>
       )}
 
-      {/* Next up */}
-      <SectionHeader style={{ marginTop: 32 }}>Reminders</SectionHeader>
-      <Group>
-        <Row
-          onPress={() => setRemindersOpen(true)}
-          leading={
-            <View style={styles.nextUpIcon}>
-              <Icon name="clock" size={19} color={colors.accent} />
-            </View>
-          }
-          title={nextReminder ? nextReminder.title : "No upcoming reminders"}
-          subtitle={
-            nextReminder
-              ? `${pet.name} · ${dueLabel(nextReminder.due) === "overdue" ? "overdue" : `due ${dueLabel(nextReminder.due)}`}`
-              : "Tap to add one for the family"
-          }
-          trailing={<Chevron />}
-        />
-      </Group>
+      {/* One-tap logging for the things this family does every day */}
+      <ShortcutsSection />
 
-      {/* Reminders overview: past-due items + a one-tap bulk clear */}
-      <Sheet open={remindersOpen} onClose={() => setRemindersOpen(false)}>
-        <View style={{ marginBottom: 12 }}>
-          <SheetTitle>Reminders</SheetTitle>
-        </View>
-        {overdueReminders.length > 0 ? (
-          <Group>
-            {overdueReminders.map((r) => {
-              const expanded = expandedReminderId === r.id;
-              return (
-                <Row
-                  key={r.id}
-                  title={
-                    <Text numberOfLines={expanded ? undefined : 1} style={styles.remindersRowTitle}>
-                      {r.title}
+      {/* Collective supply levels — what needs buying next */}
+      <HighlightsSection />
+
+      {/* Every pet's next reminders, each tagged with whose it is */}
+      <SectionHeader
+        trailing={
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            onPress={() => router.push("/reminders")}
+            accessibilityRole="button"
+            accessibilityLabel="See all reminders"
+            hitSlop={10}
+          >
+            <Text style={styles.seeAll}>See all</Text>
+          </PressableScale>
+        }
+      >
+        Reminders
+      </SectionHeader>
+      <Group>
+        {upcomingReminders.length > 0 ? (
+          upcomingReminders.map((r) => {
+            const rPet = state.pets.find((p) => p.id === r.petId);
+            const overdue = dueLabel(r.due) === "overdue";
+            return (
+              <Row
+                key={r.id}
+                onPress={() => router.push("/reminders")}
+                leading={
+                  rPet ? (
+                    <PetAvatar pet={rPet} size="sm" showCosmetics={false} />
+                  ) : (
+                    <IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} size={40} />
+                  )
+                }
+                title={
+                  <Text numberOfLines={1} style={[styles.reminderTitle, r.alert ? { color: colors.red } : null]}>
+                    {r.title}
+                  </Text>
+                }
+                subtitle={
+                  <View style={styles.reminderTagRow}>
+                    {rPet ? (
+                      <View style={styles.petTag}>
+                        <Text numberOfLines={1} style={styles.petTagLabel}>
+                          {rPet.name}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text numberOfLines={1} style={[styles.reminderDue, overdue ? { color: colors.red } : null]}>
+                      {overdue ? "overdue" : `due ${dueLabel(r.due)}`}
                     </Text>
-                  }
-                  subtitle={
-                    <Text numberOfLines={expanded ? undefined : 1} style={styles.remindersRowSubtitle}>
-                      {state.pets.find((p) => p.id === r.petId)?.name}
-                    </Text>
-                  }
-                  onPress={() => setExpandedReminderId(expanded ? null : r.id)}
-                />
-              );
-            })}
-          </Group>
+                  </View>
+                }
+                trailing={<Chevron />}
+              />
+            );
+          })
         ) : (
-          <Text style={styles.remindersEmpty}>No past-due reminders.</Text>
+          <Row
+            onPress={() => router.push("/reminders")}
+            leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} size={40} />}
+            title="No upcoming reminders"
+            subtitle="Tap to add one for the family"
+            trailing={<Chevron />}
+          />
         )}
-        {overdueReminders.length > 0 && (
-          <Group style={{ marginTop: 16 }}>
-            <ConfirmRow
-              label="Clear all"
-              confirmLabel="Tap again to clear all"
-              onConfirm={() => {
-                clearOverdueReminders();
-                setRemindersOpen(false);
-              }}
-            />
-          </Group>
-        )}
-      </Sheet>
+      </Group>
 
       {/* Switch pet */}
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
@@ -532,9 +541,20 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  remindersEmpty: { fontSize: 15, fontFamily: font.regular, color: colors.label2, paddingHorizontal: 4, paddingVertical: 8 },
-  remindersRowTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-  remindersRowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
+  seeAll: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
+  reminderTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+  reminderTagRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  // The per-pet tag: a compact chip so a household-wide list still reads as
+  // "whose is this?" at a glance.
+  petTag: {
+    maxWidth: 120,
+    borderRadius: radius.full,
+    backgroundColor: colors.fill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  petTagLabel: { fontSize: 11.5, fontFamily: font.semibold, color: colors.label2 },
+  reminderDue: { fontSize: 13, fontFamily: font.regular, color: colors.label2, flexShrink: 1 },
   streakPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -583,5 +603,4 @@ const styles = StyleSheet.create({
   },
   alertIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
   alertLabel: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: font.semibold, color: colors.red },
-  nextUpIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
 });
