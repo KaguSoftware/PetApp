@@ -168,6 +168,50 @@ function CareGuides() {
   );
 }
 
+/**
+ * Reminders + vet marketplace, reachable from the Care tab.
+ *
+ * Both routes previously lived ONLY behind the bell (Activity), which made them
+ * effectively hidden — "notifications" is not where someone looks to book a vet
+ * or plan a task. They sit here too, next to the care plan they belong to, and
+ * are rendered on BOTH the premium and locked paths: booking a vet and setting
+ * a reminder are not premium features, so the paywall must not bury them.
+ */
+function CareLinks({ petId, petName }: { petId: string; petName: string }) {
+  const router = useRouter();
+  const { state } = useStore();
+  const open = state.reminders.filter((r) => !r.done && r.petId === petId);
+  const overdue = open.filter((r) => r.due < Date.now()).length;
+  const forWhom = ` for ${petName}`;
+  return (
+    <>
+      <SectionHeader>Tasks &amp; care</SectionHeader>
+      <Group>
+        <Row
+          onPress={() => router.push("/reminders")}
+          leading={<IconCircle icon="bell" tint={colors.orange} bg={colors.orangeSoft} />}
+          title="Reminders"
+          subtitle={
+            open.length === 0
+              ? "Nothing scheduled — tap to add one"
+              : overdue > 0
+                ? `${overdue} overdue · ${open.length} open${forWhom}`
+                : `${open.length} open${forWhom}`
+          }
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={() => router.push("/vets")}
+          leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}
+          title="Find a vet"
+          subtitle="Browse clinics and request an appointment"
+          trailing={<Chevron />}
+        />
+      </Group>
+    </>
+  );
+}
+
 export default function PlanPage() {
   const router = useRouter();
   const { state, hydrated, editPet, logAction, toast } = useStore();
@@ -263,6 +307,8 @@ export default function PlanPage() {
           </View>
         </View>
         <CareGuides />
+        {/* Not gated: reminders and vet booking are free features. */}
+        <CareLinks petId={pet.id} petName={pet.name} />
         <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
       </TabScreen>
     );
@@ -299,6 +345,8 @@ export default function PlanPage() {
       </Sheet>
 
       <CareGuides />
+
+      <CareLinks petId={pet.id} petName={pet.name} />
 
       {plan ? (
         <>

@@ -202,11 +202,36 @@ export function effectiveDailyTarget(
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 /** Human summary of a schedule — "2× daily · 8:00 AM, 8:00 PM" / "Every 3 days · 9:00 AM". */
+/**
+ * A day-count cadence in the words people actually use. Long intervals are the
+ * point: a vet visit is "Every 6 months", never "Every 182 days". Shared by the
+ * schedule editor's chips and every subtitle that describes a saved schedule,
+ * so the two can never disagree.
+ */
+export function describeCadence(days: number): string {
+  if (days === 1) return "Daily";
+  if (days === 7) return "Weekly";
+  if (days === 14) return "Every 2 weeks";
+  if (days % 365 === 0) {
+    const y = days / 365;
+    return y === 1 ? "Yearly" : `Every ${y} years`;
+  }
+  // 28-31 days all mean "a month" to a person; 182 means "6 months".
+  const months = Math.round(days / 30.4);
+  if (days >= 28 && Math.abs(days - months * 30.4) <= 2) {
+    return months === 1 ? "Monthly" : `Every ${months} months`;
+  }
+  if (days % 7 === 0) return `Every ${days / 7} weeks`;
+  return `Every ${days} days`;
+}
+
 export function describeSchedule(s: CareSchedule): string {
   const times = s.slots.map((slot) => formatSlotTime(slot.time)).join(", ");
   if (s.intervalDays != null && s.intervalDays >= 1) {
-    const cadence = s.intervalDays === 1 ? "Daily" : `Every ${s.intervalDays} days`;
-    return times ? `${cadence} · ${times}` : cadence;
+    const cadence = describeCadence(s.intervalDays);
+    // Long cadences (a 6-monthly vet visit) don't need a time of day attached —
+    // "6 months · 8:00 AM" reads as though the hour matters, and it doesn't.
+    return times && s.intervalDays < 30 ? `${cadence} · ${times}` : cadence;
   }
   const daysLabel =
     s.daysMask === 127

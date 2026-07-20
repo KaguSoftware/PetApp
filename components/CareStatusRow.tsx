@@ -113,7 +113,11 @@ export default function CareStatusRow({
       : next
         ? `Next ${next.label ?? ""}${next.label ? " · " : ""}${timeLabelFuture(next.ts, now)}`
         : progress
-          ? `${progress.count} of ${progress.target} today`
+          ? // No schedule set — say so, so it's clear WHY this row shows no
+            // times and why its editor offers "Set schedule" rather than
+            // "Remove schedule". Without this an unscheduled item looks
+            // identical to a scheduled one with nothing currently due.
+            `${progress.count} of ${progress.target} today · Tap to schedule`
           : null;
 
   return (
