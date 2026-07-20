@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { useStore } from "@/lib/store";
 import { colors, font } from "@/lib/theme";
@@ -43,11 +43,16 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.card,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
+    // Keep the card background/border on Android; clear on iOS.
+    ...(Platform.OS === "android"
+      ? {
+          backgroundColor: colors.card,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.sep,
+        }
+      : null),
   },
   badge: {
     position: "absolute",

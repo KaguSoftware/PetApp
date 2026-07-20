@@ -68,9 +68,6 @@ const SPECIES_DEFAULTS: Record<"cat" | "dog", { weightKg: number; cupGrams: numb
 
 const GRID_STEP = 14;
 
-/** How far the slot button overhangs the pet, and the padding petBox adds to contain it. */
-const SLOT_INSET = 8;
-
 /** Arcade backdrop: soft radial glow near the top + faint 14px retro grid. */
 function ArcadeStage({ children, style }: { children: React.ReactNode; style?: object }) {
   const [dim, setDim] = useState({ w: 0, h: 0 });
@@ -165,7 +162,9 @@ export default function PetsScreen() {
   const refreshControl = usePullToRefresh();
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
-  const [openSheet, setOpenSheet] = useState<CosmeticSlot | "other" | null>(() => (searchParams.shop === "1" ? "other" : null));
+  const [accessoriesOpen, setAccessoriesOpen] = useState(() => searchParams.shop === "1");
+  // Which tab the accessories sheet shows: the head/hat slot, or "other" for everything else.
+  const [accessoryTab, setAccessoryTab] = useState<CosmeticSlot | "other">("head");
   const [addPetOpen, setAddPetOpen] = useState(false);
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
@@ -189,7 +188,11 @@ export default function PetsScreen() {
   };
 
   const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
-  const mainMeta = MAIN_SLOTS.find((s) => s.slot === openSheet);
+  const openAccessories = (tab: CosmeticSlot | "other") => {
+    setAccessoryTab(tab);
+    setAccessoriesOpen(true);
+  };
+  const mainMeta = MAIN_SLOTS.find((s) => s.slot === accessoryTab);
 
   if (!hydrated)
     return (
@@ -395,27 +398,6 @@ export default function PetsScreen() {
             <Animated.View style={[styles.petCenter, bumpStyle]}>
               <Pet3D pet={pet} size={200} />
             </Animated.View>
-
-            {/* Head slot button — shows the pixel hat when equipped. Kept
-                visible in 3D too so hat editing stays reachable; tucked into
-                the top-left corner there, mirroring the 3D toggle on the right. */}
-            {MAIN_SLOTS.map((s) => {
-              const equippedId = pet.equipped[s.slot];
-              return (
-                <PressableScale
-                  key={s.slot}
-                  scaleTo={PRESS_SCALE_SMALL}
-                  onPress={() => setOpenSheet(s.slot)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${s.label}: ${equippedId ? cosmetic(equippedId)?.name : "empty — tap to add"}`}
-                  style={[styles.slotButtonWrap, { left: 0, top: 0 }]}
-                >
-                  <View style={styles.slotButton}>
-                    {equippedId ? <PixelCosmetic id={equippedId} size={24} /> : <Icon name="plus" size={19} color={colors.label2} />}
-                  </View>
-                </PressableScale>
-              );
-            })}
           </View>
 
           <Text style={styles.dragHint}>Drag to spin</Text>
@@ -444,11 +426,11 @@ export default function PetsScreen() {
             <Chip>{`${pet.owned.length} items`}</Chip>
           </View>
 
-          {/* Other accessories */}
-          <PressableScale onPress={() => setOpenSheet("other")} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
+          {/* Accessories — opens a sheet with Hats / Other tabs */}
+          <PressableScale onPress={() => openAccessories("head")} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
             <View style={styles.otherButton}>
               <Icon name="bag" size={17} color={colors.label} />
-              <Text style={styles.otherButtonLabel}>Other accessories</Text>
+              <Text style={styles.otherButtonLabel}>Accessories</Text>
             </View>
           </PressableScale>
         </ArcadeStage>
@@ -465,48 +447,51 @@ export default function PetsScreen() {
         />
       </Group>
 
-      {/* Picker sheet */}
-      <Sheet open={openSheet !== null} onClose={() => setOpenSheet(null)}>
-        {openSheet === "other" ? (
-          <>
-            <View style={styles.sheetTitleRow}>
-              <SheetTitle>Other accessories</SheetTitle>
-              <CoinPill amount={state.coins} />
-            </View>
-            <SheetSubtitle>For {pet.name}</SheetSubtitle>
-            {OTHER_SLOTS.map((s) => (
-              <View key={s.slot}>
-                <SectionHeader>{s.hint}</SectionHeader>
-                <View style={styles.shopGrid}>
-                  {COSMETICS.filter((c) => c.slot === s.slot).map((c) => (
-                    <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
-                  ))}
-                </View>
+      {/* Accessories sheet — one place for Hats & other accessories, toggled at the top */}
+      <Sheet open={accessoriesOpen} onClose={() => setAccessoriesOpen(false)}>
+        <View style={styles.sheetTitleRow}>
+          <SheetTitle>Accessories</SheetTitle>
+          <CoinPill amount={state.coins} />
+        </View>
+        <SheetSubtitle>For {pet.name}</SheetSubtitle>
+        <View style={{ marginTop: 12, marginBottom: 4 }}>
+          <Segmented
+            options={[
+              { value: "head", label: "Hats" },
+              { value: "other", label: "Other accessories" },
+            ]}
+            value={accessoryTab === "other" ? "other" : "head"}
+            onChange={(v) => setAccessoryTab(v as CosmeticSlot | "other")}
+          />
+        </View>
+
+        {accessoryTab === "other" ? (
+          OTHER_SLOTS.map((s) => (
+            <View key={s.slot}>
+              <SectionHeader>{s.hint}</SectionHeader>
+              <View style={styles.shopGrid}>
+                {COSMETICS.filter((c) => c.slot === s.slot).map((c) => (
+                  <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
+                ))}
               </View>
-            ))}
-          </>
-        ) : openSheet && mainMeta ? (
-          <>
-            <View style={styles.sheetTitleRow}>
-              <SheetTitle>{mainMeta.hint}</SheetTitle>
-              <CoinPill amount={state.coins} />
             </View>
-            <SheetSubtitle>
-              For {pet.name} · {mainMeta.label.toLowerCase()} slot
-            </SheetSubtitle>
-            <View style={[styles.shopGrid, { marginTop: 16, paddingBottom: 8 }]}>
-              {COSMETICS.filter((c) => c.slot === openSheet).map((c) => (
+          ))
+        ) : mainMeta ? (
+          <>
+            <SectionHeader>{mainMeta.hint}</SectionHeader>
+            <View style={styles.shopGrid}>
+              {COSMETICS.filter((c) => c.slot === accessoryTab).map((c) => (
                 <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
               ))}
             </View>
-            {pet.equipped[openSheet] ? (
+            {pet.equipped[accessoryTab] ? (
               <Group style={{ marginTop: 8 }}>
                 <Row
                   onPress={() => {
-                    const c = cosmetic(pet.equipped[openSheet as CosmeticSlot]!);
+                    const c = cosmetic(pet.equipped[accessoryTab as CosmeticSlot]!);
                     if (c) toggle(c);
                   }}
-                  title={`Remove ${cosmetic(pet.equipped[openSheet as CosmeticSlot]!)?.name}`}
+                  title={`Remove ${cosmetic(pet.equipped[accessoryTab as CosmeticSlot]!)?.name}`}
                   destructive
                 />
               </Group>
@@ -562,34 +547,14 @@ const styles = StyleSheet.create({
   },
   stage: { alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 },
   // Sized to the 200pt pet PLUS the slot-button overhang on each side, so the
-  // button sits entirely INSIDE these bounds. It used to be offset to
-  // {left:-8, top:-8}, hanging 8pt outside the parent — and a child rendered
-  // outside its parent's bounds never receives touches on Android, so the hat
-  // slot was simply dead there. Negative margin keeps the pet's visual position
-  // and spacing unchanged.
   petBox: {
     position: "relative",
-    width: 200 + SLOT_INSET * 2,
-    height: 200 + SLOT_INSET * 2,
-    marginVertical: 28 - SLOT_INSET,
-    marginHorizontal: -SLOT_INSET,
+    width: 200,
+    height: 200,
+    marginVertical: 28,
   },
-  // Fills petBox so the 200pt pet stays optically centred inside the larger box.
+  // Fills petBox so the 200pt pet stays optically centred inside the box.
   petCenter: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  // elevation pairs with zIndex so Android (which orders by elevation, not
-  // zIndex) also hit-tests this above the GLView surface behind it.
-  slotButtonWrap: { position: "absolute", zIndex: 10, elevation: 10 },
-  slotButton: {
-    width: HIT,
-    height: HIT,
-    borderRadius: HIT / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-    ...cardShadow,
-  },
   dragHint: { marginTop: -16, marginBottom: 8, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
   petName: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
   petBreed: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
