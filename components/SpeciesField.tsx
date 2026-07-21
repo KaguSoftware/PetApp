@@ -1,32 +1,25 @@
-import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
-import { PressableScale, PRESS_SCALE_SMALL } from "@/components/ui";
+import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { colors, font, radius } from "@/lib/theme";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-/** Species the wheel offers, in display order. */
-const SPECIES: { value: "cat" | "dog"; label: string }[] = [
-  { value: "cat", label: "Cat" },
-  { value: "dog", label: "Dog" },
-];
-
-const LABELS = SPECIES.map((s) => s.label);
-const labelToValue = (label: string) => SPECIES.find((s) => s.label === label)?.value ?? "cat";
-const valueToLabel = (value: "cat" | "dog") => SPECIES.find((s) => s.value === value)?.label ?? "Cat";
+const SPECIES_LABELS: Record<"cat" | "dog", string> = { cat: "Cat", dog: "Dog" };
+const SPECIES_VALUES: Record<string, "cat" | "dog"> = { Cat: "cat", Dog: "dog" };
 
 /**
- * Animal picker, styled to match BreedField: a collapsed row showing the
- * current species with a chevron that rotates on expand, revealing a single
- * wheel column inline. Swapped in for the old Segmented control so animal and
- * breed read as one consistent wheel-based pair.
+ * Collapsed by default: a single tappable row showing the current species, a
+ * chevron that rotates to hint at the expand/collapse state. Tapping it
+ * reveals the species wheel inline; tapping again collapses it back down.
+ * Mirrors BreedField's interaction so Species and Breed feel consistent.
  */
 export default function SpeciesField({
   species,
-  onChange,
+  onChangeSpecies,
 }: {
   species: "cat" | "dog";
-  onChange: (s: "cat" | "dog") => void;
+  onChangeSpecies: (s: "cat" | "dog") => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -34,7 +27,7 @@ export default function SpeciesField({
     <View>
       <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => setOpen((o) => !o)}>
         <View style={styles.row}>
-          <Text style={styles.value}>{valueToLabel(species)}</Text>
+          <Text style={styles.value}>{SPECIES_LABELS[species]}</Text>
           <View style={{ transform: [{ rotate: open ? "90deg" : "0deg" }] }}>
             <Icon name="chevron-right" size={16} color={colors.label3} />
           </View>
@@ -44,9 +37,9 @@ export default function SpeciesField({
       {open ? (
         <View style={{ marginTop: 10 }}>
           <SingleWheelPicker
-            values={LABELS}
-            value={valueToLabel(species)}
-            onChange={(label) => onChange(labelToValue(label))}
+            values={["Cat", "Dog"]}
+            value={SPECIES_LABELS[species]}
+            onChange={(v) => onChangeSpecies(SPECIES_VALUES[v])}
           />
         </View>
       ) : null}

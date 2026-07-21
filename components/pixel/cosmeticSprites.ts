@@ -31,35 +31,35 @@ const P = (rows: string[], palette: Record<string, string>): Sprite => ({ rows, 
 export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   /* ---------- HEAD ---------- */
   tophat: {
-    place: { left: 0.28, top: -0.18, widthFrac: 0.44 },
+    place: { left: 0.22, top: -0.18, widthFrac: 0.56 },
     sprite: P(
       ["OOOOOO", "OBBBBO", "OBBBBO", "OBBBBO", "RRRRRR", "OOOOOO"],
       { O: "#1c1c26", B: "#33333f", R: "#d23b57" }
     ),
   },
   crown: {
-    place: { left: 0.3, top: -0.1, widthFrac: 0.4 },
+    place: { left: 0.24, top: -0.1, widthFrac: 0.52 },
     sprite: P(
       ["G.G.G", "GGGGG", "GJGJG", "GGGGG"],
       { G: "#f5c542", J: "#e0443f" }
     ),
   },
   cap: {
-    place: { left: 0.24, top: -0.06, widthFrac: 0.52 },
+    place: { left: 0.175, top: -0.06, widthFrac: 0.65 },
     sprite: P(
       [".RRRR..", "RRRRRR.", "RRRRRRR", "..WWWWW"],
       { R: "#2f7de0", W: "#1b4e93" }
     ),
   },
   party: {
-    place: { left: 0.34, top: -0.22, widthFrac: 0.32 },
+    place: { left: 0.29, top: -0.22, widthFrac: 0.42 },
     sprite: P(
       ["..Y..", "..P..", ".PPP.", ".GGG.", "BBBBB"],
       { Y: "#f5c542", P: "#e0443f", G: "#3fb56b", B: "#2f7de0" }
     ),
   },
   santa: {
-    place: { left: 0.26, top: -0.12, widthFrac: 0.48 },
+    place: { left: 0.2, top: -0.12, widthFrac: 0.6 },
     // All rows must be equal length or PixelSprite (which reads row[0] for width)
     // clips the wider brim — pad the hat body to the brim's 6-wide grid.
     sprite: P(
@@ -74,10 +74,10 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   // The cat's eyes span cols 3-12 of 16 (rows 7-8), so the frame covers the
   // full width of both eyes; the dog's are narrower and one row higher.
   sunglasses: {
-    place: { left: 0.125, top: 0.4, widthFrac: 0.75 },
+    place: { left: 0.025, top: 0.4, widthFrac: 0.95 },
     placeBySpecies: {
-      cat: { left: 0.125, top: 0.395, widthFrac: 0.75 },
-      dog: { left: 0.135, top: 0.35, widthFrac: 0.72 },
+      cat: { left: 0.025, top: 0.395, widthFrac: 0.95 },
+      dog: { left: 0.035, top: 0.35, widthFrac: 0.92 },
     },
     sprite: P(
       ["BBBB.BBBB", "BBBB.BBBB", "BBBBBBBBB", ".B.....B."],
@@ -85,10 +85,10 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
     ),
   },
   glasses: {
-    place: { left: 0.125, top: 0.4, widthFrac: 0.75 },
+    place: { left: 0.025, top: 0.4, widthFrac: 0.95 },
     placeBySpecies: {
-      cat: { left: 0.125, top: 0.395, widthFrac: 0.75 },
-      dog: { left: 0.135, top: 0.35, widthFrac: 0.72 },
+      cat: { left: 0.025, top: 0.395, widthFrac: 0.95 },
+      dog: { left: 0.035, top: 0.35, widthFrac: 0.92 },
     },
     sprite: P(
       ["OOOO.OOOO", "O..O.O..O", "OOOO.OOOO", ".O.....O."],
@@ -96,10 +96,10 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
     ),
   },
   monocle: {
-    place: { left: 0.5, top: 0.4, widthFrac: 0.3 },
+    place: { left: 0.45, top: 0.4, widthFrac: 0.4 },
     placeBySpecies: {
-      cat: { left: 0.56, top: 0.4, widthFrac: 0.3 },
-      dog: { left: 0.5, top: 0.36, widthFrac: 0.28 },
+      cat: { left: 0.51, top: 0.4, widthFrac: 0.4 },
+      dog: { left: 0.45, top: 0.36, widthFrac: 0.38 },
     },
     sprite: P(
       ["GGGG", "G..G", "GGGG", "..C."],
@@ -109,21 +109,21 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
 
   /* ---------- NECK ---------- */
   bowtie: {
-    place: { left: 0.34, top: 0.74, widthFrac: 0.32 },
+    place: { left: 0.29, top: 0.74, widthFrac: 0.42 },
     sprite: P(
       ["R.R", "RKR", "R.R"],
       { R: "#d23b57", K: "#8f2233" }
     ),
   },
   scarf: {
-    place: { left: 0.2, top: 0.72, widthFrac: 0.6 },
+    place: { left: 0.14, top: 0.72, widthFrac: 0.72 },
     sprite: P(
       ["GGGGGGGGG", "GGGGGGGGG", "...GG...."],
       { G: "#3fb56b" }
     ),
   },
   medal: {
-    place: { left: 0.4, top: 0.72, widthFrac: 0.2 },
+    place: { left: 0.36, top: 0.72, widthFrac: 0.28 },
     sprite: P(
       ["RR", "YY", "YY"],
       { R: "#2f7de0", Y: "#f5c542" }
@@ -132,24 +132,38 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
 
   /* ---------- BODY ---------- */
   tux: {
-    place: { left: 0.24, top: 0.8, widthFrac: 0.52 },
+    place: { left: 0.19, top: 0.8, widthFrac: 0.62 },
     sprite: P(
       ["OWWWWWO", "OOWKWOO", "OOOWOOO"],
       { O: "#1c1c26", W: "#f4f4f4", K: "#d23b57" }
     ),
   },
   shirt: {
-    place: { left: 0.24, top: 0.8, widthFrac: 0.52 },
+    place: { left: 0.19, top: 0.8, widthFrac: 0.62 },
     sprite: P(
       ["CYCYCYC", "YCYCYCY", "CYCYCYC"],
       { C: "#2fb5c9", Y: "#f5c542" }
     ),
   },
   cape: {
-    place: { left: 0.16, top: 0.78, widthFrac: 0.68 },
+    place: { left: 0.11, top: 0.78, widthFrac: 0.78 },
     sprite: P(
       ["RRRRRRRRR", "RRRRRRRRR", ".RRRRRRR.", "..RRRRR.."],
       { R: "#d23b57" }
+    ),
+  },
+
+  // Shop item (head slot, female-only) — sits beside the head rather than at
+  // the neck like the plain "bowtie" item, since it's headwear-slotted.
+  pinkBowtie: {
+    place: { left: 0.02, top: 0.28, widthFrac: 0.3 },
+    placeBySpecies: {
+      cat: { left: 0.0, top: 0.26, widthFrac: 0.3 },
+      dog: { left: 0.02, top: 0.24, widthFrac: 0.28 },
+    },
+    sprite: P(
+      ["P.P", "PKP", "P.P"],
+      { P: "#ff6fa5", K: "#c23f77" }
     ),
   },
 };

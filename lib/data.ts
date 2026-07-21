@@ -8,6 +8,8 @@ export interface Cosmetic {
   emoji: string;
   price: number;
   slot: CosmeticSlot;
+  /** When set, only shows up in — and can be bought/worn by — a pet whose sex matches. */
+  restrictSex?: "male" | "female";
 }
 
 export interface WeightPoint {
@@ -325,13 +327,14 @@ export const COSMETICS: Cosmetic[] = [
   { id: "cap", name: "Baseball Cap", emoji: "🧢", price: 60, slot: "head" },
   { id: "party", name: "Party Hat", emoji: "🥳", price: 80, slot: "head" },
   { id: "santa", name: "Cozy Beanie", emoji: "🎅", price: 90, slot: "head" },
+  { id: "pinkBowtie", name: "Pink Bow Tie", emoji: "🎀", price: 45, slot: "head", restrictSex: "female" },
   { id: "sunglasses", name: "Cool Shades", emoji: "🕶️", price: 70, slot: "face" },
   { id: "glasses", name: "Smart Glasses", emoji: "👓", price: 50, slot: "face" },
   { id: "monocle", name: "Monocle", emoji: "🧐", price: 110, slot: "face" },
   { id: "bowtie", name: "Bow Tie", emoji: "🎀", price: 45, slot: "neck" },
   { id: "scarf", name: "Winter Scarf", emoji: "🧣", price: 65, slot: "neck" },
   { id: "medal", name: "Good Pet Medal", emoji: "🏅", price: 150, slot: "neck" },
-  { id: "tux", name: "Tiny Tuxedo", emoji: "🤵", price: 300, slot: "body" },
+  { id: "tux", name: "Tiny Tuxedo", emoji: "🤵", price: 300, slot: "body", restrictSex: "male" },
   { id: "shirt", name: "Hawaiian Shirt", emoji: "👕", price: 85, slot: "body" },
   { id: "cape", name: "Hero Cape", emoji: "🦸", price: 200, slot: "body" },
 ];

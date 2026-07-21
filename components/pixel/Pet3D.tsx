@@ -7,8 +7,8 @@ import * as THREE from "three";
 import type { Pet } from "@/lib/data";
 import { colors } from "@/lib/theme";
 import { equippedCosmetics } from "./PixelPet";
+import { headSpriteForPet } from "./breedSprites";
 import { placementFor } from "./cosmeticSprites";
-import { CAT_FUR, CAT_SPRITE, DOG_FUR, DOG_SPRITE, furSprite } from "./petSprites";
 import type { Sprite } from "./PixelSprite";
 
 /**
@@ -58,16 +58,9 @@ function spriteVoxels(sprite: Sprite, overlays: { sprite: Sprite; left: number; 
   return { voxels, w, h };
 }
 
-/** The pet's HEAD/face sprite — the same square sprite the 2D stage showed. */
-function headSpriteFor(pet: Pet): Sprite {
-  const base = pet.species === "cat" ? CAT_SPRITE : DOG_SPRITE;
-  const fur = pet.species === "cat" ? CAT_FUR : DOG_FUR;
-  return furSprite(base, fur.body, fur.shade);
-}
-
 /** Builds a fresh voxel InstancedMesh for a pet's current head + cosmetics. */
 function buildPetMesh(pet: Pet): { mesh: THREE.InstancedMesh; fit: number } {
-  const head = headSpriteFor(pet);
+  const head = headSpriteForPet(pet);
   const hw = head.rows[0]?.length ?? 16;
   const hh = head.rows.length;
   const overlays = equippedCosmetics(pet).map(({ cos }) => {
@@ -118,10 +111,10 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   const groupRef = useRef<THREE.Group | null>(null);
   const meshRef = useRef<THREE.InstancedMesh | null>(null);
 
-  // Signature of the pet identity + species + equipped cosmetics → rebuild the
-  // voxel mesh in place whenever it changes: switch pets → the model swaps to
-  // that pet; put a hat on → the 3D model wears it.
-  const equipSig = `${pet.id}|${pet.species}|${Object.entries(pet.equipped)
+  // Signature of the pet identity + species + breed + equipped cosmetics →
+  // rebuild the voxel mesh in place whenever it changes: switch pets → the
+  // model swaps to that pet; put a hat on → the 3D model wears it.
+  const equipSig = `${pet.id}|${pet.species}|${pet.breed}|${Object.entries(pet.equipped)
     .filter(([, v]) => v)
     .map(([k, v]) => `${k}:${v}`)
     .sort()
