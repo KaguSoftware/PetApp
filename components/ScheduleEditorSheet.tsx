@@ -2,6 +2,7 @@ import * as Crypto from "expo-crypto";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
+import { DrillView } from "@/components/Motion";
 import { Icon } from "@/components/Icons";
 import { Stepper } from "@/components/TimeStepper";
 import { TimeWheelPicker } from "@/components/WheelPicker";
@@ -97,11 +98,28 @@ export default function ScheduleEditorSheet({
   // Index of the slot whose time is being picked — the sheet swaps to a
   // dedicated wheel view while this is set. Null = editing the schedule form.
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
+  // Direction of the last form↔picker swap, so DrillView slides the right way:
+  // forward drilling into the picker, back returning to the form.
+  const [drillDir, setDrillDir] = useState<"forward" | "back">("forward");
+  // False until the first in-sheet swap. Gates the slide so the FORM doesn't
+  // animate when the sheet first opens (its initial mount) — only the actual
+  // form↔picker swaps do. Reset when the sheet reopens (see the seed effect).
+  const [hasSwapped, setHasSwapped] = useState(false);
+  const openPicker = (i: number) => {
+    setHasSwapped(true);
+    setDrillDir("forward");
+    setPickingSlot(i);
+  };
+  const closePicker = () => {
+    setDrillDir("back");
+    setPickingSlot(null);
+  };
 
   // Re-seed the form from the stored schedule each time the sheet opens.
   useEffect(() => {
     if (!open) return;
     setPickingSlot(null);
+    setHasSwapped(false);
     if (existing) {
       setSlots(existing.slots.length > 0 ? existing.slots : [{ time: "08:00" }]);
       setDaysMask(existing.daysMask);
@@ -239,31 +257,30 @@ export default function ScheduleEditorSheet({
     </>
   );
 
+  const picking = pickingSlot != null && slots[pickingSlot] != null;
+
   // Time picking takes over the whole sheet instead of expanding a wheel inline
   // (which stretched the sheet and pushed the form around) and instead of a
-  // nested Sheet (two stacked RN Modals is a known-fragile pattern here).
-  // scrollable={false} while the wheel is up so the wheel's own ScrollView
-  // columns aren't fighting the sheet's scroller for the same pan.
-  if (pickingSlot != null && slots[pickingSlot]) {
-    const slot = slots[pickingSlot];
-    return (
-      <Sheet open={open} onClose={onClose} scrollable={false}>
-        <SheetTitle>{slot.label?.trim() ? slot.label : `Time ${pickingSlot + 1}`}</SheetTitle>
+  // nested Sheet (two stacked RN Modals is a known-fragile pattern here). It
+  // cross-slides in over the form via DrillView.
+  const pickerBody =
+    pickingSlot != null && slots[pickingSlot] ? (
+      <>
+        <SheetTitle>{slots[pickingSlot].label?.trim() ? slots[pickingSlot].label : `Time ${pickingSlot + 1}`}</SheetTitle>
         <SheetSubtitle>
           {label} · {pet.name}
         </SheetSubtitle>
         <View style={styles.pickerBody}>
-          <TimeWheelPicker value={slot.time} onChange={(time) => updateSlot(pickingSlot, { time })} />
+          <TimeWheelPicker value={slots[pickingSlot].time} onChange={(time) => updateSlot(pickingSlot, { time })} />
         </View>
         <SheetFooter>
-          <AccentButton onPress={() => setPickingSlot(null)}>Done</AccentButton>
+          <AccentButton onPress={closePicker}>Done</AccentButton>
         </SheetFooter>
-      </Sheet>
-    );
-  }
+      </>
+    ) : null;
 
-  return (
-    <Sheet open={open} onClose={onClose}>
+  const formBody = (
+    <>
       <SheetTitle>{label} schedule</SheetTitle>
       <SheetSubtitle>
         {longCadence
@@ -281,11 +298,11 @@ export default function ScheduleEditorSheet({
         {slots.map((slot, i) => (
           <View key={i} style={styles.slotBlock}>
             <View style={styles.slotRow}>
-              {/* Tapping the time opens a small dedicated picker sheet rather
-                  than expanding inline — an inline wheel grew this sheet's
-                  height and shoved the rest of the form around. */}
+              {/* Tapping the time drills into the wheel picker (DrillView slide
+                  below) rather than expanding inline — an inline wheel grew this
+                  sheet's height and shoved the rest of the form around. */}
               <PressableScale
-                onPress={() => setPickingSlot(i)}
+                onPress={() => openPicker(i)}
                 accessibilityRole="button"
                 accessibilityLabel={`Time ${i + 1}: ${formatSlotTime(slot.time)}. Tap to change`}
               >
@@ -378,11 +395,38 @@ export default function ScheduleEditorSheet({
           ) : null}
         </View>
       </SheetFooter>
+    </>
+  );
+
+  // One Sheet for both views so the transition happens INSIDE a single modal;
+  // DrillView (keyed on which view is up) cross-slides the form and the wheel
+  // picker. The FORM's initial mount (sheet just opened) is NOT animated — only
+  // the actual form↔picker swaps are (`hasSwapped`), so opening the sheet
+  // doesn't slide the form in. The picker is only ever reached by a tap, so it
+  // always animates. The sheet scrolls for the (tall) form and stops scrolling
+  // while the picker is up so the wheels' own vertical pan isn't fighting an
+  // outer scroller; `drillClip` hides the horizontal slide's overflow.
+  return (
+    <Sheet open={open} onClose={onClose} scrollable={!picking}>
+      <View style={styles.drillClip}>
+        {picking ? (
+          <DrillView key="picker" direction={drillDir}>
+            {pickerBody}
+          </DrillView>
+        ) : (
+          <DrillView key="form" direction={drillDir} animate={hasSwapped}>
+            {formBody}
+          </DrillView>
+        )}
+      </View>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
+  // Clips the horizontal slide so a drilling view can't spill past the sheet's
+  // edges mid-transition.
+  drillClip: { overflow: "hidden" },
   slotList: { gap: 14 },
   slotBlock: { gap: 8 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },

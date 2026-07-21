@@ -32,7 +32,14 @@ export default function NotificationBell() {
       hitSlop={6}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
-      <Icon name="bell" size={21} color={colors.label} />
+      {/* The bell glyph's mass sits in the top half of its box (wide body up top,
+          thin clapper below), so geometric-centering leaves it reading ~2pt high
+          next to the gear (which is centered on cy=12). Nudge it down to align
+          the optical centers. iOS only — that's where the bigger 25pt icon made
+          the offset visible in the header row. */}
+      <View style={Platform.OS === "ios" ? { transform: [{ translateY: 2 }] } : null}>
+        <Icon name="bell" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />
+      </View>
       {count > 0 ? (
         <View style={styles.badge}>
           <Text style={styles.badgeLabel}>{count > 9 ? "9+" : count}</Text>
@@ -60,8 +67,15 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: -3,
-    right: -3,
+    // Android's native header (react-native-screens) clips headerRight to the
+    // control's own laid-out box — padding on an ANCESTOR view doesn't expand
+    // that clip region, it just shifts the row, so a badge hanging outside the
+    // bell's 38x38 pill still got its corner shaved regardless of outer
+    // padding. Pinning the badge fully INSIDE the pill (0/0 instead of -3/-3)
+    // means it never exceeds the control's own bounds, so there's nothing left
+    // for the native clip to cut — this holds on both platforms, iOS included.
+    top: 0,
+    right: 0,
     minWidth: 17,
     height: 17,
     borderRadius: 9,

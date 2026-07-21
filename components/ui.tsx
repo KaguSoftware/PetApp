@@ -18,7 +18,7 @@ import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { hapticsEnabled, useReduceMotion } from "@/lib/a11y";
-import { colors, font, radius } from "@/lib/theme";
+import { colors, font, radius, withAlpha } from "@/lib/theme";
 
 /**
  * Press-feedback system — the standard iOS control behavior: the pressed
@@ -328,7 +328,7 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
     prev.current = amount;
   }, [amount, scale, reduceMotion]);
   const pill = (
-    <Animated.View style={[styles.coinPill, anim]}>
+    <Animated.View style={[styles.coinPill, Platform.OS === "ios" && styles.coinPillOpaque, anim]}>
       <PixelSprite sprite={COIN_SPRITE} size={13} />
       <Text style={styles.coinPillLabel}>{amount.toLocaleString()}</Text>
     </Animated.View>
@@ -389,6 +389,17 @@ const styles = StyleSheet.create({
   segmentLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   segmentLabelActive: { color: colors.label },
   coinPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.full, backgroundColor: colors.orangeSoft, paddingHorizontal: 10, paddingVertical: 6 },
+  // The whole header-right group shares one iOS 26 Liquid Glass capsule. To keep
+  // the coin reading as its OWN container inset within that glass — rather than
+  // dissolving into it — give it an opaque, saturated warm fill and a hairline
+  // orange border. The stronger colour + edge define the chip against the glass
+  // material so it looks like a distinct pill sitting inside, next to the bare
+  // bell and gear.
+  coinPillOpaque: {
+    backgroundColor: "#f6d9b8",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(colors.orange, 0.45),
+  },
   coinPillLabel: { fontSize: 13, fontFamily: font.semibold, color: "#8a5a17", lineHeight: 14 },
 });
 
