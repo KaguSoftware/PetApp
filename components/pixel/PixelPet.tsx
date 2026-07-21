@@ -3,8 +3,8 @@ import { Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { cosmetic, type Pet } from "@/lib/data";
 import PixelSprite from "./PixelSprite";
+import { headSpriteForPet } from "./breedSprites";
 import { COSMETIC_SPRITES, placementFor, type CosmeticSprite } from "./cosmeticSprites";
-import { CAT_FUR, CAT_SPRITE, DOG_FUR, DOG_SPRITE, furSprite } from "./petSprites";
 
 /**
  * The pet's currently-equipped cosmetics that have a pixel sprite, in slot order.
@@ -15,6 +15,11 @@ export function equippedCosmetics(pet: Pet): { id: string; cos: CosmeticSprite }
     .map((id) => (id ? { id, cos: COSMETIC_SPRITES[id] } : null))
     .filter((x): x is { id: string; cos: CosmeticSprite } => !!x && !!x.cos);
 }
+
+// Floor so face/hat/etc. items stay legible on small avatar badges (list rows
+// use PetAvatar's xs/sm sizes), which would otherwise scale cosmetics down to
+// illegible specks.
+const MIN_COSMETIC_PX = 14;
 
 /** Gentle arcade idle wobble — pet world only, never UI chrome. */
 function IdleWrap({ size, children }: { size: number; children: React.ReactNode }) {
@@ -49,9 +54,7 @@ export default function PixelPet({
   idle?: boolean;
   showCosmetics?: boolean;
 }) {
-  const base = pet.species === "cat" ? CAT_SPRITE : DOG_SPRITE;
-  const fur = pet.species === "cat" ? CAT_FUR : DOG_FUR;
-  const sprite = furSprite(base, fur.body, fur.shade);
+  const sprite = headSpriteForPet(pet);
   const equipped = showCosmetics ? equippedCosmetics(pet) : [];
 
   const body = (
@@ -59,11 +62,12 @@ export default function PixelPet({
       <PixelSprite sprite={sprite} size={size} />
       {equipped.map(({ id, cos }) => {
         const place = placementFor(cos, pet.species);
+        const cosSize = Math.max(size * place.widthFrac, MIN_COSMETIC_PX);
         return (
           <PixelSprite
             key={id}
             sprite={cos.sprite}
-            size={size * place.widthFrac}
+            size={cosSize}
             style={{ position: "absolute", left: size * place.left, top: size * place.top }}
           />
         );

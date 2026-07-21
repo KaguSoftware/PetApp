@@ -12,6 +12,7 @@ import Pet3D from "@/components/pixel/Pet3D";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import BreedField from "@/components/BreedField";
+import SpeciesField from "@/components/SpeciesField";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -253,13 +254,9 @@ export default function PetsScreen() {
       <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
 
       <FieldLabel>Species</FieldLabel>
-      <Segmented
-        options={[
-          { value: "cat", label: "Cat" },
-          { value: "dog", label: "Dog" },
-        ]}
-        value={species}
-        onChange={(s) => {
+      <SpeciesField
+        species={species}
+        onChangeSpecies={(s) => {
           setSpecies(s);
           setBreed(BREEDS_BY_SPECIES[s][0]);
           setCustomBreed("");
@@ -470,7 +467,7 @@ export default function PetsScreen() {
             <View key={s.slot}>
               <SectionHeader>{s.hint}</SectionHeader>
               <View style={styles.shopGrid}>
-                {COSMETICS.filter((c) => c.slot === s.slot).map((c) => (
+                {COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictSex || c.restrictSex === pet.sex)).map((c) => (
                   <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
                 ))}
               </View>
@@ -480,7 +477,7 @@ export default function PetsScreen() {
           <>
             <SectionHeader>{mainMeta.hint}</SectionHeader>
             <View style={styles.shopGrid}>
-              {COSMETICS.filter((c) => c.slot === accessoryTab).map((c) => (
+              {COSMETICS.filter((c) => c.slot === accessoryTab && (!c.restrictSex || c.restrictSex === pet.sex)).map((c) => (
                 <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
               ))}
             </View>
