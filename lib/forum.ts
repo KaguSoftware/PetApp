@@ -12,12 +12,17 @@ import { supabase } from "@/lib/supabase";
 
 export type Species = "cat" | "dog";
 
+/** "question" is the original Ask-the-community post; "pet_care" covers general
+ *  pet-care posts AND caregiver service ads (flagged via `isCaregiverAd`). */
+export type ForumCategory = "question" | "pet_care";
+
 export interface ForumPost {
   id: string;
   authorUserId: string;
   authorHouseholdId: string;
-  species: Species;
-  breed: string;
+  // Null for caregiver-service ads, which aren't about one specific pet.
+  species: Species | null;
+  breed: string | null;
   title: string;
   body: string;
   score: number;
@@ -25,6 +30,8 @@ export interface ForumPost {
   /** Whether the signed-in user has upvoted this post. */
   votedByMe: boolean;
   createdAt: number;
+  category: ForumCategory;
+  isCaregiverAd: boolean;
 }
 
 export interface ForumAnswer {
@@ -44,19 +51,22 @@ export type FeedSort = "top" | "new";
 
 // PostgREST embeds. `my_vote` embeds only the caller's own vote row (RLS scopes
 // forum_votes to user_id = auth.uid()), so a non-empty array means "I upvoted".
-const POST_SELECT = "id, author_user_id, author_household_id, species, breed, title, body, score, created_at, answer_count:forum_answers(count), my_vote:forum_votes(id)";
+const POST_SELECT =
+  "id, author_user_id, author_household_id, species, breed, title, body, score, created_at, category, is_caregiver_ad, answer_count:forum_answers(count), my_vote:forum_votes(id)";
 const ANSWER_SELECT = "id, post_id, author_user_id, author_household_id, species, breed, body, score, created_at, my_vote:forum_votes(id)";
 
 type PostRow = {
   id: string;
   author_user_id: string;
   author_household_id: string;
-  species: Species;
-  breed: string;
+  species: Species | null;
+  breed: string | null;
   title: string;
   body: string;
   score: number;
   created_at: string;
+  category: ForumCategory;
+  is_caregiver_ad: boolean;
   answer_count: { count: number }[];
   my_vote: { id: string }[];
 };
@@ -87,6 +97,8 @@ function mapPost(r: PostRow): ForumPost {
     answerCount: r.answer_count?.[0]?.count ?? 0,
     votedByMe: (r.my_vote?.length ?? 0) > 0,
     createdAt: new Date(r.created_at).getTime(),
+    category: r.category,
+    isCaregiverAd: r.is_caregiver_ad,
   };
 }
 
@@ -105,9 +117,10 @@ function mapAnswer(r: AnswerRow): ForumAnswer {
   };
 }
 
-/** All posts, sorted by score ("top") or recency ("new"). */
-export async function fetchPosts(sort: FeedSort): Promise<ForumPost[]> {
+/** All posts, sorted by score ("top") or recency ("new"), optionally scoped to one category. */
+export async function fetchPosts(sort: FeedSort, category?: ForumCategory): Promise<ForumPost[]> {
   let q = supabase.from("forum_posts").select(POST_SELECT);
+  if (category) q = q.eq("category", category);
   q = sort === "top" ? q.order("score", { ascending: false }).order("created_at", { ascending: false }) : q.order("created_at", { ascending: false });
   const { data, error } = await q.limit(100);
   if (error) throw error;
@@ -126,14 +139,17 @@ export async function fetchPost(id: string): Promise<{ post: ForumPost; answers:
   return { post: mapPost(postData as PostRow), answers: ((answerData as AnswerRow[] | null) ?? []).map(mapAnswer) };
 }
 
-/** Create a question. `author_user_id` defaults to auth.uid() server-side. */
+/** Create a question or pet-care post (including caregiver ads). `author_user_id`
+ *  defaults to auth.uid() server-side. */
 export async function createPost(input: {
   householdId: string;
   petId: string | null;
-  species: Species;
-  breed: string;
+  species: Species | null;
+  breed: string | null;
   title: string;
   body: string;
+  category: ForumCategory;
+  isCaregiverAd?: boolean;
 }): Promise<string> {
   const id = Crypto.randomUUID();
   const { error } = await supabase.from("forum_posts").insert({
@@ -144,6 +160,8 @@ export async function createPost(input: {
     breed: input.breed,
     title: input.title,
     body: input.body,
+    category: input.category,
+    is_caregiver_ad: input.isCaregiverAd ?? false,
   });
   if (error) throw error;
   return id;

@@ -225,11 +225,21 @@ export default function PostDetail() {
       {/* Question header */}
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
-          <Chip style={styles.breedChipWrap}>
-            <Text style={styles.breedChip} numberOfLines={1}>
-              {speciesEmoji(post.species)} {post.breed}
-            </Text>
-          </Chip>
+          {post.isCaregiverAd ? (
+            <Chip style={styles.breedChipWrap}>
+              <Text style={styles.breedChip} numberOfLines={1}>
+                🤝 Caregiving service
+              </Text>
+            </Chip>
+          ) : post.species && post.breed ? (
+            <Chip style={styles.breedChipWrap}>
+              <Text style={styles.breedChip} numberOfLines={1}>
+                {speciesEmoji(post.species)} {post.breed}
+              </Text>
+            </Chip>
+          ) : (
+            <View />
+          )}
           <Text style={styles.family} numberOfLines={1}>
             {familyLabel(post.authorHouseholdId)}
           </Text>

@@ -4,6 +4,7 @@ import { Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-n
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import BreedField from "@/components/BreedField";
+import RoleField from "@/components/RoleField";
 import { PushedScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -28,10 +29,15 @@ import {
 import {
   BREEDS_BY_SPECIES,
   formatAge,
+  formatMemberRoles,
   formatWeight,
+  FUN_ROLE_EXAMPLES,
   isAdminRole,
   kgToUnit,
+  NO_FUN_ROLE,
   OTHER_BREED,
+  OTHER_ROLE,
+  parseMemberRoles,
   unitToKg,
   weightUnitLabel,
   type Member,
@@ -44,6 +50,18 @@ import { colors, font, radius } from "@/lib/theme";
 // on native the deployed web origin is fixed here. The app itself opens
 // petpal://join?f=<id> (app.json scheme "petpal" → app/join.tsx).
 const WEB_ORIGIN = "https://petpal.app";
+
+const CAREGIVER_TERMS_TEXT = `By assigning the Pet caregiver role to a household member, you acknowledge and agree to the following:
+
+PetPal is a coordination tool that connects people who already share responsibility for a pet's care. We do not vet, supervise, screen, or guarantee the conduct of any caregiver, family member, or other person you choose to add to your household.
+
+PetPal and its operators are not responsible or liable for any theft, loss, damage, injury, or other harm that results — directly or indirectly — from granting someone the Pet caregiver role, or from any actions taken by a caregiver, whether inside or outside the app.
+
+You are solely responsible for deciding who you trust with this role. Only assign it to people you already know and trust with your pets, your home, and your belongings.
+
+The Pet caregiver role is currently a label only, with no special app permissions attached. Assigning or removing it does not grant or restrict access to any account, billing, or household-management features.
+
+By tapping "Accept terms and conditions" below, you confirm that you understand and agree to the above.`;
 
 /** Labelled text field — FieldLabel + TextField primitives plus an optional hint line. */
 function Field({
@@ -81,6 +99,25 @@ function Field({
       />
       {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
     </View>
+  );
+}
+
+/** Liability disclaimer shown before a member can be assigned the Pet caregiver role. */
+function CaregiverTermsView({ onAccept, onBack }: { onAccept: () => void; onBack: () => void }) {
+  return (
+    <>
+      <SheetTitle>Pet caregiver terms</SheetTitle>
+      <SheetSubtitle>Please read before continuing.</SheetSubtitle>
+      <View style={styles.termsScroll}>
+        <Text style={styles.termsBody}>{CAREGIVER_TERMS_TEXT}</Text>
+      </View>
+      <View style={{ marginTop: 20 }}>
+        <AccentButton onPress={onAccept}>Accept terms and conditions</AccentButton>
+      </View>
+      <View style={{ marginTop: 12 }}>
+        <SmallButton label="Back" tone="gray" onPress={onBack} />
+      </View>
+    </>
   );
 }
 
@@ -232,17 +269,61 @@ export default function FamilySettingsPage() {
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
-  const [newMemberRole, setNewMemberRole] = useState("Member");
+  const [newMemberIsAdmin, setNewMemberIsAdmin] = useState(false);
+  const [newMemberIsCaregiver, setNewMemberIsCaregiver] = useState(false);
+  const [newMemberFunRole, setNewMemberFunRole] = useState(NO_FUN_ROLE);
+  const [newMemberCustomFunRole, setNewMemberCustomFunRole] = useState("");
+  const [newMemberTermsAccepted, setNewMemberTermsAccepted] = useState(false);
+  const [newMemberShowTerms, setNewMemberShowTerms] = useState(false);
 
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editMemberName, setEditMemberName] = useState("");
-  const [editMemberRole, setEditMemberRole] = useState("");
+  const [editMemberIsAdmin, setEditMemberIsAdmin] = useState(false);
+  const [editMemberIsCaregiver, setEditMemberIsCaregiver] = useState(false);
+  const [editMemberFunRole, setEditMemberFunRole] = useState(NO_FUN_ROLE);
+  const [editMemberCustomFunRole, setEditMemberCustomFunRole] = useState("");
+  const [editMemberTermsAccepted, setEditMemberTermsAccepted] = useState(false);
+  const [editMemberShowTerms, setEditMemberShowTerms] = useState(false);
 
   const openEditMember = (m: Member) => {
     setEditingMember(m);
     setEditMemberName(m.name);
-    setEditMemberRole(m.role);
+    const parsed = parseMemberRoles(m.role);
+    setEditMemberIsAdmin(parsed.isAdmin);
+    setEditMemberIsCaregiver(parsed.isCaregiver);
+    // Already a caregiver from before this gate existed — grandfathered in, no re-prompt.
+    setEditMemberTermsAccepted(parsed.isCaregiver);
+    setEditMemberShowTerms(false);
+    if (!parsed.customRole) {
+      setEditMemberFunRole(NO_FUN_ROLE);
+      setEditMemberCustomFunRole("");
+    } else if (FUN_ROLE_EXAMPLES.includes(parsed.customRole)) {
+      setEditMemberFunRole(parsed.customRole);
+      setEditMemberCustomFunRole("");
+    } else {
+      setEditMemberFunRole(OTHER_ROLE);
+      setEditMemberCustomFunRole(parsed.customRole);
+    }
   };
+
+  // Assigning "Pet caregiver" requires accepting the liability disclaimer first —
+  // the Save button itself turns into the "Terms and conditions" prompt until then.
+  const newMemberCaregiverGateActive = newMemberIsCaregiver && !newMemberTermsAccepted;
+  const editMemberCaregiverGateActive = editMemberIsCaregiver && !editMemberTermsAccepted;
+
+  const resolveFunRole = (funRole: string, customFunRole: string) =>
+    funRole === NO_FUN_ROLE ? "" : funRole === OTHER_ROLE ? customFunRole.trim() : funRole;
+
+  const resolvedNewMemberRole = formatMemberRoles({
+    isAdmin: newMemberIsAdmin,
+    isCaregiver: newMemberIsCaregiver,
+    customRole: resolveFunRole(newMemberFunRole, newMemberCustomFunRole),
+  });
+  const resolvedEditMemberRole = formatMemberRoles({
+    isAdmin: editMemberIsAdmin,
+    isCaregiver: editMemberIsCaregiver,
+    customRole: resolveFunRole(editMemberFunRole, editMemberCustomFunRole),
+  });
 
   const resolvedEditBreed =
     editPetBreed === OTHER_BREED
@@ -593,65 +674,144 @@ export default function FamilySettingsPage() {
       </Sheet>
 
       {/* Add member */}
-      <Sheet open={addMemberOpen} onClose={() => setAddMemberOpen(false)}>
-        <SheetTitle>Add a member</SheetTitle>
-
-        <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
-        <Field label="Role" value={newMemberRole} onChangeText={setNewMemberRole} />
-
-        <View style={{ marginTop: 28 }}>
-          <AccentButton
-            disabled={!newMemberName.trim() || !hydrated}
-            onPress={() => {
-              addMember(newMemberName.trim(), newMemberRole.trim() || "Member");
-              setAddMemberOpen(false);
-              setNewMemberName("");
-              setNewMemberRole("Member");
+      <Sheet
+        open={addMemberOpen}
+        onClose={() => {
+          setAddMemberOpen(false);
+          setNewMemberShowTerms(false);
+        }}
+      >
+        {newMemberShowTerms ? (
+          <CaregiverTermsView
+            onAccept={() => {
+              setNewMemberTermsAccepted(true);
+              setNewMemberShowTerms(false);
             }}
-          >
-            Add to family
-          </AccentButton>
-        </View>
+            onBack={() => setNewMemberShowTerms(false)}
+          />
+        ) : (
+          <>
+            <SheetTitle>Add a member</SheetTitle>
+
+            <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
+
+            <FieldLabel>Role</FieldLabel>
+            <RoleField
+              isAdmin={newMemberIsAdmin}
+              isCaregiver={newMemberIsCaregiver}
+              onToggleAdmin={() => setNewMemberIsAdmin((v) => !v)}
+              onToggleCaregiver={() =>
+                setNewMemberIsCaregiver((prev) => {
+                  const next = !prev;
+                  if (!next) setNewMemberTermsAccepted(false);
+                  return next;
+                })
+              }
+              funRole={newMemberFunRole}
+              customFunRole={newMemberCustomFunRole}
+              onChangeFunRole={setNewMemberFunRole}
+              onChangeCustomFunRole={setNewMemberCustomFunRole}
+            />
+
+            <View style={{ marginTop: 28 }}>
+              {newMemberCaregiverGateActive ? (
+                <AccentButton onPress={() => setNewMemberShowTerms(true)}>Terms and conditions</AccentButton>
+              ) : (
+                <AccentButton
+                  disabled={!newMemberName.trim() || !hydrated}
+                  onPress={() => {
+                    addMember(newMemberName.trim(), resolvedNewMemberRole);
+                    setAddMemberOpen(false);
+                    setNewMemberName("");
+                    setNewMemberIsAdmin(false);
+                    setNewMemberIsCaregiver(false);
+                    setNewMemberFunRole(NO_FUN_ROLE);
+                    setNewMemberCustomFunRole("");
+                    setNewMemberTermsAccepted(false);
+                  }}
+                >
+                  Add to family
+                </AccentButton>
+              )}
+            </View>
+          </>
+        )}
       </Sheet>
 
       {/* Edit member */}
-      <Sheet open={editingMember !== null} onClose={() => setEditingMember(null)}>
-        {editingMember && (
-          <>
-            <SheetTitle>Edit {editingMember.name}</SheetTitle>
+      <Sheet
+        open={editingMember !== null}
+        onClose={() => {
+          setEditingMember(null);
+          setEditMemberShowTerms(false);
+        }}
+      >
+        {editingMember &&
+          (editMemberShowTerms ? (
+            <CaregiverTermsView
+              onAccept={() => {
+                setEditMemberTermsAccepted(true);
+                setEditMemberShowTerms(false);
+              }}
+              onBack={() => setEditMemberShowTerms(false)}
+            />
+          ) : (
+            <>
+              <SheetTitle>Edit {editingMember.name}</SheetTitle>
 
-            <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
-            <Field label="Role" value={editMemberRole} onChangeText={setEditMemberRole} />
+              <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
 
-            <View style={{ marginTop: 28 }}>
-              <AccentButton
-                disabled={!editMemberName.trim()}
-                onPress={() => {
-                  editMember(editingMember.id, { name: editMemberName.trim(), role: editMemberRole.trim() || "Member" });
-                  toast("person", `${editMemberName.trim()} updated`, "");
-                  setEditingMember(null);
-                }}
-              >
-                Save changes
-              </AccentButton>
-            </View>
+              <FieldLabel>Role</FieldLabel>
+              <RoleField
+                isAdmin={editMemberIsAdmin}
+                isCaregiver={editMemberIsCaregiver}
+                onToggleAdmin={() => setEditMemberIsAdmin((v) => !v)}
+                onToggleCaregiver={() =>
+                  setEditMemberIsCaregiver((prev) => {
+                    const next = !prev;
+                    if (!next) setEditMemberTermsAccepted(false);
+                    return next;
+                  })
+                }
+                funRole={editMemberFunRole}
+                customFunRole={editMemberCustomFunRole}
+                onChangeFunRole={setEditMemberFunRole}
+                onChangeCustomFunRole={setEditMemberCustomFunRole}
+              />
 
-            {state.members.length > 1 && (
-              <Group style={{ marginTop: 12 }}>
-                <ConfirmRow
-                  label="Remove member"
-                  confirmLabel="Tap again — also deletes their activity history"
-                  onConfirm={() => {
-                    const name = editingMember.name;
-                    removeMember(editingMember.id);
-                    setEditingMember(null);
-                    toast("person", `${name} was removed`, "");
-                  }}
-                />
-              </Group>
-            )}
-          </>
-        )}
+              <View style={{ marginTop: 28 }}>
+                {editMemberCaregiverGateActive ? (
+                  <AccentButton onPress={() => setEditMemberShowTerms(true)}>Terms and conditions</AccentButton>
+                ) : (
+                  <AccentButton
+                    disabled={!editMemberName.trim()}
+                    onPress={() => {
+                      editMember(editingMember.id, { name: editMemberName.trim(), role: resolvedEditMemberRole });
+                      toast("person", `${editMemberName.trim()} updated`, "");
+                      setEditingMember(null);
+                    }}
+                  >
+                    Save changes
+                  </AccentButton>
+                )}
+              </View>
+
+              {state.members.length > 1 && (
+                <Group style={{ marginTop: 12 }}>
+                  <ConfirmRow
+                    label="Remove member"
+                    confirmLabel="Tap again — also deletes their activity history"
+                    onConfirm={() => {
+                      const name = editingMember.name;
+                      removeMember(editingMember.id);
+                      setEditingMember(null);
+                      toast("person", `${name} was removed`, "");
+                    }}
+                  />
+                </Group>
+              )}
+            </>
+          ))}
       </Sheet>
 
       {/* Join a household */}
@@ -696,6 +856,8 @@ export default function FamilySettingsPage() {
 
 const styles = StyleSheet.create({
   rowActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  termsScroll: { marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, padding: 14 },
+  termsBody: { fontSize: 14, lineHeight: 21, fontFamily: font.regular, color: colors.label2 },
   footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
   lockCard: {
     marginTop: 24,

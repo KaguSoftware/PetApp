@@ -116,8 +116,67 @@ export const ADMIN_ROLE = "Admin";
 // "Admin", so both must count as admin — otherwise a real signup can't manage
 // its own Family ID.
 const ADMIN_ROLES = new Set(["admin", "owner"]);
+
+// Placeholder role — no permissions wired up yet, but held separately from
+// the free-text "fun" role so a future release can gate real behavior on it.
+export const CAREGIVER_ROLE = "Pet caregiver";
+const CAREGIVER_ROLES = new Set(["pet caregiver", "caregiver"]);
+
+// A member's `role` string is a comma-joined list of role tokens, e.g.
+// "Admin, Pet caregiver, Cuddle manager" — up to the two structured roles
+// above plus one free-text "fun" role with no functionality. Legacy
+// single-word values ("Owner", "Admin", "Member", or any custom text) still
+// parse fine: unrecognized tokens just fall through to `customRole`.
+export function parseMemberRoles(role: string): { isAdmin: boolean; isCaregiver: boolean; customRole: string } {
+  const parts = role
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  let isAdmin = false;
+  let isCaregiver = false;
+  const rest: string[] = [];
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (ADMIN_ROLES.has(lower)) isAdmin = true;
+    else if (CAREGIVER_ROLES.has(lower)) isCaregiver = true;
+    else rest.push(part);
+  }
+  return { isAdmin, isCaregiver, customRole: rest.join(", ") };
+}
+
+export function formatMemberRoles({
+  isAdmin,
+  isCaregiver,
+  customRole,
+}: {
+  isAdmin: boolean;
+  isCaregiver: boolean;
+  customRole: string;
+}): string {
+  const parts: string[] = [];
+  if (isAdmin) parts.push(ADMIN_ROLE);
+  if (isCaregiver) parts.push(CAREGIVER_ROLE);
+  const custom = customRole.trim();
+  if (custom) parts.push(custom);
+  return parts.join(", ") || "Member";
+}
+
 export function isAdminRole(role: string): boolean {
-  return ADMIN_ROLES.has(role.trim().toLowerCase());
+  return parseMemberRoles(role).isAdmin;
+}
+
+export function isCaregiverRole(role: string): boolean {
+  return parseMemberRoles(role).isCaregiver;
+}
+
+// Fun-role wheel: purely cosmetic, no functionality. "None" clears it, the
+// curated examples cover both dog and cat households, and "Other" hands off
+// to a free-text field for anything else.
+export const NO_FUN_ROLE = "None";
+export const OTHER_ROLE = "Other";
+export const FUN_ROLE_EXAMPLES = ["Walk specialist", "Cuddle manager", "Litterbox guardian", "Kitchen boss"];
+export function funRoleWheelOptions(): string[] {
+  return [NO_FUN_ROLE, ...FUN_ROLE_EXAMPLES, OTHER_ROLE];
 }
 
 export interface Activity {

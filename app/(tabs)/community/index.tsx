@@ -19,7 +19,8 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
-import { createPost, fetchPosts, familyLabel, relativeTime, speciesEmoji, type ForumPost } from "@/lib/forum";
+import { createPost, fetchPosts, familyLabel, relativeTime, speciesEmoji, type ForumCategory, type ForumPost } from "@/lib/forum";
+import { isCaregiverRole } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, radius } from "@/lib/theme";
 
@@ -36,11 +37,21 @@ function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
     <View style={styles.card}>
       <PressableScale onPress={onPress} accessibilityRole="button">
         <View style={styles.cardHeader}>
-          <Chip style={styles.breedChipWrap}>
-            <Text style={styles.breedChip} numberOfLines={1}>
-              {speciesEmoji(post.species)} {post.breed}
-            </Text>
-          </Chip>
+          {post.isCaregiverAd ? (
+            <Chip style={[styles.breedChipWrap, styles.adChip]}>
+              <Text style={[styles.breedChip, styles.adChipLabel]} numberOfLines={1}>
+                🤝 Caregiving service
+              </Text>
+            </Chip>
+          ) : post.species && post.breed ? (
+            <Chip style={styles.breedChipWrap}>
+              <Text style={styles.breedChip} numberOfLines={1}>
+                {speciesEmoji(post.species)} {post.breed}
+              </Text>
+            </Chip>
+          ) : (
+            <View />
+          )}
           <Text style={styles.family} numberOfLines={1}>
             {familyLabel(post.authorHouseholdId)}
           </Text>
@@ -73,20 +84,29 @@ export default function Community() {
   const { state, hydrated, toast } = useStore();
   const router = useRouter();
   const [sort, setSort] = useState<SortKey>("top");
+  const [category, setCategory] = useState<ForumCategory>("question");
   const [posts, setPosts] = useState<ForumPost[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Compose sheet state.
+  // Compose sheet state (Ask).
   const [composeOpen, setComposeOpen] = useState(false);
   const [petId, setPetId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Compose sheet state (Caregive — pet caregivers advertising their service).
+  const currentMember = state.members.find((m) => m.id === state.currentMemberId);
+  const canAdvertiseCaregiving = !!currentMember && isCaregiverRole(currentMember.role);
+  const [caregiveOpen, setCaregiveOpen] = useState(false);
+  const [caregiveTitle, setCaregiveTitle] = useState("");
+  const [caregiveBody, setCaregiveBody] = useState("");
+  const [caregiveSubmitting, setCaregiveSubmitting] = useState(false);
+
   const load = useCallback(
-    async (nextSort: SortKey) => {
+    async (nextSort: SortKey, nextCategory: ForumCategory) => {
       try {
-        const rows = await fetchPosts(nextSort);
+        const rows = await fetchPosts(nextSort, nextCategory);
         setPosts(rows);
       } catch (e) {
         console.error("[petpal] forum feed load failed:", e);
@@ -100,19 +120,25 @@ export default function Community() {
   // Refetch every time the tab regains focus (no realtime in the app).
   useFocusEffect(
     useCallback(() => {
-      load(sort);
-    }, [load, sort])
+      load(sort, category);
+    }, [load, sort, category])
   );
+
+  const changeCategory = (c: ForumCategory) => {
+    setCategory(c);
+    setPosts(null);
+    load(sort, c);
+  };
 
   const changeSort = (s: SortKey) => {
     setSort(s);
     setPosts(null);
-    load(s);
+    load(s, category);
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load(sort);
+    await load(sort, category);
     setRefreshing(false);
   };
 
@@ -137,15 +163,49 @@ export default function Community() {
         breed: selectedPet.breed,
         title: title.trim(),
         body: body.trim(),
+        category: "question",
       });
       setComposeOpen(false);
       toast("check", "Question posted", "Other families can answer it now");
-      await load(sort);
+      await load(sort, category);
     } catch (e) {
       console.error("[petpal] forum post failed:", e);
       toast("alert", "Couldn't post", "That didn't send — try again");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openCaregive = () => {
+    setCaregiveTitle("");
+    setCaregiveBody("");
+    setCaregiveOpen(true);
+  };
+
+  const canSubmitCaregive = caregiveTitle.trim().length > 0 && !caregiveSubmitting;
+
+  const submitCaregive = async () => {
+    if (!state.familyId) return;
+    setCaregiveSubmitting(true);
+    try {
+      await createPost({
+        householdId: state.familyId,
+        petId: null,
+        species: null,
+        breed: null,
+        title: caregiveTitle.trim(),
+        body: caregiveBody.trim(),
+        category: "pet_care",
+        isCaregiverAd: true,
+      });
+      setCaregiveOpen(false);
+      toast("check", "Service posted", "Families looking for care can see it now");
+      await load(sort, category);
+    } catch (e) {
+      console.error("[petpal] forum caregiver post failed:", e);
+      toast("alert", "Couldn't post", "That didn't send — try again");
+    } finally {
+      setCaregiveSubmitting(false);
     }
   };
 
@@ -195,6 +255,43 @@ export default function Community() {
     </Sheet>
   );
 
+  const caregiveSheet = (
+    <Sheet open={caregiveOpen} onClose={() => setCaregiveOpen(false)}>
+      <SheetTitle>Advertise your caregiving service</SheetTitle>
+      <SheetSubtitle>Shown under Pet care, tagged so families know it's a service offer.</SheetSubtitle>
+
+      <FieldLabel>Title</FieldLabel>
+      <TextField
+        value={caregiveTitle}
+        onChangeText={setCaregiveTitle}
+        placeholder="e.g. Weekday dog walks in the downtown area"
+        returnKeyType="next"
+        maxLength={200}
+      />
+
+      <FieldLabel>Description</FieldLabel>
+      <TextField
+        value={caregiveBody}
+        onChangeText={setCaregiveBody}
+        placeholder="Tell families what you offer, your availability, and rates…"
+        multiline
+        style={styles.multiline}
+        maxLength={5000}
+      />
+
+      <SheetFooter>
+        <AccentButton disabled={!canSubmitCaregive} loading={caregiveSubmitting} onPress={submitCaregive}>
+          Post service
+        </AccentButton>
+      </SheetFooter>
+    </Sheet>
+  );
+
+  const emptyCopy =
+    category === "question"
+      ? { title: "No questions yet", body: "Be the first to ask the community about your pet.", cta: "Ask a question" }
+      : { title: "No pet care posts yet", body: "Share pet-care advice, or advertise your caregiving service.", cta: "Ask a question" };
+
   return (
     <TabScreen
       title="Community"
@@ -202,30 +299,39 @@ export default function Community() {
       trailing={<HeaderActions />}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.label3} />}
     >
+      <View style={styles.categoryRow}>
+        <CategoryTab label="Questions" active={category === "question"} onPress={() => changeCategory("question")} />
+        <CategoryTab label="Pet care" active={category === "pet_care"} onPress={() => changeCategory("pet_care")} />
+      </View>
+
       <View style={styles.controls}>
         <View style={styles.sortRow}>
           <SortTab label="Top" active={sort === "top"} onPress={() => changeSort("top")} />
           <SortTab label="New" active={sort === "new"} onPress={() => changeSort("new")} />
         </View>
-        <PressableScale onPress={openCompose} accessibilityRole="button" accessibilityLabel="Ask a question">
-          <View style={styles.askButton}>
-            <Icon name="plus" size={16} color={colors.white} />
-            <Text style={styles.askLabel}>Ask</Text>
-          </View>
-        </PressableScale>
+        <View style={styles.actionRow}>
+          {canAdvertiseCaregiving ? (
+            <PressableScale onPress={openCaregive} accessibilityRole="button" accessibilityLabel="Advertise your caregiving service">
+              <View style={styles.caregiveButton}>
+                <Icon name="plus" size={16} color={colors.accent} />
+                <Text style={styles.caregiveLabel}>Caregive</Text>
+              </View>
+            </PressableScale>
+          ) : null}
+          <PressableScale onPress={openCompose} accessibilityRole="button" accessibilityLabel="Ask a question">
+            <View style={styles.askButton}>
+              <Icon name="plus" size={16} color={colors.white} />
+              <Text style={styles.askLabel}>Ask</Text>
+            </View>
+          </PressableScale>
+        </View>
       </View>
 
       {!hydrated || posts === null ? (
         <PageLoading />
       ) : posts.length === 0 ? (
         <View style={{ marginTop: 8 }}>
-          <EmptyState
-            icon="people"
-            title="No questions yet"
-            body="Be the first to ask the community about your pet."
-            cta="Ask a question"
-            onCta={openCompose}
-          />
+          <EmptyState icon="people" title={emptyCopy.title} body={emptyCopy.body} cta={emptyCopy.cta} onCta={openCompose} />
         </View>
       ) : (
         <View style={styles.feed}>
@@ -236,6 +342,7 @@ export default function Community() {
       )}
 
       {composeSheet}
+      {caregiveSheet}
     </TabScreen>
   );
 }
@@ -250,15 +357,41 @@ function SortTab({ label, active, onPress }: { label: string; active: boolean; o
   );
 }
 
+function CategoryTab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}>
+      <View style={[styles.categoryTab, active && styles.categoryTabActive]}>
+        <Text style={[styles.categoryTabLabel, active && styles.categoryTabLabelActive]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
 const styles = StyleSheet.create({
-  controls: { marginTop: 12, marginBottom: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  categoryRow: { marginTop: 12, flexDirection: "row", gap: 8 },
+  categoryTab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.fill },
+  categoryTabActive: { backgroundColor: colors.accent },
+  categoryTabLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
+  categoryTabLabelActive: { color: colors.white },
+  controls: { marginTop: 10, marginBottom: 4, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sortRow: { flexDirection: "row", gap: 8 },
   sortTab: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.fill },
   sortTabActive: { backgroundColor: colors.accentSoft },
   sortTabLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
   sortTabLabelActive: { color: colors.accent },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   askButton: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.full, backgroundColor: colors.accent },
   askLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.white },
+  caregiveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentSoft,
+  },
+  caregiveLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   feed: { marginTop: 8, gap: 10 },
   card: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 14, ...cardShadow },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
@@ -267,6 +400,8 @@ const styles = StyleSheet.create({
   // attribution off the right edge entirely.
   breedChipWrap: { flexShrink: 1, minWidth: 0 },
   breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2, flexShrink: 1 },
+  adChip: { backgroundColor: colors.accentSoft },
+  adChipLabel: { color: colors.accent, fontFamily: font.semibold },
   family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 0 },
   cardTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.label, lineHeight: 21 },
   cardBody: { marginTop: 4, fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
