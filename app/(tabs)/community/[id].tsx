@@ -27,7 +27,10 @@ function AnswerCard({ answer, onDelete }: { answer: ForumAnswer; onDelete?: () =
   return (
     <View style={styles.answerCard}>
       <View style={styles.answerHeader}>
-        <Text style={styles.family}>{familyLabel(answer.authorHouseholdId)}</Text>
+        <Text style={styles.family}>
+          {familyLabel(answer.authorHouseholdId)}
+          {answer.authorMemberName ? ` · ${answer.authorMemberName}` : ""}
+        </Text>
         {answer.breed && answer.species ? (
           <Chip>
             <Text style={styles.breedChip}>
@@ -67,6 +70,7 @@ export default function PostDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { state, userId, toast } = useStore();
+  const currentMember = state.members.find((m) => m.id === state.currentMemberId);
   const [data, setData] = useState<{ post: ForumPost; answers: ForumAnswer[] } | null | undefined>(undefined);
 
   // Answer composer.
@@ -106,10 +110,14 @@ export default function PostDetail() {
   const submit = async () => {
     if (!id || !state.familyId || body.trim().length === 0) return;
     setSubmitting(true);
+    // TEMP DEBUG — remove once we've root-caused the null author_member_id issue.
+    console.log("[petpal][debug] answer submit — currentMemberId:", state.currentMemberId, "currentMember:", currentMember);
     try {
       await createAnswer({
         postId: id,
         householdId: state.familyId,
+        memberId: currentMember?.id ?? null,
+        memberName: currentMember?.name ?? null,
         petId: selectedPet?.id ?? null,
         species: selectedPet?.species ?? null,
         breed: selectedPet?.breed ?? null,
@@ -127,7 +135,15 @@ export default function PostDetail() {
   };
 
   const confirmDeletePost = () => {
-    if (!id) return;
+    // Belt-and-suspenders: the trash icon is only rendered for the author
+    // (see the DeleteButton usage below), but re-check here too so this
+    // function is never callable against someone else's post. Household-level
+    // match (authorUserId) is the real, RLS-enforced boundary — every member
+    // shares one login, so authorMemberId is only a soft, locally-trusted
+    // extra check for posts that recorded which member posted (older rows
+    // have no member id, so they fall back to the household-level check).
+    if (!id || !userId || post.authorUserId !== userId) return;
+    if (post.authorMemberId != null && post.authorMemberId !== state.currentMemberId) return;
     Alert.alert("Delete question", "This removes your question and all its answers. This can't be undone.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -148,6 +164,9 @@ export default function PostDetail() {
   };
 
   const confirmDeleteAnswer = (answerId: string) => {
+    const answer = answers.find((a) => a.id === answerId);
+    if (!answer || !userId || answer.authorUserId !== userId) return;
+    if (answer.authorMemberId != null && answer.authorMemberId !== state.currentMemberId) return;
     Alert.alert("Delete answer", "This removes your answer. This can't be undone.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -191,6 +210,13 @@ export default function PostDetail() {
   }
 
   const { post, answers } = data;
+
+  // Household-level match is the real, RLS-enforced boundary; the member-id
+  // match on top is a soft, locally-trusted guard (see confirmDeletePost).
+  const canDeletePost =
+    !!userId && post.authorUserId === userId && (post.authorMemberId == null || post.authorMemberId === state.currentMemberId);
+  const canDeleteAnswer = (a: ForumAnswer) =>
+    !!userId && a.authorUserId === userId && (a.authorMemberId == null || a.authorMemberId === state.currentMemberId);
 
   const answerSheet = (
     <Sheet open={answerOpen} onClose={() => setAnswerOpen(false)}>
@@ -242,6 +268,7 @@ export default function PostDetail() {
           )}
           <Text style={styles.family} numberOfLines={1}>
             {familyLabel(post.authorHouseholdId)}
+            {post.authorMemberName ? ` · ${post.authorMemberName}` : ""}
           </Text>
         </View>
         <Text style={styles.postTitle}>{post.title}</Text>
@@ -249,7 +276,7 @@ export default function PostDetail() {
         <View style={styles.postFooter}>
           <VoteControl target={{ postId: post.id }} score={post.score} voted={post.votedByMe} />
           <Text style={styles.meta}>{relativeTime(post.createdAt)}</Text>
-          {userId && post.authorUserId === userId ? (
+          {canDeletePost ? (
             <>
               <View style={{ flex: 1 }} />
               <DeleteButton onPress={confirmDeletePost} accessibilityLabel="Delete question" />
@@ -273,7 +300,7 @@ export default function PostDetail() {
       ) : (
         <View style={styles.answerList}>
           {answers.map((a) => (
-            <AnswerCard key={a.id} answer={a} onDelete={userId && a.authorUserId === userId ? () => confirmDeleteAnswer(a.id) : undefined} />
+            <AnswerCard key={a.id} answer={a} onDelete={canDeleteAnswer(a) ? () => confirmDeleteAnswer(a.id) : undefined} />
           ))}
         </View>
       )}

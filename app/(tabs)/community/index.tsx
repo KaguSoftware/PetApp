@@ -54,6 +54,7 @@ function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
           )}
           <Text style={styles.family} numberOfLines={1}>
             {familyLabel(post.authorHouseholdId)}
+            {post.authorMemberName ? ` · ${post.authorMemberName}` : ""}
           </Text>
         </View>
         <Text style={styles.cardTitle} numberOfLines={2}>
@@ -155,9 +156,13 @@ export default function Community() {
   const submit = async () => {
     if (!selectedPet || !state.familyId) return;
     setSubmitting(true);
+    // TEMP DEBUG — remove once we've root-caused the null author_member_id issue.
+    console.log("[petpal][debug] ask submit — currentMemberId:", state.currentMemberId, "currentMember:", currentMember);
     try {
       await createPost({
         householdId: state.familyId,
+        memberId: currentMember?.id ?? null,
+        memberName: currentMember?.name ?? null,
         petId: selectedPet.id,
         species: selectedPet.species,
         breed: selectedPet.breed,
@@ -187,9 +192,13 @@ export default function Community() {
   const submitCaregive = async () => {
     if (!state.familyId) return;
     setCaregiveSubmitting(true);
+    // TEMP DEBUG — remove once we've root-caused the null author_member_id issue.
+    console.log("[petpal][debug] caregive submit — currentMemberId:", state.currentMemberId, "currentMember:", currentMember);
     try {
       await createPost({
         householdId: state.familyId,
+        memberId: currentMember?.id ?? null,
+        memberName: currentMember?.name ?? null,
         petId: null,
         species: null,
         breed: null,

@@ -20,6 +20,11 @@ export interface ForumPost {
   id: string;
   authorUserId: string;
   authorHouseholdId: string;
+  // A household is one shared login across all its local members (switching
+  // member is local UI state, not separate auth), so these two identify WHICH
+  // member posted — a snapshot, since the member could later be renamed/removed.
+  authorMemberId: string | null;
+  authorMemberName: string | null;
   // Null for caregiver-service ads, which aren't about one specific pet.
   species: Species | null;
   breed: string | null;
@@ -39,6 +44,8 @@ export interface ForumAnswer {
   postId: string;
   authorUserId: string;
   authorHouseholdId: string;
+  authorMemberId: string | null;
+  authorMemberName: string | null;
   species: Species | null;
   breed: string | null;
   body: string;
@@ -52,13 +59,16 @@ export type FeedSort = "top" | "new";
 // PostgREST embeds. `my_vote` embeds only the caller's own vote row (RLS scopes
 // forum_votes to user_id = auth.uid()), so a non-empty array means "I upvoted".
 const POST_SELECT =
-  "id, author_user_id, author_household_id, species, breed, title, body, score, created_at, category, is_caregiver_ad, answer_count:forum_answers(count), my_vote:forum_votes(id)";
-const ANSWER_SELECT = "id, post_id, author_user_id, author_household_id, species, breed, body, score, created_at, my_vote:forum_votes(id)";
+  "id, author_user_id, author_household_id, author_member_id, author_member_name, species, breed, title, body, score, created_at, category, is_caregiver_ad, answer_count:forum_answers(count), my_vote:forum_votes(id)";
+const ANSWER_SELECT =
+  "id, post_id, author_user_id, author_household_id, author_member_id, author_member_name, species, breed, body, score, created_at, my_vote:forum_votes(id)";
 
 type PostRow = {
   id: string;
   author_user_id: string;
   author_household_id: string;
+  author_member_id: string | null;
+  author_member_name: string | null;
   species: Species | null;
   breed: string | null;
   title: string;
@@ -76,6 +86,8 @@ type AnswerRow = {
   post_id: string;
   author_user_id: string;
   author_household_id: string;
+  author_member_id: string | null;
+  author_member_name: string | null;
   species: Species | null;
   breed: string | null;
   body: string;
@@ -89,6 +101,8 @@ function mapPost(r: PostRow): ForumPost {
     id: r.id,
     authorUserId: r.author_user_id,
     authorHouseholdId: r.author_household_id,
+    authorMemberId: r.author_member_id,
+    authorMemberName: r.author_member_name,
     species: r.species,
     breed: r.breed,
     title: r.title,
@@ -108,6 +122,8 @@ function mapAnswer(r: AnswerRow): ForumAnswer {
     postId: r.post_id,
     authorUserId: r.author_user_id,
     authorHouseholdId: r.author_household_id,
+    authorMemberId: r.author_member_id,
+    authorMemberName: r.author_member_name,
     species: r.species,
     breed: r.breed,
     body: r.body,
@@ -143,6 +159,8 @@ export async function fetchPost(id: string): Promise<{ post: ForumPost; answers:
  *  defaults to auth.uid() server-side. */
 export async function createPost(input: {
   householdId: string;
+  memberId: string | null;
+  memberName: string | null;
   petId: string | null;
   species: Species | null;
   breed: string | null;
@@ -155,6 +173,8 @@ export async function createPost(input: {
   const { error } = await supabase.from("forum_posts").insert({
     id,
     author_household_id: input.householdId,
+    author_member_id: input.memberId,
+    author_member_name: input.memberName,
     pet_id: input.petId,
     species: input.species,
     breed: input.breed,
@@ -171,6 +191,8 @@ export async function createPost(input: {
 export async function createAnswer(input: {
   postId: string;
   householdId: string;
+  memberId: string | null;
+  memberName: string | null;
   petId?: string | null;
   species?: Species | null;
   breed?: string | null;
@@ -181,6 +203,8 @@ export async function createAnswer(input: {
     id,
     post_id: input.postId,
     author_household_id: input.householdId,
+    author_member_id: input.memberId,
+    author_member_name: input.memberName,
     pet_id: input.petId ?? null,
     species: input.species ?? null,
     breed: input.breed ?? null,
