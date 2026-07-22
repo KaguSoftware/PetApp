@@ -27,8 +27,8 @@ export default function HeaderActions({ leading }: { leading?: React.ReactNode }
   const router = useRouter();
   const { state } = useStore();
   // The status-bar inset is handled once, at the header level
-  // (useHeaderStatusBarInset in components/Screen.tsx) — not here, or the
-  // offset would be applied twice on Android.
+  // (statusBarTranslucent in nativeHeaderOptions, components/Screen.tsx) —
+  // not here, or the offset would be applied twice on Android.
   return (
     <View style={styles.island}>
       {leading}
@@ -43,5 +43,9 @@ const styles = StyleSheet.create({
   // gap 8 (not 12): the controls now carry their own 44pt touch targets via
   // hitSlop, and a wide visual gap made the dead space between them look
   // tappable. Tighter spacing reads as one island of real buttons.
-  island: { flexDirection: "row", alignItems: "center", gap: 8 },
+  island: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
 });

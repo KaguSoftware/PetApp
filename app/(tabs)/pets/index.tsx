@@ -1,21 +1,16 @@
-import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
-import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
+import BreedField from "@/components/BreedField";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
+import { Icon } from "@/components/Icons";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
-import { PixelCosmetic } from "@/components/pixel/PixelPet";
-import Pet3D from "@/components/pixel/Pet3D";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
+import Pet3D from "@/components/pixel/Pet3D";
+import { PixelCosmetic } from "@/components/pixel/PixelPet";
 import PixelSprite from "@/components/pixel/PixelSprite";
-import BreedField from "@/components/BreedField";
-import SpeciesField from "@/components/SpeciesField";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
-import { Icon } from "@/components/Icons";
+import SpeciesField from "@/components/SpeciesField";
 import {
   AccentButton,
   Chevron,
@@ -36,8 +31,8 @@ import {
 } from "@/components/ui";
 import {
   BREEDS_BY_SPECIES,
-  COSMETICS,
   cosmetic,
+  COSMETICS,
   formatAge,
   formatWeight,
   kgToUnit,
@@ -51,6 +46,11 @@ import {
 import { useStore } from "@/lib/store";
 import { cardShadow, colors, font, HIT, radius } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
+import { useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
 
 /* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
 const MAIN_SLOTS: { slot: CosmeticSlot; label: string; hint: string }[] = [{ slot: "head", label: "Hat", hint: "Hats & headwear" }];

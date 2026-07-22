@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
@@ -25,6 +25,7 @@ import { dueLabel, useStore } from "@/lib/store";
 import { colors, font, withAlpha } from "@/lib/theme";
 
 const DAY_MS = 86_400_000;
+const isIOS = Platform.OS === "ios";
 
 const REPEAT_LABEL: Record<RepeatKind, string> = {
   daily: "daily",
@@ -66,8 +67,14 @@ export default function RemindersScreen() {
       accessibilityLabel="Add reminder"
       hitSlop={8}
     >
+      {/* iPhone gets a bigger, chromeless glyph (no filled pill); Android keeps
+          the accent circle so the control stays visible against the header. */}
       <View style={styles.addButton}>
-        <Icon name="plus" size={17} color={colors.white} />
+        <Icon
+          name="plus"
+          size={isIOS ? 26 : 17}
+          color={isIOS ? colors.accent : colors.white}
+        />
       </View>
     </PressableScale>
   );
@@ -335,18 +342,23 @@ export default function RemindersScreen() {
 
 const styles = StyleSheet.create({
   addButton: {
-    // 36pt visual + hitSlop 8 → 44pt effective target in the native header
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.accent,
+    // iPhone: a bigger, chromeless glyph — no pill, no shadow — per design.
+    // Android: 36pt accent circle (visual + hitSlop 8 → 44pt effective target).
+    width: isIOS ? 44 : 36,
+    height: isIOS ? 44 : 36,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    ...(isIOS
+      ? null
+      : {
+          borderRadius: 18,
+          backgroundColor: colors.accent,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 4,
+        }),
   },
   checkZone: {
     width: 44,

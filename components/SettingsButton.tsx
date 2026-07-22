@@ -24,7 +24,7 @@ export default function SettingsButton() {
       hitSlop={6}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
-      <Icon name="gear" size={21} color={colors.label} />
+      <Icon name="gear" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />
     </Pressable>
   );
 }

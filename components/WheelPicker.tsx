@@ -128,8 +128,13 @@ function WheelColumn<T>({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         snapToAlignment="start"
-        disableIntervalMomentum
-        decelerationRate="fast"
+        // A flick should FLING and coast through several items, then settle on a
+        // centered row — like a real picker wheel. `disableIntervalMomentum`
+        // (removed) hard-stopped at the first snap point after lift, so a fast
+        // swipe only ever moved one item; "normal" deceleration (not "fast")
+        // gives the long glide. `snapToInterval` still lands it on an item, and
+        // onScroll keeps the highlight + haptics ticking through the whole coast.
+        decelerationRate="normal"
         nestedScrollEnabled
         scrollEventThrottle={16}
         onScrollBeginDrag={() => {

@@ -1,8 +1,37 @@
 import { useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
 import { Platform, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
+import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, font } from "@/lib/theme";
+
+/**
+ * The compact nav-bar title (WhatsApp/iOS style). It stays hidden while the big
+ * in-content title is visible, then fades in once that title has scrolled up
+ * and out of view. Driven by the shared scroll offset from TabScreen.
+ */
+// Scroll offsets (px) over which the big title hands off to the compact one.
+// The compact title stays hidden until FADE_START, then eases fully in by
+// FADE_END — roughly the span where the big in-content title scrolls away.
+const FADE_START = 24;
+const FADE_END = 60;
+
+function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: SharedValue<number> }) {
+  const style = useAnimatedStyle(() => {
+    // Linear progress across the handoff range, then eased with a smoothstep
+    // (3t²−2t³) so the fade accelerates in and decelerates out instead of
+    // snapping at the thresholds — the "smooth" feel.
+    const t = interpolate(scrollY.value, [FADE_START, FADE_END], [0, 1], Extrapolation.CLAMP);
+    const eased = t * t * (3 - 2 * t);
+    return {
+      opacity: eased,
+      // Slide up a few px as it appears (and down as it leaves) for a gentle
+      // WhatsApp-style rise into place rather than a flat cross-fade.
+      transform: [{ translateY: (1 - eased) * 6 }],
+    };
+  });
+  return <Animated.Text style={[styles.collapsedTitle, style]}>{title}</Animated.Text>;
+}
 
 /**
  * Native UINavigationBar styling shared by every stack in the app. Real
@@ -24,6 +53,16 @@ export const nativeHeaderOptions = {
   headerBackTitleStyle: { fontFamily: font.regular },
   headerStyle: { backgroundColor: colors.bg },
   contentStyle: { backgroundColor: colors.bg },
+  // `android.edgeToEdgeEnabled` in app.json draws the window behind the status
+  // bar, but react-native-screens defaults `statusBarTranslucent` to false —
+  // so on Android it computed the header's status-bar inset from the (now
+  // meaningless) frame y-position instead of the real inset, and the header
+  // rendered too short: its icons (gear/bell/coin) landed underneath the
+  // system status bar instead of below it. This tells screens the status bar
+  // really is translucent/overlaid, so it adds the correct inset to the
+  // header height. iOS ignores this option — its header already accounts for
+  // the notch/Dynamic Island on its own.
+  statusBarTranslucent: true,
 };
 
 /**
@@ -39,19 +78,6 @@ export const tabStackScreenOptions = {
 
 function HeaderTrailing({ children }: { children: React.ReactNode }) {
   return <View style={styles.headerTrailing}>{children}</View>;
-}
-
-/**
- * Android draws edge-to-edge (`android.edgeToEdgeEnabled` in app.json), so the
- * window starts behind the status bar. `headerStatusBarHeight` tells
- * react-native-screens how much room to reserve above the header content;
- * without it the header's own accessories overlap the clock and battery.
- * iOS's UINavigationBar already accounts for the notch, so this only applies
- * on Android.
- */
-export function useHeaderStatusBarInset(): { headerStatusBarHeight?: number } {
-  const insets = useSafeAreaInsets();
-  return Platform.OS === "android" ? { headerStatusBarHeight: insets.top } : {};
 }
 
 /**
@@ -86,38 +112,63 @@ export function TabScreen({
 } & ScrollViewProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const statusBarInset = useHeaderStatusBarInset();
+
+  // iOS keeps the native header for the trailing accessories (it clears the
+  // notch reliably). On Android the native header's status-bar inset proved
+  // unreliable under edge-to-edge (accessories rendered UNDER the status bar,
+  // whatever we set for statusBarTranslucent/topInsetEnabled), so instead we
+  // hide the native header on Android and render the same accessories as an
+  // in-content row, offset by the real measured `insets.top`. That inset is
+  // ours to control, so the row is guaranteed to sit below the status bar.
+  const isAndroid = Platform.OS === "android";
+
+  // WhatsApp-style collapsing title: the big in-content title stays as the
+  // page's main heading; a compact title fades into the nav bar only once the
+  // big one has scrolled away. `scrollY` is the live scroll offset that drives
+  // that fade (see CollapsingHeaderTitle).
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: "",
-      ...statusBarInset,
-      headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
+      // Compact nav-bar title that fades in on scroll (iOS only — Android has
+      // no native header here). Empty on Android.
+      headerTitle: !isAndroid ? () => <CollapsingHeaderTitle title={title} scrollY={scrollY} /> : "",
+      headerShown: !isAndroid,
+      headerRight: !isAndroid && trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, trailing, statusBarInset.headerStatusBarHeight]);
+  }, [navigation, title, trailing, isAndroid, scrollY]);
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.root}
-      contentInsetAdjustmentBehavior="automatic"
+      // `never` so the scroll offset starts at 0 (not the header inset), making
+      // the fade thresholds in CollapsingHeaderTitle predictable. The big title
+      // sits directly under the opaque header.
+      contentInsetAdjustmentBehavior="never"
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        // The header is opaque on both platforms, so content already begins
-        // below it — just a little breathing room, no header-height offset
-        // (that offset was the huge empty gap on Android).
-        paddingTop: 8,
+        // Content begins just below the opaque header. On Android there is no
+        // native header, so the in-content accessory row carries the status-bar
+        // inset itself (added below). iOS: no extra gap (pageTitle has its own
+        // small top padding) — keeps the big title tucked under the header.
+        paddingTop: isAndroid ? insets.top + 8 : 0,
         paddingBottom:
-          contentBottomPad + Math.max(insets.bottom, 12) + (Platform.OS === "android" ? ANDROID_TAB_BAR_HEIGHT : 0),
+          contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : 0),
         paddingHorizontal: 16,
       }}
       {...scrollProps}
     >
+      {isAndroid && trailing ? <View style={styles.inContentHeader}>{trailing}</View> : null}
       <Text style={styles.pageTitle}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {children}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -138,16 +189,13 @@ export function PushedScreen({
 }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const statusBarInset = useHeaderStatusBarInset();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       title: title ?? "",
-      ...statusBarInset,
       headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, title, trailing, statusBarInset.headerStatusBarHeight]);
+  }, [navigation, title, trailing]);
 
   if (!scroll) {
     return <View style={[styles.root, { paddingTop: 10 }]}>{children}</View>;
@@ -172,7 +220,15 @@ export function PushedScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  // Android-only in-content stand-in for the native headerRight island: a
+  // right-aligned row sitting above the page title, replacing the native
+  // header that couldn't be trusted to clear the status bar under edge-to-edge.
+  inContentHeader: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", minHeight: 44, marginBottom: 4 },
   pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label, paddingHorizontal: 4, paddingTop: 4 },
   subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10 },
   headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
+  // Compact nav-bar title that fades in on scroll (WhatsApp-style). Larger than
+  // the stock 17pt inline title so it reads prominently, still well below the
+  // big in-content pageTitle.
+  collapsedTitle: { fontSize: 20, fontFamily: font.bold, color: colors.label, letterSpacing: -0.3 },
 });

@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
-import { PressableScale, PRESS_SCALE_SMALL } from "@/components/ui";
+import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { colors, font, radius } from "@/lib/theme";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
 const SPECIES_LABELS: Record<"cat" | "dog", string> = { cat: "Cat", dog: "Dog" };
 const SPECIES_VALUES: Record<string, "cat" | "dog"> = { Cat: "cat", Dog: "dog" };
