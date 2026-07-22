@@ -14,11 +14,19 @@ const FEATURES: { icon: IconName; title: string; body: string }[] = [
   { icon: "bag", title: "Dress up & play", body: "Earn coins caring for your pet, then spoil them with pixel outfits." },
 ];
 
+const TABS: { icon: IconName; title: string; body: string }[] = [
+  { icon: "list", title: "Logs", body: "Log feeding, walks, meds and more with one tap — see everything today." },
+  { icon: "heart-text", title: "Care", body: "Feeding portions, schedules, reminders and vet visits for each pet." },
+  { icon: "home", title: "Home", body: "Your dashboard — today's stats, streaks and quick actions." },
+  { icon: "paw", title: "Pets", body: "Manage profiles and stats, and dress pets up in pixel outfits." },
+  { icon: "people", title: "Community", body: "Swap tips and vote with other pet parents." },
+];
+
 /**
  * First-run intro overlay — mirrors the web Welcome: gated on the household's
- * seenWelcome flag, three steps, skippable. Mounted on Home; renders as a
- * full-screen Modal so it covers the tab bar exactly like the web's absolute
- * overlay covers the phone shell.
+ * seenWelcome flag, four steps (brand, features, tab tour, family), skippable.
+ * Mounted on Home; renders as a full-screen Modal so it covers the tab bar
+ * exactly like the web's absolute overlay covers the phone shell.
  */
 export default function Welcome() {
   const { state, hydrated, setSeenWelcome } = useStore();
@@ -68,6 +76,26 @@ export default function Welcome() {
 
           {step === 2 && (
             <View style={styles.stepCol}>
+              <Text style={styles.stepTitle}>Around the app</Text>
+              <View style={styles.featureList}>
+                {TABS.map((t) => (
+                  <View key={t.title} style={styles.featureRow}>
+                    <View style={styles.featureIcon}>
+                      <Icon name={t.icon} size={18} color={colors.accent} />
+                    </View>
+                    <View style={styles.featureText}>
+                      <Text style={styles.featureTitle}>{t.title}</Text>
+                      <Text style={styles.featureBody}>{t.body}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.stepHint}>Tap the gear icon on any tab for settings, family and reminders.</Text>
+            </View>
+          )}
+
+          {step === 3 && (
+            <View style={styles.stepCol}>
               <Text style={[styles.stepTitle, { textAlign: "center" }]}>Meet the family</Text>
               <Text style={styles.stepBody}>These are the family members on your account.</Text>
               <View style={styles.memberGrid}>
@@ -93,14 +121,14 @@ export default function Welcome() {
         {/* Controls */}
         <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.dots}>
-            {[0, 1, 2].map((i) => (
+            {[0, 1, 2, 3].map((i) => (
               <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
             ))}
           </View>
-          <AccentButton onPress={() => (step < 2 ? setStep(step + 1) : finish())}>
-            {step < 2 ? "Next" : "Start exploring"}
+          <AccentButton onPress={() => (step < 3 ? setStep(step + 1) : finish())}>
+            {step < 3 ? "Next" : "Start exploring"}
           </AccentButton>
-          {step < 2 ? (
+          {step < 3 ? (
             <PressableScale onPress={finish} accessibilityRole="button">
               <View style={styles.skip}>
                 <Text style={styles.skipLabel}>Skip</Text>

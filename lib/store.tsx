@@ -1366,10 +1366,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // generated pets use "sanitation", dogs use "poopbags", all icon "broom".
       const litterSupply =
         type === "litter" || type === "walk" ? pet.supplies.find((s) => s.icon === "broom") : undefined;
-      const litterLevel = litterSupply ? Math.max(0, litterSupply.level - 15) : null;
       // Feeding through the portion picker drains the food supply (icon
       // "bowl") proportionally to the portion — a full cup drains 10%.
       const foodSupply = type === "fed" && grams != null ? pet.supplies.find((s) => s.icon === "bowl") : undefined;
+
+      // Out of stock: block the log entirely rather than draining below 0.
+      if (litterSupply && litterSupply.level <= 0) {
+        toast("alert", "Out of stock", `${pet.name}'s ${litterSupply.name.toLowerCase()} supply is empty — restock before logging this`);
+        return false;
+      }
+      if (foodSupply && foodSupply.level <= 0) {
+        toast("alert", "Out of stock", `${pet.name}'s ${foodSupply.name.toLowerCase()} supply is empty — restock before logging this`);
+        return false;
+      }
+
+      const litterLevel = litterSupply ? Math.max(0, litterSupply.level - 15) : null;
       const foodLevel = foodSupply ? Math.round(Math.max(0, foodSupply.level - 10 * (grams! / pet.cupGrams))) : null;
 
       // Coins via the synchronous shadow ref so rapid taps each build on the

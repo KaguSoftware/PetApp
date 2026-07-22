@@ -44,6 +44,10 @@ export default function FeedPortionSheet({
 
   const confirmTreat = () => {
     if (!treatsSupply) return;
+    if (treatsSupply.level <= 0) {
+      toast("alert", "Out of stock", `${pet.name}'s ${treatsSupply.name.toLowerCase()} supply is empty — restock before giving another`);
+      return;
+    }
     consumeSupply(pet.id, treatsSupply.id);
     onClose();
     toast("star", `${pet.name} got a treat`, `${treatsSupply.name} · ${Math.max(0, treatsSupply.level - 15)}% left`);
