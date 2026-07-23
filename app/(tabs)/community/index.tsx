@@ -402,16 +402,17 @@ const styles = StyleSheet.create({
   },
   caregiveLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   feed: { marginTop: 8, gap: 10 },
-  card: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 14, ...cardShadow },
+  card: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 14, overflow: "hidden", ...cardShadow },
   cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
-  // The chip yields first and the family label holds its width — otherwise a
-  // long breed name expands the chip past the card and pushes the household
-  // attribution off the right edge entirely.
+  // The chip yields first and the family label holds its width where there's
+  // room — but the family label can also shrink (with ellipsis) as a last
+  // resort so a long household name truncates inside the card instead of
+  // spilling past its edge, where a rounded-corner screen clips it.
   breedChipWrap: { flexShrink: 1, minWidth: 0 },
   breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2, flexShrink: 1 },
   adChip: { backgroundColor: colors.accentSoft },
   adChipLabel: { color: colors.accent, fontFamily: font.semibold },
-  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 0 },
+  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 1, minWidth: 0 },
   cardTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.label, lineHeight: 21 },
   cardBody: { marginTop: 4, fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
   cardFooter: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },

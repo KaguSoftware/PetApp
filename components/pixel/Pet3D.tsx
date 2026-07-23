@@ -106,6 +106,13 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   const lastYaw = useRef(0);
   const lastMoveT = useRef(0);
   const rafRef = useRef<number | null>(null);
+  // Bumped every time a GL context is (re)created. On Android, GLView can call
+  // onContextCreate more than once for the same view (resume, tab focus,
+  // relayout); without this, each call started its own requestAnimationFrame
+  // loop and the old ones never stopped, so rotation sped up every time the
+  // context was recreated. Each render loop checks its own token before
+  // rescheduling and bails out once a newer context has taken over.
+  const contextGen = useRef(0);
   // Scene refs so the model can be rebuilt when cosmetics change without
   // recreating the whole GL context.
   const groupRef = useRef<THREE.Group | null>(null);
@@ -137,6 +144,7 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
 
   useEffect(() => {
     return () => {
+      contextGen.current++;
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -175,11 +183,21 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
     });
 
   const onContextCreate = async (gl: ExpoWebGLRenderingContext) => {
+    // Stop any previously running render loop (see contextGen comment above)
+    // before starting this one.
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    const myGen = ++contextGen.current;
+
     // expo-three's Renderer extends THREE.WebGLRenderer at runtime; its shipped
     // types are thin, so treat it as the three renderer it actually is.
     const renderer = new Renderer({ gl, alpha: true }) as unknown as THREE.WebGLRenderer;
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
     renderer.setClearColor(0x000000, 0);
+    // expo-gl's getShaderInfoLog/getProgramInfoLog return null (not "") on
+    // success, and three's own error-checking calls .trim() on that result
+    // unconditionally — crashing every frame (each new material, e.g. from an
+    // equip change, recompiles a program and re-triggers it). Not needed here.
+    renderer.debug.checkShaderErrors = false;
 
     const scene = new THREE.Scene();
     const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
@@ -206,6 +224,7 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
 
     let last = 0;
     const render = (t: number) => {
+      if (myGen !== contextGen.current) return; // superseded by a newer context
       rafRef.current = requestAnimationFrame(render);
       const dt = last ? Math.min(0.05, (t - last) / 1000) : 0.016;
       last = t;

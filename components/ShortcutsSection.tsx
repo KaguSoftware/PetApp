@@ -40,6 +40,13 @@ export default function ShortcutsSection() {
     .filter((s) => s.petIds.some((id) => pets.some((p) => p.id === id)))
     .sort((a, b) => a.sort - b.sort);
 
+  // Nothing left to edit once the list empties (e.g. the last tile was just
+  // removed) — drop out of edit mode so a freshly added shortcut doesn't land
+  // straight back into it.
+  useEffect(() => {
+    if (shortcuts.length === 0 && editing) setEditing(false);
+  }, [shortcuts.length, editing]);
+
   // Nothing to pin a shortcut to yet — Home already shows its own empty state.
   if (pets.length === 0) return null;
 

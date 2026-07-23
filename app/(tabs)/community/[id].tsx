@@ -311,12 +311,12 @@ export default function PostDetail() {
 }
 
 const styles = StyleSheet.create({
-  postCard: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 16, ...cardShadow },
+  postCard: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 16, overflow: "hidden", ...cardShadow },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 },
   // A long breed must shrink the chip, not push the family label off the card.
   breedChipWrap: { flexShrink: 1, minWidth: 0 },
   breedChip: { fontSize: 12, fontFamily: font.medium, color: colors.label2, flexShrink: 1 },
-  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 0 },
+  family: { fontSize: 12, fontFamily: font.medium, color: colors.label3, flexShrink: 1, minWidth: 0 },
   postTitle: { fontSize: 19, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label, lineHeight: 25 },
   postBody: { marginTop: 8, fontSize: 15, fontFamily: font.regular, color: colors.label, lineHeight: 21 },
   postFooter: { marginTop: 14, flexDirection: "row", alignItems: "center", gap: 12 },

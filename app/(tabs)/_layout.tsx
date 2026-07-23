@@ -28,6 +28,11 @@ export default function TabsLayout() {
       tintColor={colors.accent}
       iconColor={Platform.OS === "android" ? colors.label2 : undefined}
       backgroundColor={Platform.OS === "android" ? colors.card : undefined}
+      // Android's BottomNavigationView splits the bar into 5 equal-width
+      // slots and clips the label instead of shrinking it — "Community" (the
+      // longest of the 5) loses its trailing "y" on narrower/high-density
+      // phones (reported on a Huawei P60 Pro). A point smaller avoids the clip.
+      labelStyle={Platform.OS === "android" ? { fontSize: 11 } : undefined}
     >
       <NativeTabs.Trigger name="logs">
         <Icon sf="list.bullet" androidSrc={androidIcon("list")} />
