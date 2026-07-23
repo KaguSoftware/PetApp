@@ -73,18 +73,20 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   // centred at native cols 1.5 and 6.5 (5 apart). Placement is derived so those
   // lens centres land on the eye pixels (both renderers scale the sprite to
   // widthFrac*16 wide, so a source col sx maps to grid col left*16 + sx*boxW/9):
-  //   CAT eyes (petSprites.ts) sit cols 3-4 & 11-12, rows 7-8 → centres x=4,12
-  //     (8 apart) → boxW/9 = 8/5 = 1.6 → widthFrac 0.85 lands both lenses on the
-  //     eyes; left offset centres the pair, top drops the lenses onto rows 7-8.
-  //   DOG eyes sit col 3 & col 10, row 7 → centres x=3.5,10.5 (7 apart) →
-  //     boxW/9 = 1.4 → widthFrac 0.79, one row higher (single eye row).
-  // The old ~0.56/0.44 values pulled the lenses to ~5px apart, sitting them over
-  // the nose bridge instead of the eyes.
+  //   CAT eyes (petSprites.ts) sit cols 3-4 & 11-12, rows 7-8 → centres x=4,12;
+  //     DOG eyes sit col 3 & col 10, row 7 → centres x=3.5,10.5.
+  // Eye-exact width was ~0.85/0.79, but that frame read too large, so widthFrac
+  // is dialled to ~0.75 of it (0.64/0.59) — a smaller frame. `left` AND `top`
+  // are recomputed from the eye-exact version so the frame's horizontal centre
+  // (grid x≈8 cat / ≈7 dog) AND its lens-row centre (≈7.9 cat / ≈7.2 dog) are
+  // preserved — it scales in place. At this size the fixed-spacing lenses land
+  // a hair inside the wide-set cat eyes; widen the sprite's bridge if you want
+  // them dead-centre at the smaller size.
   sunglasses: {
-    place: { left: 0.12, top: 0.4, widthFrac: 0.85 },
+    place: { left: 0.213, top: 0.423, widthFrac: 0.64 },
     placeBySpecies: {
-      cat: { left: 0.12, top: 0.4, widthFrac: 0.85 },
-      dog: { left: 0.088, top: 0.36, widthFrac: 0.79 },
+      cat: { left: 0.213, top: 0.423, widthFrac: 0.64 },
+      dog: { left: 0.177, top: 0.382, widthFrac: 0.59 },
     },
     sprite: P(
       ["BBBB.BBBB", "BBBB.BBBB", "BBBBBBBBB", ".B.....B."],
@@ -92,10 +94,10 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
     ),
   },
   glasses: {
-    place: { left: 0.12, top: 0.4, widthFrac: 0.85 },
+    place: { left: 0.213, top: 0.423, widthFrac: 0.64 },
     placeBySpecies: {
-      cat: { left: 0.12, top: 0.4, widthFrac: 0.85 },
-      dog: { left: 0.088, top: 0.36, widthFrac: 0.79 },
+      cat: { left: 0.213, top: 0.423, widthFrac: 0.64 },
+      dog: { left: 0.177, top: 0.382, widthFrac: 0.59 },
     },
     sprite: P(
       ["OOOO.OOOO", "O..O.O..O", "OOOO.OOOO", ".O.....O."],
