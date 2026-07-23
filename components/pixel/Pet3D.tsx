@@ -24,7 +24,10 @@ const DEPTH = 3; // how many voxels thick the extrusion is
 type Voxel = { x: number; y: number; color: THREE.Color };
 
 /** Flatten a sprite (+ its cosmetics) into a single voxel grid. */
-function spriteVoxels(sprite: Sprite, overlays: { sprite: Sprite; left: number; top: number; scale: number }[]): {
+function spriteVoxels(
+  sprite: Sprite,
+  overlays: { sprite: Sprite; left: number; top: number; w: number; h: number }[]
+): {
   voxels: Voxel[];
   w: number;
   h: number;
@@ -44,11 +47,31 @@ function spriteVoxels(sprite: Sprite, overlays: { sprite: Sprite; left: number; 
       }
     }
   };
+  // Cosmetics must land on the SAME box the 2D badge scales them into
+  // (size*widthFrac wide, aspect-preserved tall — see PixelPet). Painting them
+  // at native pixel size instead left hats as tiny sprites floating in the gap
+  // between the ears, never reaching the head. Nearest-neighbour upsample the
+  // sprite into its target grid box so 3D and 2D place cosmetics identically.
+  const paintScaled = (sp: Sprite, offX: number, offY: number, boxW: number, boxH: number) => {
+    const sh = sp.rows.length;
+    const sw = sp.rows[0]?.length ?? 0;
+    if (!sw || !sh) return;
+    const cols = Math.max(1, Math.round(boxW));
+    const rows = Math.max(1, Math.round(boxH));
+    for (let gy = 0; gy < rows; gy++) {
+      const sy = Math.min(sh - 1, Math.floor((gy / rows) * sh));
+      for (let gx = 0; gx < cols; gx++) {
+        const sx = Math.min(sw - 1, Math.floor((gx / cols) * sw));
+        const ch = sp.rows[sy][sx];
+        const color = sp.palette[ch];
+        if (!color || ch === " " || ch === ".") continue;
+        grid.set(`${Math.round(gx + offX)},${Math.round(gy + offY)}`, color);
+      }
+    }
+  };
   paint(sprite.rows, sprite.palette, 0, 0);
   for (const o of overlays) {
-    // Cosmetics are authored against a 16px face box at the sprite top; map their
-    // fractional placement onto the body grid.
-    paint(o.sprite.rows, o.sprite.palette, o.left, o.top);
+    paintScaled(o.sprite, o.left, o.top, o.w, o.h);
   }
   const voxels: Voxel[] = [];
   for (const [key, color] of grid) {
@@ -65,11 +88,18 @@ function buildPetMesh(pet: Pet): { mesh: THREE.InstancedMesh; fit: number } {
   const hh = head.rows.length;
   const overlays = equippedCosmetics(pet).map(({ cos }) => {
     const place = placementFor(cos, pet.species);
+    const sw = cos.sprite.rows[0]?.length ?? 1;
+    const sh = cos.sprite.rows.length || 1;
+    // Same box the 2D badge uses: widthFrac of the head box wide, height derived
+    // from the sprite's native aspect ratio.
+    const boxW = place.widthFrac * hw;
+    const boxH = boxW * (sh / sw);
     return {
       sprite: cos.sprite,
       left: place.left * hw,
       top: place.top * hh,
-      scale: place.widthFrac,
+      w: boxW,
+      h: boxH,
     };
   });
   const { voxels, w, h } = spriteVoxels(head, overlays);

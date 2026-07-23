@@ -31,35 +31,35 @@ const P = (rows: string[], palette: Record<string, string>): Sprite => ({ rows, 
 export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   /* ---------- HEAD ---------- */
   tophat: {
-    place: { left: 0.22, top: -0.18, widthFrac: 0.56 },
+    place: { left: 0.22, top: -0.27, widthFrac: 0.56 },
     sprite: P(
       ["OOOOOO", "OBBBBO", "OBBBBO", "OBBBBO", "RRRRRR", "OOOOOO"],
       { O: "#1c1c26", B: "#33333f", R: "#d23b57" }
     ),
   },
   crown: {
-    place: { left: 0.24, top: -0.1, widthFrac: 0.52 },
+    place: { left: 0.24, top: -0.18, widthFrac: 0.52 },
     sprite: P(
       ["G.G.G", "GGGGG", "GJGJG", "GGGGG"],
       { G: "#f5c542", J: "#e0443f" }
     ),
   },
   cap: {
-    place: { left: 0.175, top: -0.06, widthFrac: 0.65 },
+    place: { left: 0.175, top: -0.12, widthFrac: 0.65 },
     sprite: P(
       [".RRRR..", "RRRRRR.", "RRRRRRR", "..WWWWW"],
       { R: "#2f7de0", W: "#1b4e93" }
     ),
   },
   party: {
-    place: { left: 0.29, top: -0.22, widthFrac: 0.42 },
+    place: { left: 0.29, top: -0.27, widthFrac: 0.42 },
     sprite: P(
       ["..Y..", "..P..", ".PPP.", ".GGG.", "BBBBB"],
       { Y: "#f5c542", P: "#e0443f", G: "#3fb56b", B: "#2f7de0" }
     ),
   },
   santa: {
-    place: { left: 0.2, top: -0.12, widthFrac: 0.6 },
+    place: { left: 0.2, top: -0.2, widthFrac: 0.6 },
     // All rows must be equal length or PixelSprite (which reads row[0] for width)
     // clips the wider brim — pad the hat body to the brim's 6-wide grid.
     sprite: P(
@@ -69,15 +69,22 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
   },
 
   /* ---------- FACE ---------- */
-  // Face items are authored on a 9-wide grid so each lens is 4px across — at
-  // 7 wide the lenses rendered as 2px specks that read as smudges, not glasses.
-  // The cat's eyes span cols 3-12 of 16 (rows 7-8), so the frame covers the
-  // full width of both eyes; the dog's are narrower and one row higher.
+  // Face items are authored on a 9-wide grid: the two 4px lens frames are
+  // centred at native cols 1.5 and 6.5 (5 apart). Placement is derived so those
+  // lens centres land on the eye pixels (both renderers scale the sprite to
+  // widthFrac*16 wide, so a source col sx maps to grid col left*16 + sx*boxW/9):
+  //   CAT eyes (petSprites.ts) sit cols 3-4 & 11-12, rows 7-8 → centres x=4,12
+  //     (8 apart) → boxW/9 = 8/5 = 1.6 → widthFrac 0.85 lands both lenses on the
+  //     eyes; left offset centres the pair, top drops the lenses onto rows 7-8.
+  //   DOG eyes sit col 3 & col 10, row 7 → centres x=3.5,10.5 (7 apart) →
+  //     boxW/9 = 1.4 → widthFrac 0.79, one row higher (single eye row).
+  // The old ~0.56/0.44 values pulled the lenses to ~5px apart, sitting them over
+  // the nose bridge instead of the eyes.
   sunglasses: {
-    place: { left: 0.025, top: 0.4, widthFrac: 0.95 },
+    place: { left: 0.12, top: 0.4, widthFrac: 0.85 },
     placeBySpecies: {
-      cat: { left: 0.025, top: 0.395, widthFrac: 0.95 },
-      dog: { left: 0.035, top: 0.35, widthFrac: 0.92 },
+      cat: { left: 0.12, top: 0.4, widthFrac: 0.85 },
+      dog: { left: 0.088, top: 0.36, widthFrac: 0.79 },
     },
     sprite: P(
       ["BBBB.BBBB", "BBBB.BBBB", "BBBBBBBBB", ".B.....B."],
@@ -85,21 +92,23 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
     ),
   },
   glasses: {
-    place: { left: 0.025, top: 0.4, widthFrac: 0.95 },
+    place: { left: 0.12, top: 0.4, widthFrac: 0.85 },
     placeBySpecies: {
-      cat: { left: 0.025, top: 0.395, widthFrac: 0.95 },
-      dog: { left: 0.035, top: 0.35, widthFrac: 0.92 },
+      cat: { left: 0.12, top: 0.4, widthFrac: 0.85 },
+      dog: { left: 0.088, top: 0.36, widthFrac: 0.79 },
     },
     sprite: P(
       ["OOOO.OOOO", "O..O.O..O", "OOOO.OOOO", ".O.....O."],
       { O: "#3a3a48" }
     ),
   },
+  // Sits over one eye only — cat's right eye (cols 11-12), dog's single eye
+  // (col 10) — sized to just frame it rather than span the whole face.
   monocle: {
-    place: { left: 0.45, top: 0.4, widthFrac: 0.4 },
+    place: { left: 0.6, top: 0.3125, widthFrac: 0.25 },
     placeBySpecies: {
-      cat: { left: 0.51, top: 0.4, widthFrac: 0.4 },
-      dog: { left: 0.45, top: 0.36, widthFrac: 0.38 },
+      cat: { left: 0.6, top: 0.3125, widthFrac: 0.25 },
+      dog: { left: 0.5, top: 0.3125, widthFrac: 0.25 },
     },
     sprite: P(
       ["GGGG", "G..G", "GGGG", "..C."],
@@ -109,7 +118,7 @@ export const COSMETIC_SPRITES: Record<string, CosmeticSprite> = {
 
   /* ---------- NECK ---------- */
   bowtie: {
-    place: { left: 0.29, top: 0.74, widthFrac: 0.42 },
+    place: { left: 0.4, top: 0.74, widthFrac: 0.21 },
     sprite: P(
       ["R.R", "RKR", "R.R"],
       { R: "#d23b57", K: "#8f2233" }
