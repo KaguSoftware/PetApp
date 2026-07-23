@@ -99,7 +99,7 @@ export default function MedPickerSheet({
         <>
           <SheetTitle>{title}</SheetTitle>
           <SheetSubtitle>For {pet.name}</SheetSubtitle>
-          <View style={{ marginTop: 12 }}>
+          <View style={{ marginTop: 16 }}>
             <Group>
               {pet.meds.map((m) => {
                 const status = careItemStatus(pet, "meds", m.id, state.schedules, state.activities, Date.now());

@@ -190,6 +190,9 @@ export interface Activity {
   grams?: number;
   /** Which medication a "meds" activity was for. Absent on legacy rows. */
   medId?: string;
+  /** How long the session lasted, in minutes — set for "walk" (exercise & play)
+   *  logs made through the duration picker. Absent on legacy rows. */
+  durationMinutes?: number;
 }
 
 /** One scheduled time within a care schedule. */
@@ -408,6 +411,11 @@ export interface Vet {
   sponsored: boolean;
   specialties: string[];
   openNow: boolean;
+  /** Demo marketplace contact/info fields — drive the vet detail page. */
+  phone: string;
+  address: string;
+  hours: string;
+  about: string;
 }
 
 export const VETS: Vet[] = [
@@ -421,6 +429,10 @@ export const VETS: Vet[] = [
     sponsored: true,
     specialties: ["General", "Dental", "Cats"],
     openNow: true,
+    phone: "+1 (555) 014-2237",
+    address: "128 Maple Grove Ave",
+    hours: "Mon–Fri 8:00–18:00 · Sat 9:00–14:00",
+    about: "Full-service neighborhood clinic with an in-house dental suite and a dedicated cats-only waiting room. Same-week appointments for established patients.",
   },
   {
     id: "okoro",
@@ -432,6 +444,10 @@ export const VETS: Vet[] = [
     sponsored: true,
     specialties: ["Surgery", "Dogs", "Orthopedics"],
     openNow: true,
+    phone: "+1 (555) 014-8841",
+    address: "47 Riverside Parkway, Suite 3",
+    hours: "Mon–Sat 7:30–19:00",
+    about: "Referral surgery center focused on orthopedics and soft-tissue procedures, with on-site imaging and a supervised recovery ward.",
   },
   {
     id: "patel",
@@ -443,6 +459,10 @@ export const VETS: Vet[] = [
     sponsored: false,
     specialties: ["General", "Nutrition"],
     openNow: false,
+    phone: "+1 (555) 014-5510",
+    address: "902 Elm Street",
+    hours: "Tue–Sat 9:00–17:00",
+    about: "General practice with a special interest in diet plans and weight management — bring your pet's food label to the first visit.",
   },
   {
     id: "mueller",
@@ -454,6 +474,10 @@ export const VETS: Vet[] = [
     sponsored: false,
     specialties: ["Vaccination", "Exotics"],
     openNow: true,
+    phone: "+1 (555) 014-9903",
+    address: "15 Old Mill Road",
+    hours: "Mon–Fri 10:00–18:00",
+    about: "Walk-in vaccination clinic that also sees birds, reptiles, and small mammals. No appointment needed for boosters.",
   },
 ];
 

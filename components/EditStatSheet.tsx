@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { View } from "react-native";
 import Sheet from "@/components/Sheet";
 import WheelPicker from "@/components/WheelPicker";
 import { AccentButton, FieldLabel, SheetFooter, SheetTitle, TextField } from "@/components/ui";
@@ -102,16 +101,14 @@ export default function EditStatSheet({
 
       <FieldLabel>{label}</FieldLabel>
       {wheel ? (
-        <View style={{ marginTop: 4 }}>
-          <WheelPicker
-            whole={wholeValues}
-            decimals={decimalValues}
-            value={wheelValue}
-            onChange={setWheelValue}
-            unit={unit}
-            decimalPlaces={decimalPlaces}
-          />
-        </View>
+        <WheelPicker
+          whole={wholeValues}
+          decimals={decimalValues}
+          value={wheelValue}
+          onChange={setWheelValue}
+          unit={unit}
+          decimalPlaces={decimalPlaces}
+        />
       ) : (
         <TextField
           keyboardType="decimal-pad"

@@ -390,7 +390,9 @@ export default function ScheduleEditorSheet({
           </AccentButton>
           {existing ? (
             <AccentButton variant="gray" onPress={remove}>
-              Remove schedule
+              {/* Red label on the gray fill — the stock iOS destructive-secondary
+                  look; AccentButton renders non-string children as-is. */}
+              <Text style={styles.removeLabel}>Remove schedule</Text>
             </AccentButton>
           ) : null}
         </View>
@@ -427,12 +429,14 @@ const styles = StyleSheet.create({
   // Clips the horizontal slide so a drilling view can't spill past the sheet's
   // edges mid-transition.
   drillClip: { overflow: "hidden" },
-  slotList: { gap: 14 },
+  slotList: { gap: 12 },
   slotBlock: { gap: 8 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   timeChip: {
     minWidth: 92,
-    minHeight: 44,
+    // Matches TextField's 48pt min height so the time chip and the name field
+    // share one baseline across the slot row.
+    minHeight: 48,
     paddingHorizontal: 14,
     borderRadius: radius.sm,
     backgroundColor: colors.card,
@@ -441,14 +445,18 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
-  pickerBody: { marginTop: 12 },
+  // The drilled-in wheel sits in an inset card (same surface as the slot's time
+  // chip) so it reads as that slot's own editing surface, not a floating
+  // control. Card bg keeps the wheel's fill selection band visible.
+  pickerBody: { marginTop: 16, borderRadius: radius.md, backgroundColor: colors.card, paddingVertical: 8, ...cardShadow },
   slotName: { flex: 1, marginTop: 0 },
   removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
-  portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 2 },
-  addTime: { marginTop: 10, alignSelf: "flex-start" },
-  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 2 },
+  addTime: { marginTop: 12, alignSelf: "flex-start" },
+  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   intervalRow: { flexDirection: "row" },
-  cadenceWrap: { gap: 10 },
-  cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  cadenceWrap: { gap: 12 },
+  cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
+  removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
 });

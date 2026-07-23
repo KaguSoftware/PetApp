@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
+// Aliased: this app's own state type is also named AppState (lib/data.ts).
+import { AppState as RNAppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CareSchedule, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
@@ -88,8 +90,9 @@ interface Store {
   dismissToast: (id: number) => void;
   stopNotifications: () => void;
   /** Log a care action. `ts` (default now) allows retro logging — earlier today or yesterday.
-   *  `medId` records which medication a "meds" log was for. */
-  logAction: (petId: string, type: ActionType, grams?: number, ts?: number, medId?: string) => boolean;
+   *  `medId` records which medication a "meds" log was for; `durationMinutes`
+   *  how long a "walk" (exercise & play) session lasted. */
+  logAction: (petId: string, type: ActionType, grams?: number, ts?: number, medId?: string, durationMinutes?: number) => boolean;
   /** Compensating undo for a just-logged action: removes the activity, takes back the coins, recomputes the streak. */
   undoLogAction: (activityId: string) => void;
   switchMember: (id: string) => void;
@@ -437,6 +440,9 @@ type HouseholdRow = {
   coins: number;
   xp: number;
   streak: number;
+  /** Highest streak milestone already paid out (0, 10, 20…). Absent from the
+   *  row until migration 0024 — absence disables milestone bonuses. */
+  last_streak_bonus?: number | null;
   seen_welcome: boolean;
   units: "kg" | "lb";
   last_seen_at: number | null;
@@ -454,7 +460,7 @@ type HouseholdRow = {
     notify_vet_suggestions: boolean;
   }[];
   pets: (PetRow & { created_at: string })[];
-  activities: { id: string; pet_id: string; member_id: string; type: ActionType; ts: number; note: string | null; grams: number | null; med_id?: string | null }[];
+  activities: { id: string; pet_id: string; member_id: string; type: ActionType; ts: number; note: string | null; grams: number | null; med_id?: string | null; duration_minutes?: number | null }[];
   reminders: { id: string; pet_id: string; title: string; emoji: string; due: number; done: boolean; source: "manual" | "plan"; alert: boolean | null; vet_id: string | null; alert_kind: string | null; repeat_kind: RepeatKind | "none" | null; repeat_interval: number | null; vaccination_id: string | null }[];
   booked_vets: { vet_id: string }[];
 };
@@ -537,7 +543,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // Authoritative coins for DB writes, mutated synchronously inside
   // logAction/buyCosmetic so two rapid taps can't both compute from the same
   // stale render and lose an increment. Reset from the server in load().
-  const rewardsRef = useRef({ coins: state.coins });
+  // `lastStreakBonus` mirrors households.last_streak_bonus (migration 0024):
+  // the highest 10-day streak milestone already paid. `null` = the column
+  // doesn't exist yet (pre-0024 DB) — milestone bonuses stay off entirely so
+  // syncCounters never writes a column that would bounce the whole update.
+  const rewardsRef = useRef<{ coins: number; lastStreakBonus: number | null }>({ coins: state.coins, lastStreakBonus: null });
   // True when hydration had to fall back to the pre-0013 select — reminder
   // inserts then omit the v2 columns so they still succeed on the old schema.
   const legacySchemaRef = useRef(false);
@@ -545,6 +555,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // CRUD then stays local-only and activity inserts omit med_id, so the app
   // degrades to the count-target behavior instead of failing writes.
   const scheduleSchemaRef = useRef(false);
+  // True when activities.duration_minutes (migration 0022) is missing — walk
+  // logs then persist without their duration instead of failing outright.
+  // Unlike the schedule/shortcut tables this can't be probed by a select
+  // (hydration's `select *` succeeds either way), so it's learned from the
+  // first insert that the column bounces.
+  const durationSchemaRef = useRef(false);
   // True when the shortcuts table (migration 0018) is missing — shortcut CRUD
   // then persists to an on-device AsyncStorage cache instead of the shared
   // table, so Home shortcuts still survive restarts (just not shared yet).
@@ -683,7 +699,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       countersTimerRef.current = null;
       supabase
         .from("households")
-        .update({ coins: rewardsRef.current.coins, streak: stateRef.current.streak })
+        .update({
+          coins: rewardsRef.current.coins,
+          streak: stateRef.current.streak,
+          // Only written post-0024 (null = column absent; including it then
+          // would bounce the whole coins/streak update).
+          ...(rewardsRef.current.lastStreakBonus != null ? { last_streak_bonus: rewardsRef.current.lastStreakBonus } : {}),
+        })
         .eq("id", h)
         .then(({ error }) => {
           if (error) {
@@ -699,6 +721,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  // Age auto-update: ages derive from birthDate at hydration only, so a
+  // session kept alive (or backgrounded) across midnight — or a birthday —
+  // would keep showing yesterday's age until the next full reload. Re-derive
+  // on every return to foreground when the calendar day has changed. Display
+  // only: the DB's age_years is already reconciled on every birth-date edit.
+  const lastAgeDayRef = useRef(new Date().toDateString());
+  useEffect(() => {
+    const sub = RNAppState.addEventListener("change", (status) => {
+      if (status !== "active") return;
+      const today = new Date().toDateString();
+      if (today === lastAgeDayRef.current) return;
+      lastAgeDayRef.current = today;
+      setState((prev) => {
+        let changed = false;
+        const pets = prev.pets.map((p) => {
+          if (p.birthDate == null) return p;
+          const age = ageYearsFromBirthDate(p.birthDate);
+          if (age === p.ageYears) return p;
+          changed = true;
+          return { ...p, ageYears: age };
+        });
+        return changed ? { ...prev, pets } : prev;
+      });
+    });
+    return () => sub.remove();
+  }, []);
 
   // Toast the given member about what everyone *else* logged in the last 16h
   // — never their own actions. Used both on login/reload and on switching
@@ -773,9 +822,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .insert({ id, household_id: h, pet_id: pet.id, title, emoji: "🩺", due: ts, done: false, source: "manual", alert: true, vet_id: vetId })
         .then(({ error }) => {
           // Roll the optimistic alert back out if it didn't persist, so the
-          // in-memory reminders don't silently diverge from the DB.
+          // in-memory reminders don't silently diverge from the DB. 23505 is
+          // the 0023 dedupe index doing its job — another device already
+          // raised this exact alert today, so losing ours is the point.
           if (error) {
-            console.error("[petpal] health alert insert failed:", error);
+            if ((error as { code?: string }).code !== "23505") console.error("[petpal] health alert insert failed:", error);
             setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== id) }));
           }
         });
@@ -820,8 +871,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .from("reminders")
         .insert({ id, household_id: h, pet_id: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, vet_id: null, alert_kind: kind })
         .then(({ error }) => {
+          // 23505 = the 0023 dedupe index rejected a cross-device duplicate
+          // raise — expected, not an error. Everything else still logs.
           if (error) {
-            console.error("[petpal] care alert insert failed:", error);
+            if ((error as { code?: string }).code !== "23505") console.error("[petpal] care alert insert failed:", error);
             setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== id) }));
           }
         });
@@ -1123,6 +1176,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         note: a.note ?? undefined,
         grams: a.grams ?? undefined,
         medId: a.med_id ?? undefined,
+        durationMinutes: a.duration_minutes ?? undefined,
       }));
       // Per-user "view as": prefer the current user's own linked member card,
       // then the household's shared pointer, then the first member. This keeps
@@ -1160,7 +1214,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Derive the streak from real history so the headline always matches the
       // calendar's lit days; persist it back if the stored value drifted.
       const computedStreak = computeStreak(activityList);
-      rewardsRef.current = { coins: h.coins };
+      // Milestone marker: only live when the 0024 column is actually on the
+      // row (`select *` returns it post-migration). If the streak broke and
+      // rebuilt below the paid marker, lower the marker to the current paid
+      // floor so future milestones pay again.
+      const storedMarker = "last_streak_bonus" in h ? (h.last_streak_bonus ?? 0) : null;
+      const lastStreakBonus = storedMarker == null ? null : Math.min(storedMarker, Math.floor(computedStreak / 10) * 10);
+      rewardsRef.current = { coins: h.coins, lastStreakBonus };
       setState({
         currentMemberId,
         premium: h.premium,
@@ -1183,8 +1243,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       setHydrated(true);
       resolvePendingRefreshes();
-      if (computedStreak !== h.streak) {
-        bestEffort(supabase.from("households").update({ streak: computedStreak }).eq("id", h.id), "streak update");
+      if (computedStreak !== h.streak || (lastStreakBonus != null && lastStreakBonus !== storedMarker)) {
+        bestEffort(
+          supabase
+            .from("households")
+            .update({
+              streak: computedStreak,
+              // Persist a lowered milestone marker (streak broke) right away —
+              // otherwise a reload before the next log would re-raise it.
+              ...(lastStreakBonus != null && lastStreakBonus !== storedMarker ? { last_streak_bonus: lastStreakBonus } : {}),
+            })
+            .eq("id", h.id),
+          "streak update"
+        );
       }
 
       // Catch the signed-in member up on what everyone *else* logged in the
@@ -1298,7 +1369,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!removed) return;
       const pet = stateRef.current.pets.find((p) => p.id === removed.petId);
       const remaining = stateRef.current.activities.filter((a) => a.id !== activityId);
-      rewardsRef.current = { coins: Math.max(0, rewardsRef.current.coins - 5) };
+      rewardsRef.current = { ...rewardsRef.current, coins: Math.max(0, rewardsRef.current.coins - 5) };
       const newStreak = computeStreak(remaining);
       // Mirror logAction's supply drain in reverse (litter/walk: broom −15;
       // fed-with-grams: bowl −10 per full cup).
@@ -1344,7 +1415,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logAction = useCallback(
-    (petId: string, type: ActionType, grams?: number, tsArg?: number, medId?: string): boolean => {
+    (petId: string, type: ActionType, grams?: number, tsArg?: number, medId?: string, durationMinutes?: number): boolean => {
       const h = hid();
       if (!h) return false;
       const pet = stateRef.current.pets.find((p) => p.id === petId);
@@ -1386,22 +1457,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Coins via the synchronous shadow ref so rapid taps each build on the
       // previous increment instead of the same stale render value.
       const newCoins = rewardsRef.current.coins + 5;
-      rewardsRef.current = { coins: newCoins };
+      rewardsRef.current = { ...rewardsRef.current, coins: newCoins };
 
-      const newActivity: Activity = { id, petId, memberId, type, ts, grams, medId };
+      const newActivity: Activity = { id, petId, memberId, type, ts, grams, medId, durationMinutes };
       const newStreak = computeStreak([newActivity, ...stateRef.current.activities]);
 
       // Snapshot for rollback if the DB rejects the write.
       const before = {
         coins: stateRef.current.coins,
         streak: stateRef.current.streak,
+        lastStreakBonus: rewardsRef.current.lastStreakBonus,
         activities: stateRef.current.activities,
         pets: stateRef.current.pets,
       };
 
+      // Streak milestone bonus (10-day steps → +20 coins each). Paid exactly
+      // once per milestone: the marker records the highest step already paid
+      // and persists with coins/streak in the same debounced counters write,
+      // so reloads and other devices can't double-award. Disabled (null)
+      // until migration 0024 adds the column.
+      let bonusCoins = 0;
+      const marker = rewardsRef.current.lastStreakBonus;
+      if (marker != null) {
+        const milestone = Math.floor(newStreak / 10) * 10;
+        if (milestone > marker) {
+          bonusCoins = ((milestone - marker) / 10) * 20;
+          rewardsRef.current = { coins: rewardsRef.current.coins + bonusCoins, lastStreakBonus: milestone };
+        }
+      }
+
       setState((prev) => ({
         ...prev,
-        coins: prev.coins + 5,
+        coins: prev.coins + 5 + bonusCoins,
         streak: newStreak,
         activities: [newActivity, ...prev.activities],
         pets: prev.pets.map((p) => {
@@ -1418,7 +1505,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       const time = new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const timeLabel = isToday ? time : `${time} yesterday`;
-      const gramsNote = type === "fed" && grams != null ? `${Math.round(grams)} g · ` : "";
+      const gramsNote =
+        type === "fed" && grams != null
+          ? `${Math.round(grams)} g · `
+          : durationMinutes != null
+            ? `${durationMinutes} min · `
+            : "";
       toast(ACTION_ICON[type].icon, `${pet.name} — ${ACTIONS[type].label.toLowerCase()} at ${timeLabel}`, `Family notified · ${gramsNote}+5 coins`, {
         label: "Undo",
         onClick: () => undoLogAction(id),
@@ -1426,17 +1518,53 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // NOTE: the person who performs the action is NOT sent a push notification —
       // they already see the in-app toast above. Notifications are for *other*
       // family members (that path lives in raiseFeedingAlert/raiseCareAlert).
-      if (newStreak > before.streak) toast("flame", `${newStreak}-day streak!`, "You're on a roll — keep it going");
+      if (bonusCoins > 0) {
+        toast("flame", `${newStreak}-day streak — bonus!`, `+${bonusCoins} coins for keeping it going`);
+      } else if (newStreak > before.streak) {
+        toast("flame", `${newStreak}-day streak!`, "You're on a roll — keep it going");
+      }
 
       // Persist the activity (+ any supply drain) per-row; on failure roll the
       // whole slice back. Coins/streak go through the debounced syncCounters
       // so rapid taps can't race at the DB.
       // med_id only exists from migration 0017 — omit it entirely on older DBs
       // so the insert still succeeds.
-      const medIdCols = medId != null && !scheduleSchemaRef.current ? { med_id: medId } : {};
-      const ops: PromiseLike<{ error: unknown }>[] = [
-        supabase.from("activities").insert({ id, household_id: h, pet_id: petId, member_id: memberId, type, ts, grams: grams ?? null, ...medIdCols }),
-      ];
+      // med_id only exists from 0017, duration_minutes from 0022 — both are
+      // added only when their schema is known-present. There's no cheap probe
+      // for duration_minutes (hydration's `select *` succeeds either way), so
+      // the first insert that bounces on it marks the schema pre-0022 and
+      // retries without the duration — the log itself still lands, unmeasured.
+      type ActivityInsertRow = {
+        id: string;
+        household_id: string;
+        pet_id: string;
+        member_id: string;
+        type: ActionType;
+        ts: number;
+        grams: number | null;
+        med_id?: string;
+        duration_minutes?: number;
+      };
+      const activityRow: ActivityInsertRow = { id, household_id: h, pet_id: petId, member_id: memberId, type, ts, grams: grams ?? null };
+      if (medId != null && !scheduleSchemaRef.current) activityRow.med_id = medId;
+      if (durationMinutes != null && !durationSchemaRef.current) activityRow.duration_minutes = durationMinutes;
+      const insertActivity: PromiseLike<{ error: unknown }> =
+        activityRow.duration_minutes != null
+          ? supabase
+              .from("activities")
+              .insert(activityRow)
+              .then((res) => {
+                const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
+                if (res.error && msg.includes("duration_minutes")) {
+                  console.warn("[petpal] activities.duration_minutes unavailable — apply migration 0022; logging without duration");
+                  durationSchemaRef.current = true;
+                  const { duration_minutes: _omit, ...withoutDuration } = activityRow;
+                  return supabase.from("activities").insert(withoutDuration);
+                }
+                return res;
+              })
+          : supabase.from("activities").insert(activityRow);
+      const ops: PromiseLike<{ error: unknown }>[] = [insertActivity];
       if (litterSupply && litterLevel != null) {
         ops.push(supabase.from("supplies").update({ level: litterLevel }).eq("pet_id", petId).eq("supply_key", litterSupply.id));
       }
@@ -1445,7 +1573,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       persist(ops, {
         rollback: () => {
-          rewardsRef.current = { coins: before.coins };
+          rewardsRef.current = { coins: before.coins, lastStreakBonus: before.lastStreakBonus };
           setState((prev) => ({ ...prev, coins: before.coins, streak: before.streak, activities: before.activities, pets: before.pets }));
           syncCounters();
         },
@@ -2551,6 +2679,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           notFound ? "Check the Family ID and try again" : "Please try again"
         );
         return false;
+      }
+      // Make the joined household the active one BEFORE re-hydrating —
+      // load() resolves what to show from user_profiles.active_household_id,
+      // so without this the reload re-hydrated the OLD household and the
+      // "loading it now" toast lied. Idempotent even if the RPC also sets it.
+      const uid = userIdRef.current;
+      if (uid) {
+        const { error: profileErr } = await supabase.from("user_profiles").upsert({ user_id: uid, active_household_id: target });
+        if (profileErr) console.error("[petpal] active household update after join failed:", profileErr);
       }
       toast("home", "Joined household", "Loading it now…");
       // Full re-hydration so the store loads the newly-active household.

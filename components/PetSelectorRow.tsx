@@ -17,10 +17,13 @@ export default function PetSelectorRow({
   pets,
   selectedId,
   onSelect,
+  onAdd,
 }: {
   pets: Pet[];
   selectedId: string;
   onSelect: (petId: string) => void;
+  /** When set, a trailing "+" tile opens the add-a-pet flow (Pets tab). */
+  onAdd?: () => void;
 }) {
   if (pets.length === 0) return null;
   return (
@@ -33,6 +36,20 @@ export default function PetSelectorRow({
       {pets.map((p) => (
         <PetSelectorItem key={p.id} pet={p} selected={p.id === selectedId} onPress={() => onSelect(p.id)} />
       ))}
+      {onAdd ? (
+        <PressableScale haptic onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add a pet">
+          <View style={styles.item}>
+            <View style={[styles.avatarWrap, styles.avatarUnselected]}>
+              <View style={styles.addCircle}>
+                <Text style={styles.addGlyph}>+</Text>
+              </View>
+            </View>
+            <Text numberOfLines={1} style={styles.name}>
+              Add
+            </Text>
+          </View>
+        </PressableScale>
+      ) : null}
     </ScrollView>
   );
 }
@@ -85,4 +102,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   nameSelected: { fontFamily: font.semibold, color: colors.label },
+  // "+" tile sized to match PetAvatar md (56pt) inside the same ring padding.
+  addCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: withAlpha(colors.accent, 0.1),
+  },
+  addGlyph: { fontSize: 26, lineHeight: 30, fontFamily: font.medium, color: colors.accent },
 });

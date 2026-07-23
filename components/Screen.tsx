@@ -1,8 +1,9 @@
-import { useNavigation } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { useLayoutEffect } from "react";
-import { Platform, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Icon } from "@/components/Icons";
 import { colors, font } from "@/lib/theme";
 
 /**
@@ -34,10 +35,48 @@ function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: Sha
 }
 
 /**
+ * Custom back button rendered into the header's LEFT slot.
+ *
+ * Why not the system back chevron: react-native-screens 4.16.0 (the version
+ * baked into Expo Go for SDK 54) has a native iOS 26 bug where the system
+ * back button renders but taps do nothing when `headerShown: false` or a
+ * custom header exists anywhere in the ancestry — exactly this app's setup
+ * (root stack hides headers for (tabs); tab stacks use a custom collapsing
+ * headerTitle). Edge-swipe still pops, and `router.back()` works, so we ship
+ * our own left item through the header-subview path (the same mechanism the
+ * headerRight island already uses, which DOES receive taps).
+ * See software-mansion/react-native-screens#3294 / #3270.
+ *
+ * SCOPE(EAS cutover): remove this + `headerBackVisible: false` once dev
+ * builds pin a react-native-screens with the iOS 26 fix — the real system
+ * chevron is always preferable.
+ *
+ * Deliberately a plain Pressable (opacity dim, no scale): UIKit's own back
+ * item dims while held, and a spring-scale transform inside a UIBarButtonItem
+ * can clip against the bar's bounds.
+ */
+function HeaderBackButton() {
+  return (
+    <Pressable
+      onPress={() => {
+        if (router.canGoBack()) router.back();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      hitSlop={{ top: 12, bottom: 12, left: 16, right: 8 }}
+      style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.35 }]}
+    >
+      <Icon name="chevron-left" size={24} color={colors.accent} />
+      <Text style={styles.backLabel}>Back</Text>
+    </Pressable>
+  );
+}
+
+/**
  * Native UINavigationBar styling shared by every stack in the app. Real
  * system chrome — large titles that collapse with UIKit physics, blur under
- * the bar, the platform back chevron, interactive edge-swipe pop. No
- * hand-rolled headers anywhere.
+ * the bar, interactive edge-swipe pop. The back button is the one exception
+ * to "no hand-rolled chrome" (see HeaderBackButton for why).
  */
 export const nativeHeaderOptions = {
   // A standard OPAQUE native header. iOS gives it the system material and
@@ -46,11 +85,15 @@ export const nativeHeaderOptions = {
   headerShadowVisible: false,
   headerTintColor: colors.accent,
   headerTitleStyle: { fontFamily: font.semibold, color: colors.label },
-  // Always show the "Back" text next to the chevron (iOS defaults to icon-only
-  // "minimal" mode on many screens otherwise).
-  headerBackTitle: "Back",
-  headerBackButtonDisplayMode: "default" as const,
-  headerBackTitleStyle: { fontFamily: font.regular },
+  // iOS only: hide the system back item (unresponsive on iOS 26 in Expo Go —
+  // see HeaderBackButton above) and render our own tappable one in its place.
+  // Android keeps the working native back arrow. Edge-swipe pop is unaffected.
+  ...(Platform.OS === "ios"
+    ? {
+        headerBackVisible: false,
+        headerLeft: ({ canGoBack }: { canGoBack?: boolean }) => (canGoBack ? <HeaderBackButton /> : null),
+      }
+    : {}),
   headerStyle: { backgroundColor: colors.bg },
   contentStyle: { backgroundColor: colors.bg },
   // `android.edgeToEdgeEnabled` in app.json draws the window behind the status
@@ -227,6 +270,10 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label, paddingHorizontal: 4, paddingTop: 4 },
   subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10 },
   headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
+  // Custom back item (see HeaderBackButton). Mirrors the system metrics: 17pt
+  // label, chevron tucked 4px left of it, 44pt-tall touch area via hitSlop.
+  backButton: { flexDirection: "row", alignItems: "center", minHeight: 32, paddingRight: 6 },
+  backLabel: { fontSize: 17, fontFamily: font.regular, color: colors.accent, marginLeft: 2 },
   // Compact nav-bar title that fades in on scroll (WhatsApp-style). Larger than
   // the stock 17pt inline title so it reads prominently, still well below the
   // big in-content pageTitle.

@@ -3,7 +3,7 @@ import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
 import { Icon } from "@/components/Icons";
 import PageLoading from "@/components/PageLoading";
-import PetAvatar from "@/components/PetAvatar";
+import PetSelectorRow from "@/components/PetSelectorRow";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import Pet3D from "@/components/pixel/Pet3D";
 import { PixelCosmetic } from "@/components/pixel/PixelPet";
@@ -176,7 +176,6 @@ export default function PetsScreen() {
   const [weightInput, setWeightInput] = useState("");
   const [cupInput, setCupInput] = useState("");
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
-  const [petPickerOpen, setPetPickerOpen] = useState(false);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
   const bump = useSharedValue(1);
@@ -350,43 +349,9 @@ export default function PetsScreen() {
       trailing={<HeaderActions />}
       refreshControl={refreshControl}
     >
-      {state.pets.length > 1 ? (
-        <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" style={{ marginBottom: 8 }}>
-          <View style={styles.petSwitcher}>
-            <Text style={styles.petSwitcherName}>{pet.name}</Text>
-            <Chevron />
-          </View>
-        </PressableScale>
-      ) : null}
-
-      <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <View style={{ marginBottom: 12 }}>
-          <SheetTitle>Switch pet</SheetTitle>
-        </View>
-        <Group>
-          {state.pets.map((p) => (
-            <Row
-              key={p.id}
-              onPress={() => {
-                setPetId(p.id);
-                setPetPickerOpen(false);
-              }}
-              leading={<PetAvatar pet={p} size="sm" />}
-              title={p.name}
-              subtitle={p.breed}
-              trailing={p.id === pet.id ? <Icon name="check" size={18} color={colors.accent} /> : undefined}
-            />
-          ))}
-          <Row
-            onPress={() => {
-              setPetPickerOpen(false);
-              openAddPet();
-            }}
-            leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
-            title="Add a pet"
-          />
-        </Group>
-      </Sheet>
+      {/* Same avatar-row selector as the Logs tab, with a trailing "+" tile
+          so adding a pet stays one tap away. */}
+      <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} onAdd={openAddPet} />
 
       {/* Dressing stage — always the real voxel 3D pet (no 2D/3D toggle). */}
       <View style={styles.stageCard}>
@@ -533,8 +498,6 @@ export default function PetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  petSwitcher: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
-  petSwitcherName: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   stageCard: {
     marginTop: 8,
     borderRadius: radius.xl,

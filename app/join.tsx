@@ -76,7 +76,13 @@ export default function JoinPage() {
                 onPress={async () => {
                   setJoining(true);
                   const ok = await joinHousehold(familyId);
-                  if (!ok) setJoining(false);
+                  if (!ok) {
+                    setJoining(false);
+                    return;
+                  }
+                  // Land on Home in the newly-active household rather than
+                  // leaving the user parked on the (now stale) invite page.
+                  router.replace("/home");
                 }}
               >
                 Join household

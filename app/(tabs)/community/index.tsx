@@ -267,7 +267,7 @@ export default function Community() {
   const caregiveSheet = (
     <Sheet open={caregiveOpen} onClose={() => setCaregiveOpen(false)}>
       <SheetTitle>Advertise your caregiving service</SheetTitle>
-      <SheetSubtitle>Shown under Pet care, tagged so families know it's a service offer.</SheetSubtitle>
+      <SheetSubtitle>Shown under Pet care, tagged so families know it&apos;s a service offer.</SheetSubtitle>
 
       <FieldLabel>Title</FieldLabel>
       <TextField

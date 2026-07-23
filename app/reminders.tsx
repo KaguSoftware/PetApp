@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
@@ -17,6 +17,7 @@ import {
   SectionHeader,
   SelectableChip,
   SheetFooter,
+  SheetSubtitle,
   SheetTitle,
   TextField,
 } from "@/components/ui";
@@ -59,24 +60,27 @@ export default function RemindersScreen() {
   // toggles it to show the full text instead of navigating anywhere.
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Plain Pressable with an opacity dim, NOT PressableScale: this renders
+  // inside the native header's UIBarButtonItem, where a spring-scale transform
+  // clips against the bar item's bounds mid-animation (the iOS "add button
+  // visual bug"). Same pattern as NotificationBell/SettingsButton, which
+  // render clean. 38pt box + hitSlop 6 → 50pt effective target.
   const addButton = (
-    <PressableScale
-      scaleTo={PRESS_SCALE_SMALL}
+    <Pressable
       onPress={() => setAddOpen(true)}
       accessibilityRole="button"
       accessibilityLabel="Add reminder"
-      hitSlop={8}
+      hitSlop={6}
+      style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.6 }]}
     >
-      {/* iPhone gets a bigger, chromeless glyph (no filled pill); Android keeps
-          the accent circle so the control stays visible against the header. */}
-      <View style={styles.addButton}>
-        <Icon
-          name="plus"
-          size={isIOS ? 26 : 17}
-          color={isIOS ? colors.accent : colors.white}
-        />
-      </View>
-    </PressableScale>
+      {/* iPhone gets a chromeless glyph (no filled pill); Android keeps the
+          accent circle so the control stays visible against the header. */}
+      <Icon
+        name="plus"
+        size={isIOS ? 25 : 17}
+        color={isIOS ? colors.accent : colors.white}
+      />
+    </Pressable>
   );
 
   if (!hydrated) {
@@ -233,6 +237,7 @@ export default function RemindersScreen() {
 
       <Sheet open={addOpen} onClose={closeSheet}>
         <SheetTitle>New reminder</SheetTitle>
+        <SheetSubtitle>Visible to the whole family</SheetSubtitle>
 
         <FieldLabel>Task</FieldLabel>
         <TextField value={title} onChangeText={setTitle} placeholder="e.g. Buy litter, flea treatment…" />
@@ -276,14 +281,16 @@ export default function RemindersScreen() {
           </View>
         ) : null}
         {pickDate ? (
-          <TimeWheelPicker
-            value={`${pad(hour)}:${pad(minute)}`}
-            onChange={(t) => {
-              const [h, m] = t.split(":");
-              setHour(Number(h));
-              setMinute(Number(m));
-            }}
-          />
+          <View style={styles.pickerBlock}>
+            <TimeWheelPicker
+              value={`${pad(hour)}:${pad(minute)}`}
+              onChange={(t) => {
+                const [h, m] = t.split(":");
+                setHour(Number(h));
+                setMinute(Number(m));
+              }}
+            />
+          </View>
         ) : null}
 
         <FieldLabel>Repeat</FieldLabel>
@@ -298,16 +305,18 @@ export default function RemindersScreen() {
           ).map((o) => (
             <SelectableChip key={o.value} label={o.label} selected={repeat === o.value} onPress={() => setRepeat(o.value)} />
           ))}
-          {repeat === "every_n_days" ? (
+        </View>
+        {repeat === "every_n_days" ? (
+          <View style={styles.pickerRow}>
             <Stepper
-              label={`${intervalDays}`}
+              label={`Every ${intervalDays} days`}
               onDec={() => setIntervalDays((n) => Math.max(1, n - 1))}
               onInc={() => setIntervalDays((n) => n + 1)}
               decDisabled={intervalDays <= 1}
               accessibilityLabel="Days between repeats"
             />
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
         <SheetFooter>
           <AccentButton
@@ -342,10 +351,11 @@ export default function RemindersScreen() {
 
 const styles = StyleSheet.create({
   addButton: {
-    // iPhone: a bigger, chromeless glyph — no pill, no shadow — per design.
-    // Android: 36pt accent circle (visual + hitSlop 8 → 44pt effective target).
-    width: isIOS ? 44 : 36,
-    height: isIOS ? 44 : 36,
+    // iPhone: chromeless 38pt glyph box (matches the bell/gear header metrics
+    // — no pill, no shadow, no transform inside the UIBarButtonItem).
+    // Android: 36pt accent circle (visual + hitSlop → 44pt+ effective target).
+    width: isIOS ? 38 : 36,
+    height: isIOS ? 38 : 36,
     alignItems: "center",
     justifyContent: "center",
     ...(isIOS
@@ -394,5 +404,6 @@ const styles = StyleSheet.create({
   emptyTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
   emptyBody: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  pickerRow: { marginTop: 10, flexDirection: "row", gap: 8 },
+  pickerRow: { marginTop: 12, flexDirection: "row", gap: 8 },
+  pickerBlock: { marginTop: 12 },
 });

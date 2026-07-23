@@ -1,12 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Share, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { AccentButton, Footnote, PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
+import { Footnote, PRESS_SCALE_SMALL, PressableScale, Segmented } from "@/components/ui";
 import { VET, VETS, formatAge, formatWeight, isAdminRole, nextAnniversary, nextBirthday } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { colors, floatShadow, font, radius, withAlpha } from "@/lib/theme";
@@ -26,11 +26,17 @@ function InfoRow({ label, value, mono = false, first = false }: { label: string;
   );
 }
 
+type Variant = "emergency" | "profile";
+
+/** One field of the card — the same config renders the on-screen row AND the
+ *  share text, so the two can never drift apart. */
+type CardField = { label: string; value: string; mono?: boolean };
+
 export default function PetCardPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { state, hydrated } = useStore();
-  const [variant, setVariant] = useState<"emergency" | "profile">("emergency");
+  const [variant, setVariant] = useState<Variant>("emergency");
 
   if (!hydrated) {
     return (
@@ -59,20 +65,45 @@ export default function PetCardPage() {
   const sexLabel = pet.sex === "male" ? "Male" : pet.sex === "female" ? "Female" : null;
   const speciesLabel = pet.species === "cat" ? "Cat" : "Dog";
 
+  // The two variants serve two different readers, so their fields are two
+  // different sets. EMERGENCY = what a sitter/finder/vet needs to act fast:
+  // identification, medical flags, who to call. PROFILE = who this pet is:
+  // the dates and favorites a friend would care about. Only fields with real
+  // data render — no empty rows.
+  const emergencyFields: CardField[] = [
+    {
+      label: "Born",
+      value: pet.birthDate != null ? `${fmtDate(pet.birthDate)} (${formatAge(pet.ageYears)})` : formatAge(pet.ageYears),
+    },
+    { label: "Weight", value: formatWeight(pet.weightKg, state.units) },
+    ...(pet.microchip ? [{ label: "Microchip", value: pet.microchip, mono: true }] : []),
+    ...(pet.meds.length > 0
+      ? [{ label: "Medication", value: pet.meds.map((m) => [m.name, m.dosage].filter(Boolean).join(" ")).join(", ") }]
+      : []),
+    ...(contact ? [{ label: "Family contact", value: contact.name }] : []),
+    { label: "Vet", value: `${vet.name} · ${vet.clinic}` },
+    { label: "Vet phone", value: vet.phone, mono: true },
+  ];
+
+  const profileFields: CardField[] = [
+    pet.birthDate != null
+      ? { label: "Next birthday", value: `Turns ${nextBirthday(pet.birthDate).turns} on ${fmtDate(nextBirthday(pet.birthDate).date)}` }
+      : { label: "Age", value: formatAge(pet.ageYears) },
+    { label: "Gotcha day", value: fmtDate(nextAnniversary(pet.createdAt)) },
+    { label: "In the family since", value: fmtDate(pet.createdAt) },
+    ...(pet.owned.length > 0 ? [{ label: "Wardrobe", value: `${pet.owned.length} accessories collected` }] : []),
+    ...(contact ? [{ label: "Family", value: `${state.members.length} member${state.members.length === 1 ? "" : "s"}` }] : []),
+  ];
+
+  const fields = variant === "emergency" ? emergencyFields : profileFields;
+
   const shareText = [
-    variant === "profile" ? `Meet ${pet.name}!` : `${pet.name} — pet info card`,
+    variant === "profile" ? `Meet ${pet.name}!` : `${pet.name} — emergency & ID card`,
     `${speciesLabel} · ${pet.breed}${sexLabel ? ` · ${sexLabel}` : ""}`,
-    pet.birthDate != null ? `Born ${fmtDate(pet.birthDate)} (${formatAge(pet.ageYears)})` : `Age ${formatAge(pet.ageYears)}`,
-    `Weight ${formatWeight(pet.weightKg, state.units)}`,
-    pet.microchip ? `Microchip: ${pet.microchip}` : null,
-    pet.allergies ? `Allergies/alerts: ${pet.allergies}` : null,
-    pet.meds.length > 0 ? `Medication: ${pet.meds.map((m) => [m.name, m.dosage].filter(Boolean).join(" ")).join(", ")}` : null,
-    contact ? `Family contact: ${contact.name}` : null,
-    `Vet: ${vet.name}, ${vet.clinic}`,
+    ...(variant === "emergency" && pet.allergies ? [`⚠ Allergies/alerts: ${pet.allergies}`] : []),
+    ...fields.map((f) => `${f.label}: ${f.value}`),
     "— shared from PetPal",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].join("\n");
 
   const share = async () => {
     try {
@@ -86,13 +117,32 @@ export default function PetCardPage() {
     <PushedScreen
       title="Pet card"
       trailing={
-        <PressableScale scaleTo={PRESS_SCALE_SMALL} haptic onPress={share} accessibilityRole="button" accessibilityLabel="Share card" hitSlop={8}>
-          <View style={styles.shareButton}>
-            <Icon name="share" size={16} color={colors.accent} />
-          </View>
-        </PressableScale>
+        // Plain Pressable + opacity dim (the header-control pattern from
+        // NotificationBell): a scale transform inside the UIBarButtonItem
+        // clips against the bar's bounds. 38pt pill + hitSlop → 50pt target.
+        <Pressable
+          onPress={share}
+          accessibilityRole="button"
+          accessibilityLabel="Share card"
+          hitSlop={6}
+          style={({ pressed }) => [styles.shareButton, pressed && { opacity: 0.6 }]}
+        >
+          <Icon name="share" size={20} color={colors.accent} />
+        </Pressable>
       }
     >
+      {/* Which card — two different readers, two different field sets. */}
+      <View style={{ marginTop: 4 }}>
+        <Segmented
+          options={[
+            { value: "emergency", label: "Emergency" },
+            { value: "profile", label: "Profile" },
+          ]}
+          value={variant}
+          onChange={setVariant}
+        />
+      </View>
+
       <View style={styles.card}>
         <LinearGradient
           colors={[withAlpha(pet.gradient[0], 0.13), withAlpha(pet.gradient[1], 0.07)]}
@@ -106,70 +156,36 @@ export default function PetCardPage() {
             {speciesLabel} · {pet.breed}
             {sexLabel ? ` · ${sexLabel}` : ""}
           </Text>
-          {variant === "emergency" ? (
-            <View style={styles.emergencyBadge}>
-              <Text style={styles.emergencyBadgeLabel}>Emergency &amp; ID card</Text>
-            </View>
-          ) : null}
+          <View style={[styles.badge, variant === "emergency" ? styles.badgeEmergency : styles.badgeProfile]}>
+            <Text style={[styles.badgeLabel, variant === "emergency" ? styles.badgeLabelEmergency : styles.badgeLabelProfile]}>
+              {variant === "emergency" ? "Emergency & ID card" : "Profile card"}
+            </Text>
+          </View>
         </LinearGradient>
 
         <View style={styles.cardBody}>
-          {variant === "emergency" ? (
-            <>
-              <InfoRow
-                first
-                label="Born"
-                value={pet.birthDate != null ? `${fmtDate(pet.birthDate)} (${formatAge(pet.ageYears)})` : formatAge(pet.ageYears)}
-              />
-              <InfoRow label="Weight" value={formatWeight(pet.weightKg, state.units)} />
-              {pet.microchip ? <InfoRow label="Microchip" value={pet.microchip} mono /> : null}
-              {pet.allergies ? (
-                <View style={styles.allergyBox}>
-                  <Icon name="alert" size={16} color={colors.red} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.allergyLabel}>Allergies &amp; alerts</Text>
-                    <Text style={styles.allergyValue}>{pet.allergies}</Text>
-                  </View>
-                </View>
-              ) : null}
-              {pet.meds.length > 0 ? (
-                <InfoRow label="Medication" value={pet.meds.map((m) => [m.name, m.dosage].filter(Boolean).join(" ")).join(", ")} />
-              ) : null}
-              {contact ? <InfoRow label="Family contact" value={contact.name} /> : null}
-              <InfoRow label="Vet" value={`${vet.name} · ${vet.clinic}`} />
-            </>
-          ) : (
-            <>
-              {pet.birthDate != null ? (
-                <InfoRow
-                  first
-                  label="Next birthday"
-                  value={`Turns ${nextBirthday(pet.birthDate).turns} on ${fmtDate(nextBirthday(pet.birthDate).date)}`}
-                />
-              ) : (
-                <InfoRow first label="Age" value={formatAge(pet.ageYears)} />
-              )}
-              <InfoRow label="Gotcha day" value={fmtDate(nextAnniversary(pet.createdAt))} />
-              <InfoRow label="In the family since" value={fmtDate(pet.createdAt)} />
-              <InfoRow label="Favorite things" value={`${pet.owned.length} accessories collected`} />
-            </>
-          )}
+          {/* Allergies get a loud box, not a quiet row — it's the one field a
+              stranger must not miss. Emergency only. */}
+          {variant === "emergency" && pet.allergies ? (
+            <View style={styles.allergyBox}>
+              <Icon name="alert" size={16} color={colors.red} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.allergyLabel}>Allergies &amp; alerts</Text>
+                <Text style={styles.allergyValue}>{pet.allergies}</Text>
+              </View>
+            </View>
+          ) : null}
+          {fields.map((f, i) => (
+            <InfoRow key={f.label} first={i === 0 && !(variant === "emergency" && pet.allergies)} label={f.label} value={f.value} mono={f.mono} />
+          ))}
         </View>
       </View>
 
-      <View style={styles.actions}>
-        <AccentButton onPress={share}>
-          <Icon name="share" size={17} color={colors.white} />
-          <Text style={styles.shareLabel}>Share</Text>
-        </AccentButton>
-        <AccentButton variant="gray" onPress={() => setVariant((v) => (v === "emergency" ? "profile" : "emergency"))}>
-          {variant === "emergency" ? "Show profile card" : "Show emergency card"}
-        </AccentButton>
-        <Footnote style={{ paddingHorizontal: 8 }}>
-          The emergency card is what you&apos;d hand a sitter or post if {pet.name} ever went missing — keep the microchip and allergy
-          info up to date in Settings ▸ Family.
-        </Footnote>
-      </View>
+      <Footnote style={{ marginTop: 14, paddingHorizontal: 8 }}>
+        {variant === "emergency"
+          ? `This is what you'd hand a sitter or post if ${pet.name} ever went missing — share it with the button up top, and keep the microchip and allergy info current in Settings ▸ Family.`
+          : `${pet.name}'s intro card — share it with the button up top.`}
+      </Footnote>
       <View style={{ height: 16 }} />
     </PushedScreen>
   );
@@ -179,13 +195,17 @@ const styles = StyleSheet.create({
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 80 },
   notFoundTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   notFoundLink: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, color: colors.accent },
-  shareButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  card: { marginTop: 6, borderRadius: radius.lg, backgroundColor: colors.card, overflow: "hidden", ...floatShadow },
+  shareButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  card: { marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.card, overflow: "hidden", ...floatShadow },
   cardHero: { alignItems: "center", paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20 },
   heroName: { marginTop: 12, fontSize: 26, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label },
   heroMeta: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
-  emergencyBadge: { marginTop: 8, borderRadius: radius.full, backgroundColor: colors.redSoft, paddingHorizontal: 12, paddingVertical: 4 },
-  emergencyBadgeLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.red },
+  badge: { marginTop: 8, borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 4 },
+  badgeEmergency: { backgroundColor: colors.redSoft },
+  badgeProfile: { backgroundColor: colors.accentSoft },
+  badgeLabel: { fontSize: 12, fontFamily: font.semibold },
+  badgeLabelEmergency: { color: colors.red },
+  badgeLabelProfile: { color: colors.accent },
   cardBody: { paddingHorizontal: 20, paddingBottom: 20 },
   infoRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12, paddingVertical: 10 },
   infoRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep },
@@ -200,7 +220,8 @@ const styles = StyleSheet.create({
   infoValue: { flex: 1, minWidth: 0, textAlign: "right", fontSize: 14, fontFamily: font.semibold, color: colors.label },
   infoValueMono: { fontSize: 13, letterSpacing: 0.8 },
   allergyBox: {
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 4,
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
@@ -211,6 +232,4 @@ const styles = StyleSheet.create({
   },
   allergyLabel: { fontSize: 12, fontFamily: font.semibold, textTransform: "uppercase", letterSpacing: 0.6, color: colors.red },
   allergyValue: { marginTop: 1, fontSize: 14, fontFamily: font.semibold, color: colors.label, lineHeight: 19 },
-  actions: { marginTop: 16, gap: 10 },
-  shareLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.white },
 });

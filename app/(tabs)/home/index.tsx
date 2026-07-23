@@ -48,8 +48,8 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
   );
 }
 
-const DOT_SIZE = 7;
-const DOT_ACTIVE_W = 20;
+const DOT_SIZE = 8;
+const DOT_ACTIVE_W = 22;
 // Precomputed OUTSIDE the worklet. Calling withAlpha() inside useAnimatedStyle
 // would run a JS function on the UI thread every frame, per dot.
 const DOT_RANGE: readonly [string, string] = [withAlpha(colors.label, 0.18), colors.label];
@@ -377,11 +377,20 @@ export default function Home() {
 
         {/* Dots sit OUTSIDE the viewport — part of the fixed frame, not the slide. */}
         {multiPet && (
-          <View style={styles.dotsRow}>
-            {state.pets.map((p, i) => (
-              <PetDot key={p.id} index={i} track={track} onPress={() => setPetIndex(i)} label={`Show ${p.name}`} />
-            ))}
-          </View>
+          <>
+            <View style={styles.dotsRow}>
+              {state.pets.map((p, i) => (
+                <PetDot key={p.id} index={i} track={track} onPress={() => setPetIndex(i)} label={`Show ${p.name}`} />
+              ))}
+            </View>
+            {/* Dots alone were too subtle a cue — say it in words too, so
+                nobody thinks the household has one pet. Plain JS render off
+                petIndex; deliberately NOT driven by the live track value (no
+                worklet, no re-serialization risk — see the crash-rule note). */}
+            <Text style={styles.heroCount}>
+              {petIndex + 1} of {petCount} pets · swipe to switch
+            </Text>
+          </>
         )}
       </View>
 
@@ -590,6 +599,7 @@ const styles = StyleSheet.create({
   barTrack: { marginTop: 6, height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: "hidden" },
   barFill: { height: "100%", borderRadius: 3 },
   dotsRow: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  heroCount: { marginTop: 8, textAlign: "center", fontSize: 12, fontFamily: font.medium, color: colors.label3 },
   // Width/color are animated by PetDot; this carries the constant geometry.
   petDot: { width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2 },
   alertBanner: {

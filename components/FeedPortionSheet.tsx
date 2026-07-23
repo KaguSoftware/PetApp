@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
-import { AccentButton, Segmented, SheetSubtitle, SheetTitle } from "@/components/ui";
+import { AccentButton, Segmented, SheetFooter, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { PORTIONS, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { colors, font } from "@/lib/theme";
@@ -62,9 +62,9 @@ export default function FeedPortionSheet({
       <View style={{ marginTop: 20 }}>
         <Segmented options={PORTIONS} value={fraction} onChange={setFraction} />
       </View>
-      <View style={{ marginTop: 28 }}>
+      <SheetFooter>
         <AccentButton onPress={confirmFeed}>Log feeding</AccentButton>
-      </View>
+      </SheetFooter>
       {treatsSupply ? (
         <View style={styles.treatBlock}>
           <Text style={styles.treatTitle}>Give a treat instead?</Text>
@@ -83,6 +83,6 @@ export default function FeedPortionSheet({
 }
 
 const styles = StyleSheet.create({
-  treatBlock: { marginTop: 24, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, paddingTop: 20 },
+  treatBlock: { marginTop: 28, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, paddingTop: 20 },
   treatTitle: { fontSize: 15, fontFamily: font.bold, color: colors.label, paddingHorizontal: 4 },
 });

@@ -8,11 +8,10 @@ import FeedPortionSheet from "@/components/FeedPortionSheet";
 import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
-import PetAvatar from "@/components/PetAvatar";
+import PetSelectorRow from "@/components/PetSelectorRow";
 import { TabScreen } from "@/components/Screen";
-import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
-import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader, SheetTitle } from "@/components/ui";
+import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
 import { useStore } from "@/lib/store";
@@ -221,7 +220,6 @@ export default function PlanPage() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [editingTarget, setEditingTarget] = useState<CustomTargetKey | null>(null);
   const [editingCadence, setEditingCadence] = useState<string | null>(null);
-  const [petPickerOpen, setPetPickerOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<GuideGroupKey>>(new Set());
@@ -316,33 +314,9 @@ export default function PlanPage() {
 
   return (
     <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<HeaderActions />} refreshControl={refreshControl}>
-      {state.pets.length > 1 ? (
-        <PressableScale onPress={() => setPetPickerOpen(true)} accessibilityRole="button" accessibilityLabel="Switch pet" hitSlop={8}>
-          <View style={styles.petSwitcher}>
-            <Text style={styles.petSwitcherLabel}>{pet.name}</Text>
-            <Chevron />
-          </View>
-        </PressableScale>
-      ) : null}
-
-      <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <SheetTitle>Switch pet</SheetTitle>
-        <Group style={{ marginTop: 12 }}>
-          {state.pets.map((p) => (
-            <Row
-              key={p.id}
-              onPress={() => {
-                setPetId(p.id);
-                setPetPickerOpen(false);
-              }}
-              leading={<PetAvatar pet={p} size="sm" />}
-              title={p.name}
-              subtitle={p.breed}
-              trailing={p.id === pet.id ? <Icon name="check" size={18} color={colors.accent} /> : undefined}
-            />
-          ))}
-        </Group>
-      </Sheet>
+      {/* Same avatar-row selector as the Logs tab — one tap to switch pets,
+          no "name + chevron → sheet" detour. */}
+      <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
 
       <CareGuides />
 
@@ -648,8 +622,6 @@ const styles = StyleSheet.create({
   lockedPreviewTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   lockedPreviewText: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
   lockedCta: { marginTop: 28, width: "100%" },
-  petSwitcher: { marginTop: 4, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44 },
-  petSwitcherLabel: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
   doneCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
   countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label3 },
   sectionHint: { marginBottom: 12, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },

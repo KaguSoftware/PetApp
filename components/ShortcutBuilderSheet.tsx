@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { ACTIONS, PORTIONS, shortcutTileLabel, type ActionType, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, withAlpha } from "@/lib/theme";
+import { colors, font, radius } from "@/lib/theme";
 
 /** Glyphs offered in the icon picker — the "you pick the icon" part of a shortcut. */
 const ICON_CHOICES: IconName[] = [
@@ -220,7 +220,10 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  // Same 8pt gap as the chip rows above so every selection group shares one
+  // rhythm; the selected state is the flat accent fill SelectableChip uses —
+  // no extra ring.
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   iconCell: {
     width: 46,
     height: 46,
@@ -228,8 +231,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.fill,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "transparent",
   },
-  iconCellSelected: { backgroundColor: colors.accent, borderColor: withAlpha(colors.accent, 0.4) },
+  iconCellSelected: { backgroundColor: colors.accent },
 });

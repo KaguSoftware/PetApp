@@ -301,6 +301,28 @@ clean, iOS + Android both bundle (8.63 MB each).
   a `uuid[]` (not an FK column) so one tile can cover many pets; deleteMed cascades shortcuts
   locally, deleted-pet rows are pruned by a render guard.
 
+### Owner walkthrough bug-fix batch (2026-07-23, plan-mode collab) — built, statically verified, NEEDS device walkthrough + migrations 0022–0024
+
+From Parsa's ~21 on-device reports. `tsc --noEmit` clean, `expo lint` 0 errors (1 pre-existing Pet3D warning), iOS + Android bundle (8.66 MB). Plan: `~/.claude/plans/in-the-pets-tab-floofy-bachman.md`.
+
+- **BACK BUTTON root-caused**: a native iOS 26 bug in react-native-screens 4.16.0 (baked into Expo Go SDK 54) — the system back item renders but taps are dead when `headerShown:false`/custom headers are in the ancestry (rn-screens #3294/#3270; expo discussion #40848). No JS upgrade can fix it inside Expo Go. **Fix: custom `HeaderBackButton`** (owner-approved) — iOS-only `headerLeft` chevron+"Back" calling `router.back()`, wired via `nativeHeaderOptions` (`components/Screen.tsx`) with `headerBackVisible:false`. Android keeps the native arrow; edge-swipe unaffected. **SCOPE(EAS cutover): remove once dev builds pin a fixed rn-screens.**
+- **Reminders "+" iOS visual bug**: was a `PressableScale` inside the UIBarButtonItem (scale transform clips against bar bounds) — now a plain `Pressable` + opacity dim, 38pt, matching the bell/gear pattern (`app/reminders.tsx`). Same pattern applied to the pet-card share button.
+- **Migrations written, NOT applied** (same CLI-access blocker): `0022_activity_duration.sql` (activities.duration_minutes), `0023_reminder_dedupe.sql` (purges duplicate alert rows, adds generated `alert_day` + partial unique index on `(pet_id, coalesce(alert_kind,title), alert_day) where alert and not done` — THE "billions of duplicates" fix), `0024_streak_bonus.sql` (households.last_streak_bonus). All degrade gracefully pre-migration (probe/learn patterns in store.tsx; duration learns from the first bounced insert).
+- **Exercise & play measured**: `logAction` 6th param `durationMinutes`; walk taps open `components/DurationPickerSheet.tsx` (chips 10–90 min); shown in Logs "Today" timeline via `formatDuration`.
+- **Streak milestone bonus**: every 10-day multiple pays +20 coins once (marker `last_streak_bonus` in rewardsRef, persisted with the debounced counters write; lowered on streak break so milestones re-pay after a rebuild). Toast "N-day streak — bonus!". Mobile-only until web adopts the column.
+- **Age auto-update**: on app-foreground across a day change, ages re-derive from birthDate (`RNAppState` listener in store.tsx).
+- **Households**: `joinHousehold` now sets `user_profiles.active_household_id` BEFORE the reload (it used to re-hydrate the OLD household); join page navigates to /home on success. **Still needs the two-account on-device audit** (invite link → join → switch; RPC `join_household` lives in web migrations, assumed working). Invite web origin is still the `https://petpal.app` placeholder.
+- **Pet selector unified**: Care + Pets tabs now use `PetSelectorRow` (avatar row) like Logs; Pets tab gets a trailing "+" tile (`onAdd` prop) so add-a-pet stays one tap. Old inline "name+chevron→sheet" switchers deleted.
+- **Notifications page** (`app/activity.tsx`, title now "Notifications"): stripped to alerts + activity feed only — removed PetPal+ upsell/Paywall, nav rows, vet-booking sheet, per-pet filter chips. Render-time alert dedupe kept as belt-and-braces until 0023 runs.
+- **Pet card redo** (`app/pet/[id]/card.tsx`): body Share button deleted — single 38pt header share; Segmented "Emergency | Profile" replaces the toggle button; both variants render from field-config arrays that ALSO build shareText (one code path). Emergency = microchip/allergy box/meds/contact/vet+phone; Profile = birthday/gotcha/family since/wardrobe.
+- **Home hero multi-pet cue**: "1 of 3 pets · swipe to switch" caption under (slightly bigger) dots — plain JS render off petIndex, deliberately not worklet-driven.
+- **Vet detail page**: `app/vets.tsx` → `app/vets/{index,[id]}.tsx`; card tap opens the clinic page (hero, specialties, about, call via tel:, directions via maps:, hours, book). Booking sheet extracted to `components/VetBookingSheet.tsx` (shared with the list). `Vet` type gained phone/address/hours/about (static demo data).
+- **Retro-log** now a full Row directly under "Add medication" in the Logs "Right now" group (was a buried text link).
+- **Sheet composition pass** (subagent, grammar: SheetTitle→FieldLabel'd sections on a 4pt grid→chips/Segmented/wheels→SheetFooter single primary): reminders add-sheet, ScheduleEditorSheet (48pt slot chips, wheel in inset card, destructive Remove), ShortcutBuilderSheet (uniform icon grid), MedPickerSheet, FeedPortionSheet (primary moved into SheetFooter), EditStatSheet. StreakCalendarSheet/EditTextSheet already conformed.
+- Gotcha learned: **typed routes did NOT regenerate on `expo export`** — needed a brief `expo start` boot; and dynamic pushes must use the object form (`router.push({pathname:"/vets/[id]", params:{id}})`).
+
+**Device-verify priorities for this batch**: back tap on every pushed screen (the custom headerLeft), reminders "+" render, walk→duration→timeline, avatar selectors, two-account household join/switch, alert dedupe after 0023, 10-day streak bonus once-only, notifications page, pet card share/variants, vet detail links.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
 - `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
@@ -309,16 +331,16 @@ clean, iOS + Android both bundle (8.63 MB each).
 - `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
 ## Roadmap
-1. **← ACTIVE: make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
+1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch** (priorities listed at the end of that batch's section) and applies migrations **0022–0024** (plus 0017/0018 still pending) in the Supabase SQL editor.
+2. Two-account household audit on-device (invite → join → switch) — code fixes landed, flow untested.
+3. **Make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
    "for all the tasks that you schedule, you can also not schedule and just track it normal."
    Plumbing already supports it (`careItemStatus` returns `state:"unscheduled"` with count-based
    `progress` when no schedule exists; `ScheduleEditorSheet` has "Remove schedule") — the work is
    making that path **explicit and discoverable** rather than implicit. Agree the UX with the owner
    first; this system was designed collaboratively.
-2. Owner verifies the full app in Expo Go on iPhone (walkthrough above; reload between checks to
-   confirm DB persistence). Migration 0017 still needs applying by someone with project access.
-3. Fix whatever the walkthrough surfaces; visual polish pass on-device.
-4. EAS cutover (checklist below), TestFlight, App Store.
+4. Fix whatever the walkthrough surfaces; visual polish pass on-device.
+5. EAS cutover (checklist below), TestFlight, App Store.
 
 ## EAS cutover checklist (when the app is ready for real builds)
 1. `npm i -g eas-cli && eas login && eas init` (sets `extra.eas.projectId` — unlocks push token registration in `lib/pushTokens.ts`).
@@ -342,6 +364,9 @@ clean, iOS + Android both bundle (8.63 MB each).
 | Invite web origin | Placeholder `https://petpal.app` in family.tsx | Real deployed web-demo origin | One-line fix (owner: provide URL) |
 | Care schedules | Full UI + local eval; DB table pending (0017 not applied — CLI lacks project access) | Synced family-wide once 0017 runs; later: server push reads care_schedules | Owner runs 0017 (SQL editor or CLI login with project access) |
 | Emergency card | Text share only | Print/PDF variant (needs expo-print) | Optional |
+| Back button | Custom `HeaderBackButton` (iOS-only headerLeft) — rn-screens 4.16 iOS 26 bug in Expo Go | Real system chevron | EAS cutover (pin fixed rn-screens, remove SCOPE(EAS cutover) block in Screen.tsx) |
+| Streak bonus | +20 coins per 10-day milestone, mobile-only | Web demo adopts `last_streak_bonus` too | Web-demo change (owner) |
+| Duplicate reminders | Insert-time dedupe + render belt-and-braces; old rows purge in 0023 | Clean table once 0023 applied | Owner runs 0023 |
 
 ## Gotchas
 

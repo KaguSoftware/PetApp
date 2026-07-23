@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import CareStatusRow from "@/components/CareStatusRow";
+import DurationPickerSheet, { formatDuration } from "@/components/DurationPickerSheet";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
 import HeaderActions from "@/components/HeaderActions";
@@ -22,7 +23,6 @@ import {
   FieldLabel,
   Group,
   IconCircle,
-  PressableScale,
   Row,
   SectionHeader,
   Segmented,
@@ -54,6 +54,7 @@ export default function LogsScreen() {
   const [petId, setPetId] = useState("");
   const [justLogged, setJustLogged] = useState<string | null>(null);
   const [feedPortionOpen, setFeedPortionOpen] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
   const [medAddOpen, setMedAddOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTarget, setEditorTarget] = useState<{ type: ActionType; medId?: string }>({ type: "fed" });
@@ -170,6 +171,11 @@ export default function LogsScreen() {
       setFeedPortionOpen(true);
       return;
     }
+    // Exercise & play is a measured log, like feeding: ask how long first.
+    if (item.type === "walk") {
+      setDurationOpen(true);
+      return;
+    }
     if (logAction(pet.id, item.type, undefined, undefined, item.medId)) {
       flash(item.key);
       // A vet tap naturally produces a health-history record — offer the
@@ -249,6 +255,25 @@ export default function LogsScreen() {
           leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
           title={<Text style={styles.addMedTitle}>Add medication</Text>}
         />
+        {/* Retro logging lives right under "Add medication" as a full row —
+            it used to be a small text link below another section, where nobody
+            found it. */}
+        <Row
+          onPress={() => {
+            setRetroType(null);
+            setRetroMedId(null);
+            setRetroDay("today");
+            // Seed the wheel at the current time — the common case is "I did
+            // this a little while ago", so the user spins back rather than
+            // starting blank.
+            const d = new Date();
+            setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+            setRetroOpen(true);
+          }}
+          leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} />}
+          title={<Text style={styles.addMedTitle}>Forgot to log something earlier?</Text>}
+          subtitle="Backfill from earlier today or yesterday"
+        />
       </Group>
       <Text style={styles.scheduleHint}>Tap any row to set its times — everyone gets reminded, and a ✓ shows until the next one.</Text>
 
@@ -281,26 +306,6 @@ export default function LogsScreen() {
         />
       </Group>
 
-      <PressableScale
-        onPress={() => {
-          setRetroType(null);
-          setRetroMedId(null);
-          setRetroDay("today");
-          // Seed the wheel at the current time — the common case is "I did this
-          // a little while ago", so the user spins back rather than starting blank.
-          const d = new Date();
-          setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
-          setRetroOpen(true);
-        }}
-        accessibilityRole="button"
-        style={{ marginTop: 4, alignSelf: "flex-start" }}
-      >
-        <View style={styles.retroLink}>
-          <Icon name="clock" size={13} color={colors.accent} />
-          <Text style={styles.retroLinkLabel}>Forgot to log something earlier?</Text>
-        </View>
-      </PressableScale>
-
       {/* Today's timeline — who did what, newest first. */}
       <SectionHeader>Today</SectionHeader>
       {todays.length > 0 ? (
@@ -309,6 +314,7 @@ export default function LogsScreen() {
             const member = state.members.find((m) => m.id === a.memberId);
             const medName = a.medId ? pet.meds.find((m) => m.id === a.medId)?.name : undefined;
             const gramsNote = a.grams != null ? `${Math.round(a.grams)} g` : undefined;
+            const durationNote = a.durationMinutes != null ? formatDuration(a.durationMinutes) : undefined;
             return (
               <Row
                 key={a.id}
@@ -320,7 +326,7 @@ export default function LogsScreen() {
                   )
                 }
                 title={`${member?.name ?? "Someone"} ${ACTIONS[a.type].verb} ${pet.name}`}
-                subtitle={[medName, gramsNote].filter(Boolean).join(" · ") || undefined}
+                subtitle={[medName, gramsNote, durationNote].filter(Boolean).join(" · ") || undefined}
                 trailing={
                   <Text style={styles.timelineTime}>
                     {new Date(a.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -452,6 +458,18 @@ export default function LogsScreen() {
         </SheetFooter>
       </Sheet>
 
+      <DurationPickerSheet
+        pet={pet}
+        open={durationOpen}
+        onClose={() => setDurationOpen(false)}
+        onPick={(minutes) => {
+          if (logAction(pet.id, "walk", undefined, undefined, undefined, minutes)) {
+            successHaptic();
+            flash("walk");
+          }
+        }}
+      />
+
       <FeedPortionSheet
         pet={pet}
         open={feedPortionOpen}
@@ -489,8 +507,6 @@ const styles = StyleSheet.create({
   retroHint: { marginTop: 8, fontSize: 13, fontFamily: font.regular, color: colors.red },
   addMedTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
   scheduleHint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-  retroLink: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4, minHeight: 44 },
-  retroLinkLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
   timelineTime: { fontSize: 13, fontFamily: font.regular, color: colors.label3 },
   emptyToday: { paddingHorizontal: 4, paddingVertical: 10 },
   emptyTodayText: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
