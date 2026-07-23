@@ -124,15 +124,16 @@ function CareGuides() {
         onPress={() => router.push("/instructions")}
         accessibilityRole="button"
         accessibilityLabel="All how-to guides"
-        style={styles.guidesHeader}
       >
-        <View style={styles.guidesHeaderText}>
-          <Text style={styles.guidesTitle}>How-to guides</Text>
-          <Text style={styles.guidesSubtitle}>Weight checks, dental care & more</Text>
-        </View>
-        <View style={styles.guidesSeeAll}>
-          <Text style={styles.guidesSeeAllText}>See all</Text>
-          <Icon name="chevron-right" size={14} color={colors.accent} />
+        <View style={styles.guidesHeader}>
+          <View style={styles.guidesHeaderText}>
+            <Text style={styles.guidesTitle}>How-to guides</Text>
+            <Text style={styles.guidesSubtitle}>Weight checks, dental care & more</Text>
+          </View>
+          <View style={styles.guidesSeeAll}>
+            <Text style={styles.guidesSeeAllText}>See all</Text>
+            <Icon name="chevron-right" size={14} color={colors.accent} />
+          </View>
         </View>
       </PressableScale>
       <ScrollView
@@ -570,12 +571,12 @@ export default function PlanPage() {
 }
 
 const styles = StyleSheet.create({
-  guidesWrap: { marginTop: 8, marginBottom: 20 },
-  guidesHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
-  guidesHeaderText: { flex: 1, minWidth: 0 },
+  guidesWrap: { marginTop: 8, marginBottom: 32 },
+  guidesHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
+  guidesHeaderText: { flexShrink: 1, minWidth: 0 },
   guidesTitle: { fontSize: 18, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  guidesSubtitle: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  guidesSeeAll: { flexDirection: "row", alignItems: "center", gap: 2 },
+  guidesSubtitle: { marginTop: 5, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
+  guidesSeeAll: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginLeft: 8, paddingTop: 3 },
   guidesSeeAllText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   // paddingBottom clears the chips' card shadow, which the old 2pt clipped.
   guidesRail: { gap: 10, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 8 },

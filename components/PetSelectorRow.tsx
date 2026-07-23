@@ -5,7 +5,7 @@ import PetAvatar from "@/components/PetAvatar";
 import { PressableScale } from "@/components/ui";
 import { useReduceMotion } from "@/lib/a11y";
 import type { Pet } from "@/lib/data";
-import { colors, font, withAlpha } from "@/lib/theme";
+import { colors, font, radius, withAlpha } from "@/lib/theme";
 
 /**
  * Horizontal avatar-row pet selector — one tap to switch pets. The selected
@@ -27,30 +27,32 @@ export default function PetSelectorRow({
 }) {
   if (pets.length === 0) return null;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.rowContent}
-      style={styles.row}
-    >
-      {pets.map((p) => (
-        <PetSelectorItem key={p.id} pet={p} selected={p.id === selectedId} onPress={() => onSelect(p.id)} />
-      ))}
-      {onAdd ? (
-        <PressableScale haptic onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add a pet">
-          <View style={styles.item}>
-            <View style={[styles.avatarWrap, styles.avatarUnselected]}>
-              <View style={styles.addCircle}>
-                <Text style={styles.addGlyph}>+</Text>
+    <View style={styles.card}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rowContent}
+        style={styles.row}
+      >
+        {pets.map((p) => (
+          <PetSelectorItem key={p.id} pet={p} selected={p.id === selectedId} onPress={() => onSelect(p.id)} />
+        ))}
+        {onAdd ? (
+          <PressableScale haptic onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add a pet">
+            <View style={styles.item}>
+              <View style={[styles.avatarWrap, styles.avatarUnselected]}>
+                <View style={styles.addCircle}>
+                  <Text style={styles.addGlyph}>+</Text>
+                </View>
               </View>
+              <Text numberOfLines={1} style={styles.name}>
+                Add
+              </Text>
             </View>
-            <Text numberOfLines={1} style={styles.name}>
-              Add
-            </Text>
-          </View>
-        </PressableScale>
-      ) : null}
-    </ScrollView>
+          </PressableScale>
+        ) : null}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -83,8 +85,17 @@ function PetSelectorItem({ pet, selected, onPress }: { pet: Pet; selected: boole
 }
 
 const styles = StyleSheet.create({
-  row: { marginTop: 12, marginHorizontal: -4 },
-  rowContent: { paddingHorizontal: 4, gap: 14 },
+  card: {
+    marginTop: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.sep,
+    paddingVertical: 14,
+    overflow: "hidden",
+  },
+  row: {},
+  rowContent: { paddingHorizontal: 14, gap: 14 },
   item: { alignItems: "center", width: 72, paddingVertical: 2 },
   avatarWrap: {
     padding: 3,
