@@ -4,7 +4,7 @@ import type { ActionType } from "@/lib/data";
 
 export type IconName =
   | "home" | "bell" | "heart-text" | "bag" | "people"
-  | "plus" | "chevron-right" | "chevron-left" | "check" | "xmark"
+  | "plus" | "chevron-right" | "chevron-left" | "chevron-down" | "check" | "xmark"
   | "bowl" | "drop" | "broom" | "paw" | "scissors" | "pill" | "stethoscope"
   | "calendar" | "clock" | "lock" | "star" | "coin" | "sparkles" | "flame" | "arrow-up"
   | "chart" | "box" | "gear" | "cross" | "refresh" | "pin" | "cube"
@@ -59,6 +59,7 @@ const P: Record<IconName, React.ReactNode> = {
   ),
   "chevron-right": <Path d="m9 18 6-6-6-6" />,
   "chevron-left": <Path d="m15 18-6-6 6-6" />,
+  "chevron-down": <Path d="m6 9 6 6 6-6" />,
   check: <Path d="m4 12.5 5.5 5.5L20 6.5" />,
   xmark: (
     <>
@@ -305,7 +306,17 @@ const P: Record<IconName, React.ReactNode> = {
  * Clean stroke icon set, ported 1:1 from the web demo. `currentColor` resolves
  * through the `color` prop on the root <Svg>, mirroring the web's CSS cascade.
  */
-export function Icon({ name, size = 22, color = "#0a0a0a" }: { name: IconName; size?: number; color?: string }) {
+export function Icon({
+  name,
+  size = 22,
+  color = "#0a0a0a",
+  strokeWidth = 2,
+}: {
+  name: IconName;
+  size?: number;
+  color?: string;
+  strokeWidth?: number;
+}) {
   return (
     <Svg
       width={size}
@@ -313,7 +324,7 @@ export function Icon({ name, size = 22, color = "#0a0a0a" }: { name: IconName; s
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       color={color}

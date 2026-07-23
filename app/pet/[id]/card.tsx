@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
@@ -24,6 +24,16 @@ function InfoRow({ label, value, mono = false, first = false }: { label: string;
       <Text style={[styles.infoValue, mono && styles.infoValueMono]}>{value}</Text>
     </View>
   );
+}
+
+/**
+ * The share control's backing surface. iOS wants no background at all — just
+ * the bare glyph — so the glass/blur island is Android-only, where a filled
+ * pill keeps the control visible against the header.
+ */
+function ShareGlass({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === "ios") return <View style={styles.shareGlass}>{children}</View>;
+  return <View style={[styles.shareGlass, styles.shareGlassAndroid]}>{children}</View>;
 }
 
 type Variant = "emergency" | "profile";
@@ -127,7 +137,9 @@ export default function PetCardPage() {
           hitSlop={6}
           style={({ pressed }) => [styles.shareButton, pressed && { opacity: 0.6 }]}
         >
-          <Icon name="share" size={20} color={colors.accent} />
+          <ShareGlass>
+            <Icon name="share" size={20} color={colors.accent} />
+          </ShareGlass>
         </Pressable>
       }
     >
@@ -195,7 +207,10 @@ const styles = StyleSheet.create({
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 80 },
   notFoundTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   notFoundLink: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, color: colors.accent },
-  shareButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  // iOS: no fill — just the bare glyph. Android keeps the accent pill.
+  shareButton: { width: 38, height: 38, borderRadius: 19, overflow: "hidden" },
+  shareGlass: { flex: 1, alignSelf: "stretch", borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  shareGlassAndroid: { backgroundColor: colors.accentSoft },
   card: { marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.card, overflow: "hidden", ...floatShadow },
   cardHero: { alignItems: "center", paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20 },
   heroName: { marginTop: 12, fontSize: 26, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label },

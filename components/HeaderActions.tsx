@@ -23,7 +23,15 @@ import { useStore } from "@/lib/store";
  * own pill, so the space BETWEEN them is not part of any button. Tapping there
  * used to feel like hitting a dead button; now there is simply nothing to hit.
  */
-export default function HeaderActions({ leading }: { leading?: React.ReactNode }) {
+export default function HeaderActions({
+  leading,
+  showCoins = false,
+}: {
+  leading?: React.ReactNode;
+  /** The coin pill is only shown on Home and Pets (where earning/spending
+   * happens); everywhere else it's noise, so it defaults to off. */
+  showCoins?: boolean;
+}) {
   const router = useRouter();
   const { state } = useStore();
   // The status-bar inset is handled once, at the header level
@@ -32,7 +40,7 @@ export default function HeaderActions({ leading }: { leading?: React.ReactNode }
   return (
     <View style={styles.island}>
       {leading}
-      <CoinPill amount={state.coins} onPress={() => router.push("/coins")} />
+      {showCoins ? <CoinPill amount={state.coins} onPress={() => router.push("/coins")} /> : null}
       <NotificationBell />
       <SettingsButton />
     </View>

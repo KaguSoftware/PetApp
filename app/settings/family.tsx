@@ -6,6 +6,7 @@ import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import BreedField from "@/components/BreedField";
 import RoleField from "@/components/RoleField";
 import { PushedScreen } from "@/components/Screen";
+import DateField from "@/components/DateField";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
 import {
@@ -15,12 +16,9 @@ import {
   FieldLabel,
   Group,
   IconCircle,
-  PressableScale,
-  PRESS_SCALE_SMALL,
   Row,
   SectionHeader,
   Segmented,
-  SelectableChip,
   SheetSubtitle,
   SheetTitle,
   SmallButton,
@@ -121,74 +119,12 @@ function CaregiverTermsView({ onAccept, onBack }: { onAccept: () => void; onBack
   );
 }
 
-/* -- Local date helpers + stepper (mirrors pet-detail's DateField pattern) -- */
-
-const DATE_FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
-
-function fmtDate(ts: number) {
-  return new Date(ts).toLocaleDateString(undefined, DATE_FMT);
-}
+/* -- Local date helper -- birth-date entry now uses the shared <DateField>. -- */
 
 function atNoon(d: Date) {
   const c = new Date(d);
   c.setHours(12, 0, 0, 0);
   return c.getTime();
-}
-
-function shiftDays(ts: number, n: number) {
-  const d = new Date(ts);
-  d.setDate(d.getDate() + n);
-  return atNoon(d);
-}
-
-function shiftMonths(now: number, months: number) {
-  const d = new Date(now);
-  d.setMonth(d.getMonth() + months);
-  return atNoon(d);
-}
-
-function shiftYears(now: number, years: number) {
-  const d = new Date(now);
-  d.setFullYear(d.getFullYear() + years);
-  return atNoon(d);
-}
-
-/** Day stepper + quick chips for the pet's birth date — no raw YYYY-MM-DD typing. */
-function BirthDateField({ value, onChange }: { value: number | null; onChange: (ts: number | null) => void }) {
-  const today = atNoon(new Date());
-  const chips: { label: string; ts: number }[] = [
-    { label: "1 yr ago", ts: shiftYears(today, -1) },
-    { label: "3 yrs ago", ts: shiftYears(today, -3) },
-    { label: "5 yrs ago", ts: shiftYears(today, -5) },
-    { label: "6 mo ago", ts: shiftMonths(today, -6) },
-  ];
-  // Future-date guard: the stepper can never step past today.
-  const step = (n: number) => onChange(Math.min(today, shiftDays(value ?? today, n)));
-  return (
-    <View>
-      <View style={styles.stepperRow}>
-        <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => step(-1)} accessibilityLabel="One day earlier" hitSlop={8}>
-          <View style={styles.stepButton}>
-            <Icon name="chevron-left" size={16} color={colors.accent} />
-          </View>
-        </PressableScale>
-        <Text style={[styles.stepperValue, value == null && { color: colors.label3 }]}>
-          {value != null ? fmtDate(value) : "Not set"}
-        </Text>
-        <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={() => step(1)} accessibilityLabel="One day later" hitSlop={8}>
-          <View style={styles.stepButton}>
-            <Icon name="chevron-right" size={16} color={colors.accent} />
-          </View>
-        </PressableScale>
-      </View>
-      <View style={styles.chipRow}>
-        {chips.map((c) => (
-          <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
-        ))}
-        <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} />
-      </View>
-    </View>
-  );
 }
 
 export default function FamilySettingsPage() {
@@ -558,7 +494,7 @@ export default function FamilySettingsPage() {
             <Text style={styles.fieldHint}>Used for the age-and-sex-specific weight & feeding guide.</Text>
 
             <FieldLabel>Birth date (optional)</FieldLabel>
-            <BirthDateField value={editPetBirth} onChange={setEditPetBirth} />
+            <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear />
             {editPetBirth != null ? (
               <Text style={styles.fieldHint}>With a birth date set, age is calculated automatically.</Text>
             ) : null}
@@ -881,16 +817,4 @@ const styles = StyleSheet.create({
   errorText: { marginTop: 8, alignSelf: "stretch", textAlign: "left", fontSize: 14, fontFamily: font.medium, color: colors.red },
   fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
   twoCol: { flexDirection: "row", gap: 12 },
-  stepperRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-  },
-  stepButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  stepperValue: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-  chipRow: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

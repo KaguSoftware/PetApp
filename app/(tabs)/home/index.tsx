@@ -234,7 +234,7 @@ export default function Home() {
 
   if (!hydrated || !pet) {
     return (
-      <TabScreen title="Home" trailing={<HeaderActions />} refreshControl={refreshControl}>
+      <TabScreen title="Home" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
         {hydrated ? (
           <View style={{ marginTop: 16 }}>
             <EmptyState
@@ -290,7 +290,7 @@ export default function Home() {
       // The streak pill goes INSIDE the island (not beside it) — a fragment of
       // siblings in `headerRight` leaves only one of them tappable. See
       // components/HeaderActions.tsx.
-      trailing={<HeaderActions leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
+      trailing={<HeaderActions showCoins leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
       refreshControl={refreshControl}
     >
       {/* Pet hero — a FIXED card frame; the pets themselves ride a track that
@@ -326,7 +326,14 @@ export default function Home() {
                           <Text numberOfLines={1} style={styles.heroName}>
                             {p.name}
                           </Text>
-                          <Chevron />
+                          {/* Points down, not right: this row opens a sheet
+                              below rather than pushing a screen. The 2px drop
+                              centers it on the letters: Inter's ascender is far
+                              taller than its x-height, so the text line box's
+                              center sits ~2px above the middle of the glyphs. */}
+                          <View style={styles.heroNameChevron}>
+                            <Icon name="chevron-down" size={15} color={colors.label3} strokeWidth={3} />
+                          </View>
                         </View>
                         <Text numberOfLines={1} style={styles.heroBreed}>
                           {p.breed}
@@ -388,7 +395,7 @@ export default function Home() {
                 petIndex; deliberately NOT driven by the live track value (no
                 worklet, no re-serialization risk — see the crash-rule note). */}
             <Text style={styles.heroCount}>
-              {petIndex + 1} of {petCount} pets · swipe to switch
+              swipe to switch · {petIndex + 1} of {petCount} pets
             </Text>
           </>
         )}
@@ -579,16 +586,19 @@ const styles = StyleSheet.create({
   // The frame is fixed and clips the sliding track. Padding lives on each slide
   // (not here) so the track spans the full card width and a pet slides edge to
   // edge instead of stopping inside the padding.
-  hero: { borderRadius: radius.lg, backgroundColor: colors.card, paddingBottom: 20, overflow: "hidden", ...cardShadow },
+  // marginTop gives the hero card a little breathing room below the greeting /
+  // header so it doesn't crowd the title the moment the page opens.
+  hero: { marginTop: 10, borderRadius: radius.lg, backgroundColor: colors.card, paddingBottom: 10, overflow: "hidden", ...cardShadow },
   heroViewport: { overflow: "hidden" },
   heroTrack: { flexDirection: "row" },
-  heroSlide: { paddingHorizontal: 20, paddingTop: 20 },
+  heroSlide: { paddingHorizontal: 20, paddingTop: 28 },
   // Pre-measurement: fill the frame instead of sizing to content.
   heroSlideFull: { width: "100%" },
   heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
   heroText: { flex: 1, minWidth: 0 },
   heroTextInner: { minHeight: 44, justifyContent: "center" },
   heroNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  heroNameChevron: { marginTop: 2 },
   heroName: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, flexShrink: 1 },
   heroBreed: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
   chipsRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },

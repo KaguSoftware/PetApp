@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import DateField from "@/components/DateField";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
 import Meds from "@/components/Meds";
@@ -23,7 +24,6 @@ import {
   Row,
   SectionHeader,
   Segmented,
-  SelectableChip,
   SheetFooter,
   SheetSubtitle,
   SheetTitle,
@@ -56,117 +56,6 @@ function fmtDate(ts: number, fmt: Intl.DateTimeFormatOptions = DATE_FMT) {
 function isPast(ts: number) {
   return ts < Date.now();
 }
-
-function atNoon(d: Date) {
-  const c = new Date(d);
-  c.setHours(12, 0, 0, 0);
-  return c.getTime();
-}
-
-function shiftDays(ts: number, n: number) {
-  const d = new Date(ts);
-  d.setDate(d.getDate() + n);
-  return atNoon(d);
-}
-
-function shiftMonths(now: number, months: number) {
-  const d = new Date(now);
-  d.setMonth(d.getMonth() + months);
-  return atNoon(d);
-}
-
-function shiftYears(now: number, years: number) {
-  const d = new Date(now);
-  d.setFullYear(d.getFullYear() + years);
-  return atNoon(d);
-}
-
-/**
- * No-dependency date input for sheets — replaces the web's <input type=date>:
- * a day stepper flanking the current value, plus quick-jump chips.
- */
-function DateField({
-  value,
-  onChange,
-  mode = "past",
-  allowClear = false,
-}: {
-  value: number | null;
-  onChange: (ts: number | null) => void;
-  mode?: "past" | "future";
-  allowClear?: boolean;
-}) {
-  const today = atNoon(new Date());
-  const chips: { label: string; ts: number }[] =
-    mode === "past"
-      ? [
-          { label: "Today", ts: today },
-          { label: "1 wk ago", ts: shiftDays(today, -7) },
-          { label: "1 mo ago", ts: shiftMonths(today, -1) },
-          { label: "6 mo ago", ts: shiftMonths(today, -6) },
-          { label: "1 yr ago", ts: shiftYears(today, -1) },
-        ]
-      : [
-          { label: "In 1 mo", ts: shiftMonths(today, 1) },
-          { label: "In 3 mo", ts: shiftMonths(today, 3) },
-          { label: "In 6 mo", ts: shiftMonths(today, 6) },
-          { label: "In 1 yr", ts: shiftYears(today, 1) },
-          { label: "In 3 yrs", ts: shiftYears(today, 3) },
-        ];
-  return (
-    <View>
-      <View style={dfStyles.stepperRow}>
-        <PressableScale
-          scaleTo={PRESS_SCALE_SMALL}
-          onPress={() => onChange(shiftDays(value ?? today, -1))}
-          accessibilityRole="button"
-          accessibilityLabel="One day earlier"
-          hitSlop={8}
-        >
-          <View style={dfStyles.stepButton}>
-            <Icon name="chevron-left" size={16} color={colors.accent} />
-          </View>
-        </PressableScale>
-        <Text style={[dfStyles.valueLabel, value == null && { color: colors.label3 }]}>
-          {value != null ? fmtDate(value) : "Not set"}
-        </Text>
-        <PressableScale
-          scaleTo={PRESS_SCALE_SMALL}
-          onPress={() => onChange(shiftDays(value ?? today, 1))}
-          accessibilityRole="button"
-          accessibilityLabel="One day later"
-          hitSlop={8}
-        >
-          <View style={dfStyles.stepButton}>
-            <Icon name="chevron-right" size={16} color={colors.accent} />
-          </View>
-        </PressableScale>
-      </View>
-      <View style={dfStyles.chipRow}>
-        {chips.map((c) => (
-          <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
-        ))}
-        {allowClear ? <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} /> : null}
-      </View>
-    </View>
-  );
-}
-
-const dfStyles = StyleSheet.create({
-  stepperRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    ...cardShadow,
-  },
-  stepButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  valueLabel: { flex: 1, textAlign: "center", fontSize: 16, fontFamily: font.medium, color: colors.label },
-  chipRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
-});
 
 export default function PetDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -286,10 +175,8 @@ export default function PetDetailPage() {
           <Chip>{`${pet.owned.length} items`}</Chip>
         </View>
         <View style={styles.heroButtons}>
-          <AccentButton variant="tinted" size="sm" style={styles.heroButton} onPress={() => router.push("/pets")}>
-            <Icon name="sparkles" size={16} color={colors.accent} />
-            <Text style={styles.heroButtonLabel}>Dress up</Text>
-          </AccentButton>
+          {/* Dress up lives on the Pets tab now; the hero keeps just the single
+              Pet card action, centered on its own. */}
           <AccentButton variant="tinted" size="sm" style={styles.heroButton} onPress={() => router.push(`/pet/${pet.id}/card`)}>
             <Icon name="shield" size={16} color={colors.accent} />
             <Text style={styles.heroButtonLabel}>Pet card</Text>
@@ -978,8 +865,15 @@ const styles = StyleSheet.create({
   heroBreed: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
   chipRow: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
   chipText: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  heroButtons: { marginTop: 16, width: "100%", maxWidth: 320, flexDirection: "row", gap: 8 },
-  heroButton: { flex: 1, minWidth: 0 },
+  // Single Pet card action now — center it. The button hugs its own content
+  // (the inner AccentButton pill sizes to its label); the row just centers it
+  // instead of the two-up flex:1 layout that balanced the removed Dress up
+  // button beside it.
+  heroButtons: { marginTop: 16, width: "100%", flexDirection: "row", justifyContent: "center", gap: 8 },
+  // Fixed comfortable width so the lone button reads as a deliberate centered
+  // action (the shared AccentButton pill has no horizontal padding of its own —
+  // it relied on flex:1 to get its width in the old two-up layout).
+  heroButton: { width: 200 },
   heroButtonLabel: { fontSize: 15, fontFamily: font.semibold, color: colors.accent },
   weightCard: { borderRadius: radius.md, backgroundColor: colors.card, padding: 16, ...cardShadow },
   guideGrid: {

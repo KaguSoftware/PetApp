@@ -196,7 +196,7 @@ export default function PetsScreen() {
 
   if (!hydrated)
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />} refreshControl={refreshControl}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
         <PageLoading />
       </TabScreen>
     );
@@ -320,7 +320,7 @@ export default function PetsScreen() {
 
   if (!pet) {
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions />} refreshControl={refreshControl}>
+      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
         <View style={{ marginTop: 16 }}>
           <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
         </View>
@@ -346,7 +346,7 @@ export default function PetsScreen() {
     <TabScreen
       title="Pets"
       subtitle="Style your companion"
-      trailing={<HeaderActions />}
+      trailing={<HeaderActions showCoins />}
       refreshControl={refreshControl}
     >
       {/* Same avatar-row selector as the Logs tab, with a trailing "+" tile

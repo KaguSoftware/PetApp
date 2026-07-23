@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import DateField from "@/components/DateField";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
@@ -49,9 +50,10 @@ export default function RemindersScreen() {
   const [petId, setPetId] = useState("");
   const [days, setDays] = useState(1);
   const [pickDate, setPickDate] = useState(false);
-  // No-dependency replacement for the web's <input type="date/time">: a day
-  // offset stepper (Today / Tomorrow / actual date) + a 15-min-step time.
-  const [pickDay, setPickDay] = useState(0);
+  // The exact-date branch: the native iOS date wheel (shared <DateField>) for
+  // the day, plus the 15-min-step time wheel below it. `pickTs` is a noon
+  // timestamp; the time is applied on save.
+  const [pickTs, setPickTs] = useState<number | null>(null);
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);
   const [repeat, setRepeat] = useState<"none" | RepeatKind>("none");
@@ -122,16 +124,10 @@ export default function RemindersScreen() {
     setAddOpen(false);
     setTitle("");
     setPickDate(false);
-    setPickDay(0);
+    setPickTs(null);
     setHour(9);
     setMinute(0);
     setRepeat("none");
-  };
-
-  const dayOffsetLabel = (n: number) => {
-    if (n === 0) return "Today";
-    if (n === 1) return "Tomorrow";
-    return new Date(startOfToday.getTime() + n * DAY_MS).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   };
 
   // One calm row per reminder — alerts get red title text only (the red wall,
@@ -267,17 +263,22 @@ export default function RemindersScreen() {
               }}
             />
           ))}
-          <SelectableChip label="Pick date…" selected={pickDate} onPress={() => setPickDate(true)} />
+          <SelectableChip
+            label="Pick date…"
+            selected={pickDate}
+            onPress={() => {
+              setPickDate(true);
+              if (pickTs == null) {
+                const noon = new Date();
+                noon.setHours(12, 0, 0, 0);
+                setPickTs(noon.getTime());
+              }
+            }}
+          />
         </View>
         {pickDate ? (
           <View style={styles.pickerRow}>
-            <Stepper
-              label={dayOffsetLabel(pickDay)}
-              onDec={() => setPickDay((d) => Math.max(0, d - 1))}
-              onInc={() => setPickDay((d) => d + 1)}
-              decDisabled={pickDay === 0}
-              accessibilityLabel="Due date"
-            />
+            <DateField value={pickTs} onChange={setPickTs} mode="future" />
           </View>
         ) : null}
         {pickDate ? (
@@ -320,11 +321,16 @@ export default function RemindersScreen() {
 
         <SheetFooter>
           <AccentButton
-            disabled={!title.trim() || !activePetId || (repeat === "every_n_days" && intervalDays < 1)}
+            disabled={!title.trim() || !activePetId || (pickDate && pickTs == null) || (repeat === "every_n_days" && intervalDays < 1)}
             onPress={() => {
-              const due = pickDate
-                ? startOfToday.getTime() + pickDay * DAY_MS + (hour * 60 + minute) * 60_000
-                : Date.now() + days * DAY_MS;
+              let due: number;
+              if (pickDate && pickTs != null) {
+                const d = new Date(pickTs);
+                d.setHours(hour, minute, 0, 0);
+                due = d.getTime();
+              } else {
+                due = Date.now() + days * DAY_MS;
+              }
               addReminder({
                 petId: activePetId,
                 title: title.trim(),

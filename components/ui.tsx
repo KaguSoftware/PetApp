@@ -13,7 +13,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
@@ -297,12 +297,28 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const reduceMotion = useReduceMotion();
+  // Measure the track once so the thumb width is exact; until then it renders
+  // at 0 width (invisible) and snaps into place on first layout.
+  const [trackW, setTrackW] = useState(0);
+  const index = Math.max(0, options.findIndex((o) => o.value === value));
+  // padding: 2 on each side (segmented style) leaves this inner width.
+  const segW = trackW > 0 ? (trackW - SEG_PAD * 2) / options.length : 0;
+  const x = useSharedValue(0);
+  useEffect(() => {
+    const target = index * segW;
+    // Spring gives the pill the iOS "slide" feel; reduce-motion jumps instantly.
+    x.value = reduceMotion ? target : withSpring(target, { damping: 22, stiffness: 260, mass: 0.7 });
+  }, [index, segW, x, reduceMotion]);
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+
   return (
-    <View style={styles.segmented}>
+    <View style={styles.segmented} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
+      {segW > 0 ? <Animated.View pointerEvents="none" style={[styles.segmentThumb, { width: segW }, thumbStyle]} /> : null}
       {options.map((o) => {
         const active = o.value === value;
         return (
-          <Pressable key={o.value} onPress={() => onChange(o.value)} style={[styles.segment, active && styles.segmentActive]}>
+          <Pressable key={o.value} onPress={() => onChange(o.value)} style={styles.segment}>
             <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>{o.label}</Text>
           </Pressable>
         );
@@ -310,6 +326,9 @@ export function Segmented<T extends string>({
     </View>
   );
 }
+
+/** Inner padding of the segmented track — shared by the style and the thumb math. */
+const SEG_PAD = 2;
 
 export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => void }) {
   // Bump whenever the balance INCREASES — one place gives coin-earn feedback
@@ -376,9 +395,16 @@ const styles = StyleSheet.create({
   accentButtonLabel: { fontSize: 17, fontFamily: font.semibold },
   chip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 10, paddingVertical: 4 },
   chipLabel: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  segmented: { flexDirection: "row", borderRadius: 10, backgroundColor: colors.fill, padding: 2 },
+  segmented: { position: "relative", flexDirection: "row", borderRadius: 10, backgroundColor: colors.fill, padding: 2 },
   segment: { flex: 1, borderRadius: 8.5, paddingVertical: 6, alignItems: "center" },
-  segmentActive: {
+  // The sliding pill — one shared element that translates between segments
+  // instead of each segment toggling its own background.
+  segmentThumb: {
+    position: "absolute",
+    top: 2,
+    left: 2,
+    bottom: 2,
+    borderRadius: 8.5,
     backgroundColor: colors.card,
     shadowColor: "#000",
     shadowOpacity: 0.12,
