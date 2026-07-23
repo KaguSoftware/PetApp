@@ -133,6 +133,9 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
  */
 const ANDROID_TAB_BAR_HEIGHT = 56;
 
+/** Height of the Android sticky header bar itself, sitting below the status-bar inset. */
+const ANDROID_HEADER_HEIGHT = 48;
+
 /**
  * Top-level tab page scaffold. The big page title is rendered as in-content
  * text (reliable everywhere), while the small native header carries only the
@@ -185,33 +188,60 @@ export function TabScreen({
   }, [navigation, title, trailing, isAndroid, scrollY]);
 
   return (
-    <Animated.ScrollView
-      style={styles.root}
-      // `never` so the scroll offset starts at 0 (not the header inset), making
-      // the fade thresholds in CollapsingHeaderTitle predictable. The big title
-      // sits directly under the opaque header.
-      contentInsetAdjustmentBehavior="never"
-      onScroll={onScroll}
-      scrollEventThrottle={16}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{
-        // Content begins just below the opaque header. On Android there is no
-        // native header, so the in-content accessory row carries the status-bar
-        // inset itself (added below). iOS: no extra gap (pageTitle has its own
-        // small top padding) — keeps the big title tucked under the header.
-        paddingTop: isAndroid ? insets.top + 8 : 0,
-        paddingBottom:
-          contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : 0),
-        paddingHorizontal: 16,
-      }}
-      {...scrollProps}
-    >
-      {isAndroid && trailing ? <View style={styles.inContentHeader}>{trailing}</View> : null}
-      <Text style={styles.pageTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      {children}
-    </Animated.ScrollView>
+    <View style={styles.root}>
+      <Animated.ScrollView
+        style={styles.root}
+        // `never` so the scroll offset starts at 0 (not the header inset), making
+        // the fade thresholds in CollapsingHeaderTitle predictable. The big title
+        // sits directly under the opaque header.
+        contentInsetAdjustmentBehavior="never"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          // Content begins just below the opaque header. On Android the accessory
+          // row is a pinned overlay outside this ScrollView, so content must
+          // reserve the status-bar inset plus the bar's own height. iOS: no extra
+          // gap (pageTitle has its own small top padding) — keeps the big title
+          // tucked under the native header.
+          paddingTop: isAndroid ? insets.top + ANDROID_HEADER_HEIGHT : 0,
+          paddingBottom:
+            contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : 0),
+          paddingHorizontal: 16,
+        }}
+        {...scrollProps}
+      >
+        <Text style={styles.pageTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {children}
+      </Animated.ScrollView>
+      {/* Android stand-in for the native header. Pinned outside the ScrollView so
+          it stays put while content scrolls under it, carrying the same
+          scroll-driven collapsing title iOS gets from its nav bar.
+
+          CRITICAL — `top: insets.top`, NOT top:0 with paddingTop. Under
+          `edgeToEdgeEnabled` the status-bar strip is composited by the system
+          over app content; an opaque layer intruding into that strip changes
+          what paints there. Starting the bar BELOW the inset leaves that strip
+          untouched, so <StatusBar style="dark" /> keeps working as before. */}
+      {isAndroid ? (
+        <>
+          {/* Opaque fill for the status-bar strip itself. Separate from the bar
+              below so it is pure background — no children, no touch handling —
+              which keeps it out of the way of expo-status-bar's icon
+              compositing under edgeToEdgeEnabled. Without it, content scrolls
+              visibly behind the clock and battery icons. */}
+          <View style={[styles.androidStatusFill, { height: insets.top }]} pointerEvents="none" />
+          <View style={[styles.androidHeader, { top: insets.top }]} pointerEvents="box-none">
+            <View style={styles.androidHeaderTitle} pointerEvents="none">
+              <CollapsingHeaderTitle title={title} scrollY={scrollY} />
+            </View>
+            {trailing ? <HeaderTrailing>{trailing}</HeaderTrailing> : null}
+          </View>
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -263,10 +293,27 @@ export function PushedScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  // Android-only in-content stand-in for the native headerRight island: a
-  // right-aligned row sitting above the page title, replacing the native
-  // header that couldn't be trusted to clear the status bar under edge-to-edge.
-  inContentHeader: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", minHeight: 44, marginBottom: 4 },
+  // Android-only stand-in for the native header, which couldn't be trusted to
+  // clear the status bar under edge-to-edge. Pinned over the ScrollView (not
+  // inside it) so it behaves like iOS's nav bar: sticky, opaque, content
+  // scrolling underneath, collapsed title left and accessories right. `top` is
+  // set inline from the live safe-area inset — see the render site for why it
+  // must not extend into the status-bar strip.
+  androidHeader: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: ANDROID_HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    backgroundColor: colors.bg,
+  },
+  androidHeaderTitle: { flex: 1, minWidth: 0 },
+  // Status-bar strip fill (height set inline from the live inset). Deliberately
+  // childless and pointerEvents="none" — see the render site.
+  androidStatusFill: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.bg },
   pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label, paddingHorizontal: 4, paddingTop: 4 },
   subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10 },
   headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },

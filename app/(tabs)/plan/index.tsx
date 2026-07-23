@@ -571,7 +571,7 @@ export default function PlanPage() {
 }
 
 const styles = StyleSheet.create({
-  guidesWrap: { marginTop: 8, marginBottom: 32 },
+  guidesWrap: { marginTop: 8, marginBottom: 8 },
   guidesHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
   guidesHeaderText: { flexShrink: 1, minWidth: 0 },
   guidesTitle: { fontSize: 18, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
