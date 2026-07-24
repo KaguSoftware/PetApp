@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
 import EditStatSheet from "@/components/EditStatSheet";
@@ -43,7 +43,7 @@ import {
   weightUnitLabel,
 } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
 
@@ -58,6 +58,8 @@ function isPast(ts: number) {
 }
 
 export default function PetDetailPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const {
@@ -849,7 +851,7 @@ export default function PetDetailPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 80 },
   notFoundTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   notFoundLink: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, color: colors.accent },

@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PressableScale, PRESS_SCALE_SMALL, SelectableChip, TextField } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { funRoleWheelOptions, OTHER_ROLE } from "@/lib/data";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * A member can hold up to 3 roles at once: Admin and/or Pet caregiver
@@ -32,6 +32,8 @@ export default function RoleField({
   onChangeFunRole: (v: string) => void;
   onChangeCustomFunRole: (v: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const isOtherFunRole = funRole === OTHER_ROLE;
 
@@ -78,17 +80,18 @@ export default function RoleField({
   );
 }
 
-const styles = StyleSheet.create({
-  chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 10 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    minHeight: 48,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  value: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 10 },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      minHeight: 48,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    value: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+  });

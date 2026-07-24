@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
@@ -22,7 +22,7 @@ import {
 import { createPost, fetchPosts, familyLabel, relativeTime, speciesEmoji, type ForumCategory, type ForumPost } from "@/lib/forum";
 import { isCaregiverRole } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 type SortKey = "top" | "new";
 
@@ -33,6 +33,8 @@ type SortKey = "top" | "new";
  * the post instead of voting (and discarded the optimistic score on the way).
  */
 function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.card}>
       <PressableScale onPress={onPress} accessibilityRole="button">
@@ -82,6 +84,8 @@ function PostCard({ post, onPress }: { post: ForumPost; onPress: () => void }) {
 }
 
 export default function Community() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, toast } = useStore();
   const router = useRouter();
   const [sort, setSort] = useState<SortKey>("top");
@@ -357,6 +361,8 @@ export default function Community() {
 }
 
 function SortTab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}>
       <View style={[styles.sortTab, active && styles.sortTabActive]}>
@@ -367,6 +373,8 @@ function SortTab({ label, active, onPress }: { label: string; active: boolean; o
 }
 
 function CategoryTab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityState={{ selected: active }}>
       <View style={[styles.categoryTab, active && styles.categoryTabActive]}>
@@ -376,7 +384,7 @@ function CategoryTab({ label, active, onPress }: { label: string; active: boolea
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   categoryRow: { marginTop: 12, flexDirection: "row", gap: 8 },
   categoryTab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.full, backgroundColor: colors.fill },
   categoryTabActive: { backgroundColor: colors.accent },

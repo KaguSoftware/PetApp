@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, type IconName } from "@/components/Icons";
@@ -6,7 +6,7 @@ import { InitialAvatar } from "@/components/PetAvatar";
 import PixelPet from "@/components/pixel/PixelPet";
 import { AccentButton, PressableScale } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, withAlpha, HIT } from "@/lib/theme";
+import { font, radius, useColors, withAlpha, HIT, type Colors } from "@/lib/theme";
 
 const FEATURES: { icon: IconName; title: string; body: string }[] = [
   { icon: "bell", title: "Log care together", body: "Feed, walk, clean — everyone in the family gets notified instantly." },
@@ -29,6 +29,8 @@ const TABS: { icon: IconName; title: string; body: string }[] = [
  * exactly like the web's absolute overlay covers the phone shell.
  */
 export default function Welcome() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, setSeenWelcome } = useStore();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
@@ -141,7 +143,7 @@ export default function Welcome() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   stage: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 },
   petsRow: { flexDirection: "row", alignItems: "flex-end", gap: 12 },

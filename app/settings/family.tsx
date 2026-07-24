@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
@@ -42,7 +42,7 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 // The web builds its invite link as `${window.location.origin}/join?f=<familyId>`;
 // on native the deployed web origin is fixed here. The app itself opens
@@ -83,6 +83,8 @@ function Field({
   hint?: string;
   style?: object;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={style}>
       <FieldLabel>{label}</FieldLabel>
@@ -102,6 +104,8 @@ function Field({
 
 /** Liability disclaimer shown before a member can be assigned the Pet caregiver role. */
 function CaregiverTermsView({ onAccept, onBack }: { onAccept: () => void; onBack: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <>
       <SheetTitle>Pet caregiver terms</SheetTitle>
@@ -129,6 +133,8 @@ function atNoon(d: Date) {
 
 export default function FamilySettingsPage() {
   const router = useRouter();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const {
     state,
     hydrated,
@@ -790,31 +796,32 @@ export default function FamilySettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  rowActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  termsScroll: { marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, padding: 14 },
-  termsBody: { fontSize: 14, lineHeight: 21, fontFamily: font.regular, color: colors.label2 },
-  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  lockCard: {
-    marginTop: 24,
-    alignItems: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 24,
-    paddingVertical: 36,
-  },
-  lockIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  lockTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  lockBody: {
-    marginTop: 4,
-    maxWidth: 240,
-    fontSize: 13,
-    fontFamily: font.regular,
-    lineHeight: 18,
-    color: colors.label2,
-    textAlign: "center",
-  },
-  errorText: { marginTop: 8, alignSelf: "stretch", textAlign: "left", fontSize: 14, fontFamily: font.medium, color: colors.red },
-  fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  twoCol: { flexDirection: "row", gap: 12 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    rowActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+    termsScroll: { marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, padding: 14 },
+    termsBody: { fontSize: 14, lineHeight: 21, fontFamily: font.regular, color: colors.label2 },
+    footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+    lockCard: {
+      marginTop: 24,
+      alignItems: "center",
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      paddingHorizontal: 24,
+      paddingVertical: 36,
+    },
+    lockIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+    lockTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
+    lockBody: {
+      marginTop: 4,
+      maxWidth: 240,
+      fontSize: 13,
+      fontFamily: font.regular,
+      lineHeight: 18,
+      color: colors.label2,
+      textAlign: "center",
+    },
+    errorText: { marginTop: 8, alignSelf: "stretch", textAlign: "left", fontSize: 14, fontFamily: font.medium, color: colors.red },
+    fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+    twoCol: { flexDirection: "row", gap: 12 },
+  });

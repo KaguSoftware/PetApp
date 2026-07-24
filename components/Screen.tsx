@@ -1,10 +1,10 @@
 import { router, useNavigation } from "expo-router";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
  * The compact nav-bar title (WhatsApp/iOS style). It stays hidden while the big
@@ -18,6 +18,8 @@ const FADE_START = 24;
 const FADE_END = 60;
 
 function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: SharedValue<number> }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const style = useAnimatedStyle(() => {
     // Linear progress across the handoff range, then eased with a smoothstep
     // (3t²−2t³) so the fade accelerates in and decelerates out instead of
@@ -56,6 +58,8 @@ function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: Sha
  * can clip against the bar's bounds.
  */
 function HeaderBackButton() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Pressable
       onPress={() => {
@@ -80,35 +84,42 @@ function HeaderBackButton() {
  * the bar, interactive edge-swipe pop. The back button is the one exception
  * to "no hand-rolled chrome" (see HeaderBackButton for why).
  */
-export const nativeHeaderOptions = {
-  // A standard OPAQUE native header. iOS gives it the system material and
-  // auto-blurs it as content scrolls under — a *transparent* header here left a
-  // blank gap with no title painted, so we let UIKit own the background.
-  headerShadowVisible: false,
-  headerTintColor: colors.accent,
-  headerTitleStyle: { fontFamily: font.semibold, color: colors.label },
-  // iOS only: hide the system back item (unresponsive on iOS 26 in Expo Go —
-  // see HeaderBackButton above) and render our own tappable one in its place.
-  // Android keeps the working native back arrow. Edge-swipe pop is unaffected.
-  ...(Platform.OS === "ios"
-    ? {
-        headerBackVisible: false,
-        headerLeft: ({ canGoBack }: { canGoBack?: boolean }) => (canGoBack ? <HeaderBackButton /> : null),
-      }
-    : {}),
-  headerStyle: { backgroundColor: colors.bg },
-  contentStyle: { backgroundColor: colors.bg },
-  // `android.edgeToEdgeEnabled` in app.json draws the window behind the status
-  // bar, but react-native-screens defaults `statusBarTranslucent` to false —
-  // so on Android it computed the header's status-bar inset from the (now
-  // meaningless) frame y-position instead of the real inset, and the header
-  // rendered too short: its icons (gear/bell/coin) landed underneath the
-  // system status bar instead of below it. This tells screens the status bar
-  // really is translucent/overlaid, so it adds the correct inset to the
-  // header height. iOS ignores this option — its header already accounts for
-  // the notch/Dynamic Island on its own.
-  statusBarTranslucent: true,
-};
+/** Native UINavigationBar options, theme-aware — call inside a Stack's parent component. */
+export function useNativeHeaderOptions() {
+  const colors = useColors();
+  return useMemo(
+    () => ({
+      // A standard OPAQUE native header. iOS gives it the system material and
+      // auto-blurs it as content scrolls under — a *transparent* header here left a
+      // blank gap with no title painted, so we let UIKit own the background.
+      headerShadowVisible: false,
+      headerTintColor: colors.accent,
+      headerTitleStyle: { fontFamily: font.semibold, color: colors.label },
+      // iOS only: hide the system back item (unresponsive on iOS 26 in Expo Go —
+      // see HeaderBackButton above) and render our own tappable one in its place.
+      // Android keeps the working native back arrow. Edge-swipe pop is unaffected.
+      ...(Platform.OS === "ios"
+        ? {
+            headerBackVisible: false,
+            headerLeft: ({ canGoBack }: { canGoBack?: boolean }) => (canGoBack ? <HeaderBackButton /> : null),
+          }
+        : {}),
+      headerStyle: { backgroundColor: colors.bg },
+      contentStyle: { backgroundColor: colors.bg },
+      // `android.edgeToEdgeEnabled` in app.json draws the window behind the status
+      // bar, but react-native-screens defaults `statusBarTranslucent` to false —
+      // so on Android it computed the header's status-bar inset from the (now
+      // meaningless) frame y-position instead of the real inset, and the header
+      // rendered too short: its icons (gear/bell/coin) landed underneath the
+      // system status bar instead of below it. This tells screens the status bar
+      // really is translucent/overlaid, so it adds the correct inset to the
+      // header height. iOS ignores this option — its header already accounts for
+      // the notch/Dynamic Island on its own.
+      statusBarTranslucent: true,
+    }),
+    [colors]
+  );
+}
 
 /**
  * Tab stacks render their big title as in-content text (see TabScreen), not as
@@ -116,12 +127,14 @@ export const nativeHeaderOptions = {
  * in Expo Go on iOS (blank gap, no title). We keep a normal small header only
  * for the trailing accessories (coins + bell), with no title text of its own.
  */
-export const tabStackScreenOptions = {
-  ...nativeHeaderOptions,
-  headerTitle: "",
-};
+export function useTabStackScreenOptions() {
+  const base = useNativeHeaderOptions();
+  return useMemo(() => ({ ...base, headerTitle: "" }), [base]);
+}
 
 function HeaderTrailing({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return <View style={styles.headerTrailing}>{children}</View>;
 }
 
@@ -158,6 +171,8 @@ export function TabScreen({
   /** Extra bottom breathing room, on top of the tab-bar + safe-area allowance. */
   contentBottomPad?: number;
 } & ScrollViewProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -262,6 +277,8 @@ export function PushedScreen({
   children: React.ReactNode;
   scroll?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -293,7 +310,7 @@ export function PushedScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   // Android-only stand-in for the native header, which couldn't be trusted to
   // clear the status bar under edge-to-edge. Pinned over the ScrollView (not

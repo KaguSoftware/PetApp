@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { InitialAvatar } from "@/components/PetAvatar";
 import Sheet from "@/components/Sheet";
@@ -5,9 +6,11 @@ import { Icon } from "@/components/Icons";
 import { AccentButton, Chip, Footnote, Group, IconCircle, Row, SheetTitle } from "@/components/ui";
 import type { Vet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export function Stars({ rating }: { rating: number }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.stars}>
       {Array.from({ length: 5 }).map((_, i) => (
@@ -25,6 +28,8 @@ export function Stars({ rating }: { rating: number }) {
  * keep it closed.
  */
 export default function VetBookingSheet({ vet, onClose }: { vet: Vet | null; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, bookVetById, toast } = useStore();
 
   const cat = state.pets.find((p) => p.breed === "British Shorthair") ?? state.pets[0];
@@ -83,7 +88,7 @@ export default function VetBookingSheet({ vet, onClose }: { vet: Vet | null; onC
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   sheetHeader: { flexDirection: "row", alignItems: "center", gap: 16, paddingTop: 4 },
   clinic: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
   metaRow: { marginTop: 2, flexDirection: "row", alignItems: "center", gap: 4 },

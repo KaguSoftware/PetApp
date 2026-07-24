@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { ACTION_ICON, Icon } from "@/components/Icons";
 import { IconCircle, Row, SmallButton } from "@/components/ui";
 import { careItemLabel, type CareItemStatus } from "@/lib/careStatus";
 import type { ActionType, Pet } from "@/lib/data";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /** Past-tense lead-in for the "who did it last" line, per action. */
 const DONE_VERB: Record<ActionType, string> = {
@@ -20,6 +20,8 @@ const DONE_VERB: Record<ActionType, string> = {
 
 /** "+5" coin pill that floats up and fades from the row's log button (~600ms). */
 export function CoinPop() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const t = useSharedValue(0);
   useEffect(() => {
     t.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
@@ -92,6 +94,8 @@ export default function CareStatusRow({
   onPress: () => void;
   now?: number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { type, medId, state, last, next, progress } = status;
   const a = ACTION_ICON[type];
   const title = careItemLabel(pet, type, medId);
@@ -161,28 +165,29 @@ export default function CareStatusRow({
   );
 }
 
-const styles = StyleSheet.create({
-  lastLine: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  nextLine: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label3 },
-  nextDue: { color: colors.accent, fontFamily: font.medium },
-  nextOverdue: { color: colors.red, fontFamily: font.medium },
-  warningBadge: {
-    position: "absolute",
-    right: -4,
-    top: -4,
-    backgroundColor: colors.card,
-    borderRadius: radius.full,
-    padding: 1,
-  },
-  coinPop: {
-    position: "absolute",
-    right: 0,
-    top: -22,
-    zIndex: 10,
-    borderRadius: radius.full,
-    backgroundColor: colors.orangeSoft,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  coinPopLabel: { fontSize: 12, fontFamily: font.bold, color: colors.orange },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    lastLine: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
+    nextLine: { marginTop: 1, fontSize: 13, fontFamily: font.regular, color: colors.label3 },
+    nextDue: { color: colors.accent, fontFamily: font.medium },
+    nextOverdue: { color: colors.red, fontFamily: font.medium },
+    warningBadge: {
+      position: "absolute",
+      right: -4,
+      top: -4,
+      backgroundColor: colors.card,
+      borderRadius: radius.full,
+      padding: 1,
+    },
+    coinPop: {
+      position: "absolute",
+      right: 0,
+      top: -22,
+      zIndex: 10,
+      borderRadius: radius.full,
+      backgroundColor: colors.orangeSoft,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    coinPopLabel: { fontSize: 12, fontFamily: font.bold, color: colors.orange },
+  });

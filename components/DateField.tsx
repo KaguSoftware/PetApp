@@ -1,9 +1,9 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PressableScale, PRESS_SCALE_SMALL, SelectableChip } from "@/components/ui";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * The one date input used across sheets (birth date, vaccination dates, vet
@@ -60,6 +60,8 @@ export default function DateField({
   mode?: DateFieldMode;
   allowClear?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const today = atNoon(new Date());
   const chips: { label: string; ts: number }[] =
     mode === "past"
@@ -148,25 +150,26 @@ export default function DateField({
   );
 }
 
-const styles = StyleSheet.create({
-  wheelCard: {
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    overflow: "hidden",
-    ...cardShadow,
-  },
-  // The iOS spinner needs a fixed height or it collapses inside a scroll view.
-  wheel: { height: 180, alignSelf: "stretch" },
-  androidValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    ...cardShadow,
-  },
-  androidValue: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-  chipRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    wheelCard: {
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      overflow: "hidden",
+      ...cardShadow,
+    },
+    // The iOS spinner needs a fixed height or it collapses inside a scroll view.
+    wheel: { height: 180, alignSelf: "stretch" },
+    androidValueRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      ...cardShadow,
+    },
+    androidValue: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+    chipRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  });

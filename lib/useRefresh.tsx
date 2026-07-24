@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { RefreshControl } from "react-native";
 import { useStore } from "@/lib/store";
-import { colors } from "@/lib/theme";
+import { useColors } from "@/lib/theme";
 
 /**
  * Drop-in `refreshControl` for a `TabScreen`: swipe-down re-runs the store's
@@ -10,6 +10,7 @@ import { colors } from "@/lib/theme";
  */
 export function usePullToRefresh() {
   const { refresh } = useStore();
+  const colors = useColors();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {

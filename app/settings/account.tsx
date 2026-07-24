@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { InitialAvatar } from "@/components/PetAvatar";
@@ -20,10 +20,12 @@ import {
 import { friendlyAuthError } from "@/lib/authErrors";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, signOut, setSeenWelcome, userEmail, toast } = useStore();
   const [pwOpen, setPwOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
@@ -227,8 +229,9 @@ export default function AccountSettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-  form: { marginTop: 20, gap: 12 },
-  errorText: { fontSize: 14, fontFamily: font.medium, color: colors.red, textAlign: "left" },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+    form: { marginTop: 20, gap: 12 },
+    errorText: { fontSize: 14, fontFamily: font.medium, color: colors.red, textAlign: "left" },
+  });

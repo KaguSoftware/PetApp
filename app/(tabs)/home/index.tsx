@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -28,11 +28,13 @@ import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/
 import { effectiveDailyTarget } from "@/lib/careStatus";
 import { useReduceMotion } from "@/lib/a11y";
 import { dueLabel, useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale
       haptic
@@ -50,9 +52,6 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
 
 const DOT_SIZE = 8;
 const DOT_ACTIVE_W = 22;
-// Precomputed OUTSIDE the worklet. Calling withAlpha() inside useAnimatedStyle
-// would run a JS function on the UI thread every frame, per dot.
-const DOT_RANGE: readonly [string, string] = [withAlpha(colors.label, 0.18), colors.label];
 
 /**
  * One page dot, driven by the carousel's live track value so it stretches and
@@ -61,13 +60,19 @@ const DOT_RANGE: readonly [string, string] = [withAlpha(colors.label, 0.18), col
  * is a small faint circle, and it interpolates between the two.
  */
 function PetDot({ index, track, onPress, label }: { index: number; track: SharedValue<number>; onPress: () => void; label: string }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Precomputed OUTSIDE the worklet (per theme, via useMemo). Calling
+  // withAlpha() inside useAnimatedStyle would run a JS function on the UI
+  // thread every frame, per dot.
+  const dotRange = useMemo<readonly [string, string]>(() => [withAlpha(colors.label, 0.18), colors.label], [colors]);
   const style = useAnimatedStyle(() => {
     "worklet";
     // 1 when this dot's page is centered, 0 when a full slide away or more.
     const nearness = Math.max(0, 1 - Math.abs(track.value - index));
     return {
       width: DOT_SIZE + (DOT_ACTIVE_W - DOT_SIZE) * nearness,
-      backgroundColor: interpolateColor(nearness, [0, 1], DOT_RANGE as unknown as string[]),
+      backgroundColor: interpolateColor(nearness, [0, 1], dotRange as unknown as string[]),
     };
   });
   return (
@@ -79,6 +84,8 @@ function PetDot({ index, track, onPress, label }: { index: number; track: Shared
 
 /** Animated "meals today" progress bar. */
 function MealsBar({ pct }: { pct: number }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [barW, setBarW] = useState(0);
   const progress = useSharedValue(0);
   // One MealsBar renders per carousel slide, and slides mount/unmount as the
@@ -96,6 +103,8 @@ function MealsBar({ pct }: { pct: number }) {
 }
 
 export default function Home() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, addWeight, editPet, toast } = useStore();
   const router = useRouter();
   const refreshControl = usePullToRefresh();
@@ -556,7 +565,7 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   seeAll: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   reminderTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
   reminderTagRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },

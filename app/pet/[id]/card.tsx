@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
@@ -9,7 +9,7 @@ import { Icon } from "@/components/Icons";
 import { Footnote, PRESS_SCALE_SMALL, PressableScale, Segmented } from "@/components/ui";
 import { VET, VETS, formatAge, formatWeight, isAdminRole, nextAnniversary, nextBirthday } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, floatShadow, font, radius, withAlpha } from "@/lib/theme";
+import { floatShadow, font, radius, withAlpha, useColors, type Colors } from "@/lib/theme";
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
 
@@ -18,6 +18,8 @@ function fmtDate(ts: number) {
 }
 
 function InfoRow({ label, value, mono = false, first = false }: { label: string; value: string; mono?: boolean; first?: boolean }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.infoRow, !first && styles.infoRowBorder]}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -32,6 +34,8 @@ function InfoRow({ label, value, mono = false, first = false }: { label: string;
  * pill keeps the control visible against the header.
  */
 function ShareGlass({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   if (Platform.OS === "ios") return <View style={styles.shareGlass}>{children}</View>;
   return <View style={[styles.shareGlass, styles.shareGlassAndroid]}>{children}</View>;
 }
@@ -43,6 +47,8 @@ type Variant = "emergency" | "profile";
 type CardField = { label: string; value: string; mono?: boolean };
 
 export default function PetCardPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { state, hydrated } = useStore();
@@ -203,7 +209,7 @@ export default function PetCardPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 80 },
   notFoundTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   notFoundLink: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, color: colors.accent },

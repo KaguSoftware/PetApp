@@ -1,14 +1,17 @@
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Top-right bell on tab pages, badged with the outstanding care-alert count.
  * Tapping opens the activity hub — mirrors the web NotificationBell.
  */
 export default function NotificationBell() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state } = useStore();
   // Care alerts deduped by petId|title, matching the web's badge count.
@@ -42,42 +45,43 @@ export default function NotificationBell() {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    // Keep the card background/border on Android; clear on iOS.
-    ...(Platform.OS === "android"
-      ? {
-          backgroundColor: colors.card,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.sep,
-        }
-      : null),
-  },
-  badge: {
-    position: "absolute",
-    // Android's native header (react-native-screens) clips headerRight to the
-    // control's own laid-out box — padding on an ANCESTOR view doesn't expand
-    // that clip region, it just shifts the row, so a badge hanging outside the
-    // bell's 38x38 pill still got its corner shaved regardless of outer
-    // padding. Pinning the badge fully INSIDE the pill (0/0 instead of -3/-3)
-    // means it never exceeds the control's own bounds, so there's nothing left
-    // for the native clip to cut — this holds on both platforms, iOS included.
-    top: 0,
-    right: 0,
-    minWidth: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: colors.red,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: colors.bg,
-  },
-  badgeLabel: { fontSize: 10, fontFamily: font.bold, color: "#fff" },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    wrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      // Keep the card background/border on Android; clear on iOS.
+      ...(Platform.OS === "android"
+        ? {
+            backgroundColor: colors.card,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.sep,
+          }
+        : null),
+    },
+    badge: {
+      position: "absolute",
+      // Android's native header (react-native-screens) clips headerRight to the
+      // control's own laid-out box — padding on an ANCESTOR view doesn't expand
+      // that clip region, it just shifts the row, so a badge hanging outside the
+      // bell's 38x38 pill still got its corner shaved regardless of outer
+      // padding. Pinning the badge fully INSIDE the pill (0/0 instead of -3/-3)
+      // means it never exceeds the control's own bounds, so there's nothing left
+      // for the native clip to cut — this holds on both platforms, iOS included.
+      top: 0,
+      right: 0,
+      minWidth: 17,
+      height: 17,
+      borderRadius: 9,
+      backgroundColor: colors.red,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      borderWidth: 1.5,
+      borderColor: colors.bg,
+    },
+    badgeLabel: { fontSize: 10, fontFamily: font.bold, color: "#fff" },
+  });

@@ -44,10 +44,10 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, HIT, radius } from "@/lib/theme";
+import { cardShadow, font, HIT, radius, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
@@ -71,6 +71,7 @@ const GRID_STEP = 14;
 
 /** Arcade backdrop: soft radial glow near the top + faint 14px retro grid. */
 function ArcadeStage({ children, style }: { children: React.ReactNode; style?: object }) {
+  const colors = useColors();
   const [dim, setDim] = useState({ w: 0, h: 0 });
   const vLines = dim.w > 0 ? Array.from({ length: Math.floor(dim.w / GRID_STEP) }, (_, i) => (i + 1) * GRID_STEP) : [];
   const hLines = dim.h > 0 ? Array.from({ length: Math.floor(dim.h / GRID_STEP) }, (_, i) => (i + 1) * GRID_STEP) : [];
@@ -111,6 +112,8 @@ function ItemCard({
   onBuy: () => void;
   onToggle: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const owned = pet.owned.includes(c.id);
   const equipped = pet.equipped[c.slot] === c.id;
   const affordable = coins >= c.price;
@@ -159,6 +162,8 @@ function ItemCard({
 }
 
 export default function PetsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, buyCosmetic, toggleEquip, addPet, addWeight, editPet, toast } = useStore();
   const refreshControl = usePullToRefresh();
   const searchParams = useLocalSearchParams<{ shop?: string }>();
@@ -497,7 +502,7 @@ export default function PetsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   stageCard: {
     marginTop: 8,
     borderRadius: radius.xl,

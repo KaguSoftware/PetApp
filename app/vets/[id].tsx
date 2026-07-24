@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Linking, Platform, StyleSheet, Text, View } from "react-native";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
@@ -7,10 +7,12 @@ import VetBookingSheet, { Stars } from "@/components/VetBookingSheet";
 import { AccentButton, Chevron, Chip, Group, IconCircle, PRESS_SCALE_SMALL, PressableScale, Row, SectionHeader, SmallButton } from "@/components/ui";
 import { VETS } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 /** Per-clinic info page — reached by tapping a vet card in the marketplace. */
 export default function VetDetailPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { state, unbookVetById, toast } = useStore();
@@ -102,7 +104,7 @@ export default function VetDetailPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 80 },
   notFoundTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
   notFoundLink: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, color: colors.accent },

@@ -1,12 +1,15 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
 import { Group, IconCircle, Row, SectionHeader, Segmented, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function GeneralSettingsPage() {
-  const { state, hydrated, setUnits, setNotificationPref, toast } = useStore();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { state, hydrated, setUnits, themeMode, setThemeMode, setNotificationPref, toast } = useStore();
   const currentMember = state.members.find((m) => m.id === state.currentMemberId);
 
   if (!hydrated) {
@@ -19,6 +22,29 @@ export default function GeneralSettingsPage() {
 
   return (
     <PushedScreen title="General">
+      <SectionHeader>Appearance</SectionHeader>
+      <Group>
+        <Row
+          leading={<IconCircle icon={themeMode === "dark" ? "moon" : "sun"} tint={colors.accent} bg={colors.accentSoft} />}
+          title="Appearance"
+          trailing={
+            <View style={{ width: 132 }}>
+              <Segmented
+                options={[
+                  { value: "light", label: "Light", icon: "sun" },
+                  { value: "dark", label: "Dark", icon: "moon" },
+                ]}
+                value={themeMode}
+                onChange={(m) => {
+                  setThemeMode(m);
+                  toast(m === "dark" ? "moon" : "sun", `Switched to ${m} mode`, "");
+                }}
+              />
+            </View>
+          }
+        />
+      </Group>
+
       <SectionHeader>Units</SectionHeader>
       <Group>
         <Row
@@ -78,6 +104,7 @@ export default function GeneralSettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+  });

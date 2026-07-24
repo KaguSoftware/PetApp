@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-import { colors, radius } from "@/lib/theme";
+import { radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Hydration placeholder rows — pulsing skeletons so tab chrome doesn't pop
  * and no false empty state ever shows during the initial DB load.
  */
 export default function PageLoading({ rows = 3 }: { rows?: number }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const opacity = useSharedValue(0.6);
   useEffect(() => {
     opacity.value = withRepeat(
@@ -28,7 +30,8 @@ export default function PageLoading({ rows = 3 }: { rows?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { gap: 10, marginTop: 12 },
-  row: { height: 68, borderRadius: radius.md, backgroundColor: colors.card },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    wrap: { gap: 10, marginTop: 12 },
+    row: { height: 68, borderRadius: radius.md, backgroundColor: colors.card },
+  });

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PressableScale, PRESS_SCALE_SMALL } from "@/components/ui";
 import { setVote } from "@/lib/forum";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Upvote pill for a forum post or answer. Optimistic: flips locally on tap and
@@ -23,6 +23,8 @@ export default function VoteControl({
   voted: boolean;
   size?: "md" | "sm";
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { toast } = useStore();
   const [state, setState] = useState({ score, voted });
   const [busy, setBusy] = useState(false);
@@ -68,7 +70,7 @@ export default function VoteControl({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   pill: {
     flexDirection: "row",
     alignItems: "center",

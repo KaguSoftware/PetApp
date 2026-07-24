@@ -1,8 +1,8 @@
 import { Icon } from "@/components/Icons";
 import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
-import { colors, font, radius } from "@/lib/theme";
-import { useState } from "react";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 const SPECIES_LABELS: Record<"cat" | "dog", string> = { cat: "Cat", dog: "Dog" };
@@ -21,6 +21,8 @@ export default function SpeciesField({
   species: "cat" | "dog";
   onChangeSpecies: (s: "cat" | "dog") => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
 
   return (
@@ -47,7 +49,7 @@ export default function SpeciesField({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",

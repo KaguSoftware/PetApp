@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import EmptyState from "@/components/EmptyState";
 import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
@@ -22,9 +22,11 @@ import { DEFAULT_MED_FREQUENCY, MED_FREQUENCIES, SingleWheelPicker } from "@/com
 import { describeSchedule, findSchedule } from "@/lib/careStatus";
 import { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function Meds({ pet }: { pet: Pet }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, addMed, deleteMed, toast } = useStore();
   // Light adherence signal — the most recent "meds" activity for this pet.
   const lastGiven = state.activities.find((a) => a.petId === pet.id && a.type === "meds")?.ts;
@@ -160,9 +162,10 @@ export default function Meds({ pet }: { pet: Pet }) {
   );
 }
 
-const styles = StyleSheet.create({
-  addLink: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 24 },
-  addLinkLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
-  deleteButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  lastGiven: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    addLink: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 24 },
+    addLinkLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.accent },
+    deleteButton: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+    lastGiven: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+  });

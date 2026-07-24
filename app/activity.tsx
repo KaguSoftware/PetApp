@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import EmptyState from "@/components/EmptyState";
@@ -10,7 +10,7 @@ import { ACTION_ICON } from "@/components/Icons";
 import { AccentButton, Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { ACTIONS, Activity } from "@/lib/data";
 import { dueLabel, timeAgo, useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 function dayKey(ts: number) {
   const d = new Date(ts);
@@ -32,6 +32,8 @@ function dayKey(ts: number) {
  * those destinations keep their own doors on the Logs tab and /vets.
  */
 export default function ActivityScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, dismissAllAlerts } = useStore();
   const router = useRouter();
   const [visible, setVisible] = useState(40);
@@ -193,7 +195,7 @@ export default function ActivityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   alertPetHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   alertPetName: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   alertTitle: { fontSize: 16, fontFamily: font.medium, color: colors.red },

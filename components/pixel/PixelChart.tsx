@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
 import { Icon } from "@/components/Icons";
 import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { WeightPoint, formatWeight } from "@/lib/data";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 const WINDOW_SIZE = 6;
 
@@ -17,6 +17,8 @@ function spanText(fromTs: number, toTs: number) {
 }
 
 function AddButton({ onPress }: { onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={onPress} accessibilityRole="button" accessibilityLabel="Add weight" hitSlop={10}>
       <View style={styles.addButton}>
@@ -28,6 +30,8 @@ function AddButton({ onPress }: { onPress: () => void }) {
 }
 
 function RangeFooter({ target, units, onAddWeight }: { target?: [number, number]; units: "kg" | "lb"; onAddWeight?: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   if (!target && !onAddWeight) return null;
   return (
     <View style={styles.footerRow}>
@@ -62,6 +66,8 @@ export default function PixelChart({
   height?: number;
   onAddWeight?: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const maxStart = Math.max(0, allPoints.length - WINDOW_SIZE);
   // Track the point count alongside the window start so that whenever a new
   // weight is logged (points array grows/shrinks), the window jumps back to
@@ -192,7 +198,7 @@ export default function PixelChart({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   emptyWrap: { alignItems: "center", paddingVertical: 12 },
   emptyWeight: { fontSize: 17, fontFamily: font.bold, color: colors.label },
   emptyHint: { marginTop: 6, fontSize: 12, fontFamily: font.regular, color: colors.label2, textAlign: "center" },

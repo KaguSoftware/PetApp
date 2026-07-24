@@ -1,14 +1,16 @@
 import { Link } from "expo-router";
 import BrandMark from "@/components/BrandMark";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccentButton, TextField } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { supabase } from "@/lib/supabase";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function SignupScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -99,7 +101,7 @@ export default function SignupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   container: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 },
   header: { alignItems: "center", marginBottom: 40 },

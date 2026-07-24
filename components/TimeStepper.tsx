@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * The no-dependency −/+ picker controls, extracted from the reminders add
@@ -21,6 +22,8 @@ export function Stepper({
   decDisabled?: boolean;
   accessibilityLabel: string;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.stepper} accessibilityLabel={accessibilityLabel}>
       <PressableScale
@@ -82,7 +85,7 @@ export function TimeStepper({
   return <Stepper label={label} onDec={() => step(-1)} onInc={() => step(1)} accessibilityLabel={accessibilityLabel} />;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   stepper: {
     flexDirection: "row",
     alignItems: "center",

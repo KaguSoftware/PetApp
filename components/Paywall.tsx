@@ -1,11 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
 import Sheet from "@/components/Sheet";
 import { AccentButton, Footnote, IconCircle } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 import { usePurchases } from "@/providers/purchases";
 
 const PERKS: { icon: IconName; title: string; body: string }[] = [
@@ -16,6 +16,8 @@ const PERKS: { icon: IconName; title: string; body: string }[] = [
 ];
 
 export default function Paywall({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { setPremium, toast } = useStore();
   const purchases = usePurchases();
   const [busy, setBusy] = useState(false);
@@ -67,26 +69,27 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
   );
 }
 
-const styles = StyleSheet.create({
-  hero: { alignItems: "center", paddingTop: 8 },
-  heroTile: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-  title: { marginTop: 12, fontSize: 24, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label },
-  tagline: { marginTop: 4, maxWidth: 280, fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center", lineHeight: 20 },
-  perks: { marginTop: 24, gap: 16 },
-  perk: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-  perkText: { flex: 1, minWidth: 0, marginTop: 2 },
-  perkTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  perkBody: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
-  footer: { marginTop: 28 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    hero: { alignItems: "center", paddingTop: 8 },
+    heroTile: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: colors.accent,
+      shadowOpacity: 0.35,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+    },
+    title: { marginTop: 12, fontSize: 24, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label },
+    tagline: { marginTop: 4, maxWidth: 280, fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center", lineHeight: 20 },
+    perks: { marginTop: 24, gap: 16 },
+    perk: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+    perkText: { flex: 1, minWidth: 0, marginTop: 2 },
+    perkTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
+    perkBody: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
+    footer: { marginTop: 28 },
+  });

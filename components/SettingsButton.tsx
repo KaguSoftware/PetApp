@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icons";
-import { colors } from "@/lib/theme";
+import { useColors, type Colors } from "@/lib/theme";
 
 /**
  * Top-right gear on tab pages — Settings moved off the tab bar (to make room
@@ -13,6 +14,8 @@ import { colors } from "@/lib/theme";
  * subview count between screens and destabilised native hit-testing.)
  */
 export default function SettingsButton() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   return (
     <Pressable
@@ -29,7 +32,7 @@ export default function SettingsButton() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   wrap: {
     width: 38,
     height: 38,

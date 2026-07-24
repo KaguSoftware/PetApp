@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PressableScale, PRESS_SCALE_SMALL, TextField } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { breedWheelOptions, OTHER_BREED } from "@/lib/data";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Collapsed by default: a single tappable row showing the current breed, a
@@ -25,6 +25,8 @@ export default function BreedField({
   onChangeBreed: (b: string) => void;
   onChangeCustomBreed: (v: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const isOtherBreed = breed === OTHER_BREED;
 
@@ -66,16 +68,17 @@ export default function BreedField({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    minHeight: 48,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  value: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.card,
+      borderRadius: radius.md,
+      minHeight: 48,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    value: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+  });

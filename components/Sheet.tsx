@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useA11yPrefs, useReduceMotion } from "@/lib/a11y";
-import { colors, radius } from "@/lib/theme";
+import { radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Bottom sheet, matching the web demo's Sheet: backdrop tap or swipe-down to
@@ -22,6 +22,8 @@ export default function Sheet({
   children: React.ReactNode;
   scrollable?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   // Read live — a module-scope Dimensions.get() never updates, so after a
   // rotation or split-screen resize the panel was capped to a stale height and
@@ -137,7 +139,7 @@ export default function Sheet({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   flex: { flex: 1 },
   root: { flex: 1, justifyContent: "flex-end" },
   backdrop: { backgroundColor: "rgba(18, 18, 24, 0.35)" },

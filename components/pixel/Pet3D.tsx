@@ -1,11 +1,11 @@
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import { Renderer } from "expo-three";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as THREE from "three";
 import type { Pet } from "@/lib/data";
-import { colors } from "@/lib/theme";
+import { useColors, type Colors } from "@/lib/theme";
 import { equippedCosmetics } from "./PixelPet";
 import { headSpriteForPet } from "./breedSprites";
 import { placementFor } from "./cosmeticSprites";
@@ -122,6 +122,8 @@ function buildPetMesh(pet: Pet): { mesh: THREE.InstancedMesh; fit: number } {
 }
 
 export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   // Rotation state the gesture writes (on the JS thread — see runOnJS below) and
   // the render loop reads. Plain refs so mutations never trigger re-renders.
   const rotY = useRef(0);
@@ -284,7 +286,7 @@ export default function Pet3D({ pet, size }: { pet: Pet; size: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   wrap: { alignItems: "center", justifyContent: "center" },
   shadow: {
     position: "absolute",

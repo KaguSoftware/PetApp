@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -17,7 +17,7 @@ import { DEFAULT_MED_FREQUENCY, MED_FREQUENCIES, SingleWheelPicker } from "@/com
 import { careItemStatus } from "@/lib/careStatus";
 import type { Pet } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
  * "Which med?" — pick one of the pet's medications (to log a dose or backfill
@@ -40,6 +40,8 @@ export default function MedPickerSheet({
   /** Open straight onto the "new medication" form (the Add medication row). */
   initialAdding?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, addMed, toast } = useStore();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -130,6 +132,7 @@ export default function MedPickerSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  addTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    addTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
+  });

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { AccentButton, Segmented, SheetFooter, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { PORTIONS, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /** Portion picker for logging a feeding (plus the "give a treat instead" path).
  *  Shared by the Logs tab and the Care tab's Today checklist. */
@@ -23,6 +23,8 @@ export default function FeedPortionSheet({
   /** Preselect the portion nearest this many grams — the upcoming meal slot's portion. */
   presetGrams?: number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { logAction, useSupply: consumeSupply, toast } = useStore();
   const [fraction, setFraction] = useState<(typeof PORTIONS)[number]["value"]>("1");
   const treatsSupply = pet.supplies.find((s) => s.icon === "star");
@@ -82,7 +84,8 @@ export default function FeedPortionSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  treatBlock: { marginTop: 28, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, paddingTop: 20 },
-  treatTitle: { fontSize: 15, fontFamily: font.bold, color: colors.label, paddingHorizontal: 4 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    treatBlock: { marginTop: 28, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, paddingTop: 20 },
+    treatTitle: { fontSize: 15, fontFamily: font.bold, color: colors.label, paddingHorizontal: 4 },
+  });

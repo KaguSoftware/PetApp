@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
 import PageLoading from "@/components/PageLoading";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui";
 import { RepeatKind, Reminder, nextRepeatDue } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
-import { colors, font, withAlpha } from "@/lib/theme";
+import { font, withAlpha, useColors, type Colors } from "@/lib/theme";
 
 const DAY_MS = 86_400_000;
 const isIOS = Platform.OS === "ios";
@@ -44,6 +44,8 @@ function pad(n: number) {
 }
 
 export default function RemindersScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, addReminder, toggleReminder, deleteReminder, toast } = useStore();
   const [addOpen, setAddOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -355,7 +357,7 @@ export default function RemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   addButton: {
     // iPhone: chromeless 38pt glyph box (matches the bell/gear header metrics
     // — no pill, no shadow, no transform inside the UIBarButtonItem).

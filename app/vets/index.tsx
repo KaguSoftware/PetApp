@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
@@ -8,9 +8,11 @@ import { Icon } from "@/components/Icons";
 import { Footnote, PressableScale, SmallButton } from "@/components/ui";
 import { VETS, type Vet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+import { cardShadow, font, radius, withAlpha, useColors, type Colors } from "@/lib/theme";
 
 export default function VetsPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state, unbookVetById, toast } = useStore();
   const [selected, setSelected] = useState<Vet | null>(null);
@@ -79,7 +81,7 @@ export default function VetsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   list: { gap: 12, paddingBottom: 16 },
   card: {
     flexDirection: "row",

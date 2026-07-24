@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import EmptyState from "@/components/EmptyState";
@@ -20,10 +20,12 @@ import {
 } from "@/components/ui";
 import { createAnswer, deleteAnswer, deletePost, fetchPost, familyLabel, relativeTime, speciesEmoji, type ForumAnswer, type ForumPost } from "@/lib/forum";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 /** One answer card. `onDelete` is provided only when the viewer is the author. */
 function AnswerCard({ answer, onDelete }: { answer: ForumAnswer; onDelete?: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.answerCard}>
       <View style={styles.answerHeader}>
@@ -57,6 +59,8 @@ function AnswerCard({ answer, onDelete }: { answer: ForumAnswer; onDelete?: () =
 
 /** Small tappable trash affordance shown only to the author of a post/answer. */
 function DeleteButton({ onPress, accessibilityLabel }: { onPress: () => void; accessibilityLabel: string }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={accessibilityLabel} hitSlop={8}>
       <View style={styles.deleteButton}>
@@ -67,6 +71,8 @@ function DeleteButton({ onPress, accessibilityLabel }: { onPress: () => void; ac
 }
 
 export default function PostDetail() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { state, userId, toast } = useStore();
@@ -310,7 +316,7 @@ export default function PostDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   postCard: { borderRadius: radius.lg, backgroundColor: colors.card, padding: 16, overflow: "hidden", ...cardShadow },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 },
   // A long breed must shrink the chip, not push the family label off the card.

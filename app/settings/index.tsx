@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
@@ -10,10 +10,12 @@ import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SmallButton } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, withAlpha } from "@/lib/theme";
+import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, setPremium, toast } = useStore();
   const [paywallOpen, setPaywallOpen] = useState(false);
 
@@ -149,27 +151,28 @@ export default function SettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  plusTile: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
-  upgradeCard: {
-    borderRadius: radius.md,
-    padding: 16,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  upgradeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  upgradeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    backgroundColor: withAlpha(colors.white, 0.15),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  upgradeText: { flex: 1, minWidth: 0 },
-  upgradeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.white },
-  upgradeBody: { fontSize: 13, fontFamily: font.medium, color: withAlpha(colors.white, 0.8) },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    plusTile: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
+    upgradeCard: {
+      borderRadius: radius.md,
+      padding: 16,
+      shadowColor: colors.accent,
+      shadowOpacity: 0.3,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 6,
+    },
+    upgradeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    upgradeIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.sm,
+      backgroundColor: withAlpha(colors.white, 0.15),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    upgradeText: { flex: 1, minWidth: 0 },
+    upgradeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.white },
+    upgradeBody: { fontSize: 13, fontFamily: font.medium, color: withAlpha(colors.white, 0.8) },
+  });

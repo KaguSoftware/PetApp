@@ -1,13 +1,16 @@
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { FadeInItem } from "@/components/Motion";
 import { PushedScreen } from "@/components/Screen";
 import { PressableScale } from "@/components/ui";
 import { GUIDES } from "@/lib/guides";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 export default function GuidesListScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
 
   return (
@@ -44,7 +47,7 @@ export default function GuidesListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   intro: { fontSize: 14, fontFamily: font.regular, color: colors.label2, lineHeight: 20, paddingHorizontal: 4, paddingBottom: 16 },
   list: { gap: 12 },
   row: {

@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
-import { colors } from "@/lib/theme";
+import { useColors } from "@/lib/theme";
 import { useSession } from "@/providers/session";
 
 /**
@@ -18,6 +18,7 @@ const androidIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => (
 );
 
 export default function TabsLayout() {
+  const colors = useColors();
   const { session } = useSession();
   if (!session) return <Redirect href="/(auth)/login" />;
 

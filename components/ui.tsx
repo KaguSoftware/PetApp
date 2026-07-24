@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -18,7 +18,7 @@ import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { hapticsEnabled, useReduceMotion } from "@/lib/a11y";
-import { colors, font, radius, withAlpha } from "@/lib/theme";
+import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 /**
  * Press-feedback system — the standard iOS control behavior: the pressed
@@ -77,10 +77,14 @@ export function PressableScale({
 
 /* Inset grouped list container (iOS Settings style) */
 export function Group({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return <View style={[styles.group, style]}>{children}</View>;
 }
 
 export function SectionHeader({ children, trailing, style }: { children: React.ReactNode; trailing?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.sectionHeader, style]}>
       <Text style={styles.sectionHeaderText}>{typeof children === "string" ? children.toUpperCase() : children}</Text>
@@ -140,6 +144,8 @@ export function Row({
    */
   interactiveTrailing?: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const inner = (
     <>
       {leading}
@@ -226,10 +232,12 @@ export function ConfirmRow({
 }
 
 export function Chevron() {
+  const colors = useColors();
   return <Icon name="chevron-right" size={15} color={colors.label3} />;
 }
 
 export function Separator({ inset = 16 }: { inset?: number }) {
+  const colors = useColors();
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.sep, marginLeft: inset }} />;
 }
 
@@ -251,6 +259,8 @@ export function AccentButton({
   size?: "md" | "sm";
   style?: StyleProp<ViewStyle>;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   // Disabled is a full state of its own (gray fill + muted label), not a
   // half-transparent accent — a washed-out lavender CTA read as "half on".
   const off = disabled && !loading;
@@ -286,6 +296,8 @@ export function AccentButton({
 }
 
 export function Chip({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.chip, style]}>
       {typeof children === "string" ? <Text style={styles.chipLabel}>{children}</Text> : children}
@@ -298,10 +310,12 @@ export function Segmented<T extends string>({
   value,
   onChange,
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; icon?: IconName }[];
   value: T;
   onChange: (v: T) => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
   // Measure the track once so the thumb width is exact; until then it renders
   // at 0 width (invisible) and snaps into place on first layout.
@@ -324,6 +338,7 @@ export function Segmented<T extends string>({
         const active = o.value === value;
         return (
           <Pressable key={o.value} onPress={() => onChange(o.value)} style={styles.segment}>
+            {o.icon ? <Icon name={o.icon} size={14} color={active ? colors.label : colors.label2} strokeWidth={2.2} /> : null}
             <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>{o.label}</Text>
           </Pressable>
         );
@@ -336,6 +351,8 @@ export function Segmented<T extends string>({
 const SEG_PAD = 2;
 
 export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   // Bump whenever the balance INCREASES — one place gives coin-earn feedback
   // for every source. Spending (a decrease) doesn't bump.
   const reduceMotion = useReduceMotion();
@@ -373,7 +390,7 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   group: {
     borderRadius: radius.md,
     backgroundColor: colors.card,
@@ -401,7 +418,7 @@ const styles = StyleSheet.create({
   chip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 10, paddingVertical: 4 },
   chipLabel: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
   segmented: { position: "relative", flexDirection: "row", borderRadius: 10, backgroundColor: colors.fill, padding: 2 },
-  segment: { flex: 1, borderRadius: 8.5, paddingVertical: 6, alignItems: "center" },
+  segment: { flex: 1, flexDirection: "row", gap: 5, borderRadius: 8.5, paddingVertical: 6, alignItems: "center", justifyContent: "center" },
   // The sliding pill — one shared element that translates between segments
   // instead of each segment toggling its own background.
   segmentThumb: {
@@ -442,19 +459,27 @@ const styles = StyleSheet.create({
  * ------------------------------------------------------------------------- */
 
 export function SheetTitle({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   return <Text style={primStyles.sheetTitle}>{children}</Text>;
 }
 
 export function SheetSubtitle({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   return <Text style={primStyles.sheetSubtitle}>{children}</Text>;
 }
 
 export function FieldLabel({ children }: { children: string }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   return <Text style={primStyles.fieldLabel}>{children}</Text>;
 }
 
 /** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
 export const TextField = forwardRef<TextInput, TextInputProps>(function TextField(props, ref) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
@@ -475,11 +500,15 @@ export const TextField = forwardRef<TextInput, TextInputProps>(function TextFiel
 });
 
 export function SheetFooter({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   return <View style={primStyles.sheetFooter}>{children}</View>;
 }
 
 /** Centered small-print under buttons/cards — replaces the four local footnote styles. */
 export function Footnote({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   return <Text style={[primStyles.footnote, style as object]}>{children}</Text>;
 }
 
@@ -501,7 +530,13 @@ export function SelectableChip({
   disabled?: boolean;
   leading?: React.ReactNode;
 }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
+  // Border tints recomputed per theme (not module scope, since they now
+  // depend on the live palette) but still stable strings for the worklet.
+  const chipBorder = useMemo(() => withAlpha(colors.label, 0.1), [colors]);
+  const chipBorderSelected = useMemo(() => withAlpha(colors.accent, 0.35), [colors]);
   // Crossfade the container colors between the quiet and tinted states instead
   // of hard-swapping — selection reads as a state change, not a repaint.
   const t = useSharedValue(selected ? 1 : 0);
@@ -510,7 +545,7 @@ export function SelectableChip({
   }, [selected, t, reduceMotion]);
   const containerAnim = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(t.value, [0, 1], [colors.card, colors.accentSoft]),
-    borderColor: interpolateColor(t.value, [0, 1], [CHIP_BORDER, CHIP_BORDER_SELECTED]),
+    borderColor: interpolateColor(t.value, [0, 1], [chipBorder, chipBorderSelected]),
   }));
   return (
     <PressableScale
@@ -528,11 +563,6 @@ export function SelectableChip({
     </PressableScale>
   );
 }
-
-// Chip border tints — module scope so the animated style (a UI-thread worklet)
-// captures stable strings rather than recomputing withAlpha per frame.
-const CHIP_BORDER = withAlpha(colors.label, 0.1);
-const CHIP_BORDER_SELECTED = withAlpha(colors.accent, 0.35);
 
 /**
  * iOS-style switch, accent on-state, animated knob. The whole 51×31 control is
@@ -554,6 +584,8 @@ export function Toggle({
   label?: string;
   interactive?: boolean;
 }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   const t = useSharedValue(on ? 1 : 0);
   useEffect(() => {
     t.value = withTiming(on ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
@@ -598,6 +630,8 @@ export function SmallButton({
   tone?: "accent" | "red" | "green" | "gray";
   disabled?: boolean;
 }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   const bg = { accent: colors.accentSoft, red: colors.redSoft, green: colors.greenSoft, gray: colors.fill }[tone];
   const fg = { accent: colors.accentDeep, red: colors.red, green: colors.green, gray: colors.label }[tone];
   return (
@@ -616,7 +650,7 @@ export function SmallButton({
   );
 }
 
-const primStyles = StyleSheet.create({
+const makePrimStyles = (colors: Colors) => StyleSheet.create({
   sheetTitle: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.4, color: colors.label, paddingHorizontal: 4 },
   sheetSubtitle: { marginTop: 2, fontSize: 14, fontFamily: font.regular, lineHeight: 19, color: colors.label2, paddingHorizontal: 4 },
   fieldLabel: {
@@ -639,7 +673,7 @@ const primStyles = StyleSheet.create({
     fontFamily: font.medium,
     color: colors.label,
     borderWidth: 1,
-    borderColor: "rgba(28, 28, 35, 0.1)",
+    borderColor: withAlpha(colors.label, 0.1),
   },
   textFieldFocused: {
     borderColor: colors.accent,
@@ -660,7 +694,7 @@ const primStyles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "rgba(28, 28, 35, 0.1)",
+    borderColor: withAlpha(colors.label, 0.1),
     paddingHorizontal: 14,
     paddingVertical: 7,
   },

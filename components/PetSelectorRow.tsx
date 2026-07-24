@@ -1,11 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import PetAvatar from "@/components/PetAvatar";
 import { PressableScale } from "@/components/ui";
 import { useReduceMotion } from "@/lib/a11y";
 import type { Pet } from "@/lib/data";
-import { colors, font, radius, withAlpha } from "@/lib/theme";
+import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 /**
  * Horizontal avatar-row pet selector — one tap to switch pets. The selected
@@ -25,6 +25,8 @@ export default function PetSelectorRow({
   /** When set, a trailing "+" tile opens the add-a-pet flow (Pets tab). */
   onAdd?: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   if (pets.length === 0) return null;
   return (
     <View style={styles.card}>
@@ -57,6 +59,8 @@ export default function PetSelectorRow({
 }
 
 function PetSelectorItem({ pet, selected, onPress }: { pet: Pet; selected: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
   const scale = useSharedValue(selected ? 1 : 0.92);
   useEffect(() => {
@@ -84,43 +88,44 @@ function PetSelectorItem({ pet, selected, onPress }: { pet: Pet; selected: boole
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginTop: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-    paddingVertical: 14,
-    overflow: "hidden",
-  },
-  row: {},
-  rowContent: { paddingHorizontal: 14, gap: 14 },
-  item: { alignItems: "center", width: 72, paddingVertical: 2 },
-  avatarWrap: {
-    padding: 3,
-    borderRadius: 34,
-    borderWidth: 2,
-  },
-  avatarSelected: { borderColor: colors.accent, backgroundColor: withAlpha(colors.accent, 0.08) },
-  avatarUnselected: { borderColor: "transparent" },
-  name: {
-    marginTop: 4,
-    maxWidth: 72,
-    fontSize: 13,
-    fontFamily: font.medium,
-    color: colors.label2,
-    textAlign: "center",
-  },
-  nameSelected: { fontFamily: font.semibold, color: colors.label },
-  // "+" tile sized to match PetAvatar md (56pt) inside the same ring padding.
-  addCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha(colors.accent, 0.1),
-  },
-  addGlyph: { fontSize: 26, lineHeight: 30, fontFamily: font.medium, color: colors.accent },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    card: {
+      marginTop: 12,
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.sep,
+      paddingVertical: 14,
+      overflow: "hidden",
+    },
+    row: {},
+    rowContent: { paddingHorizontal: 14, gap: 14 },
+    item: { alignItems: "center", width: 72, paddingVertical: 2 },
+    avatarWrap: {
+      padding: 3,
+      borderRadius: 34,
+      borderWidth: 2,
+    },
+    avatarSelected: { borderColor: colors.accent, backgroundColor: withAlpha(colors.accent, 0.08) },
+    avatarUnselected: { borderColor: "transparent" },
+    name: {
+      marginTop: 4,
+      maxWidth: 72,
+      fontSize: 13,
+      fontFamily: font.medium,
+      color: colors.label2,
+      textAlign: "center",
+    },
+    nameSelected: { fontFamily: font.semibold, color: colors.label },
+    // "+" tile sized to match PetAvatar md (56pt) inside the same ring padding.
+    addCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: withAlpha(colors.accent, 0.1),
+    },
+    addGlyph: { fontSize: 26, lineHeight: 30, fontFamily: font.medium, color: colors.accent },
+  });

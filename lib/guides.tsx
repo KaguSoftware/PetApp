@@ -1,7 +1,8 @@
+import { useMemo } from "react";
 import Svg, { Circle, Ellipse, Line, Path, Rect } from "react-native-svg";
 import { StyleSheet, Text, View } from "react-native";
 import type { IconName } from "@/components/Icons";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Shared how-to guide content. One source of truth for the guides list menu
@@ -215,6 +216,8 @@ export function GuideDiagram({ kind }: { kind: NonNullable<Guide["diagram"]> }) 
 }
 
 function BodyConditionDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
   const Body = ({ rx, label, tint }: { rx: number; label: string; tint: string }) => (
     <View style={dstyles.item}>
       <Svg width={72} height={56} viewBox="0 0 72 56">
@@ -235,6 +238,8 @@ function BodyConditionDiagram() {
 }
 
 function BrushAngleDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
   return (
     <View style={dstyles.single}>
       <Svg width={160} height={80} viewBox="0 0 160 80">
@@ -249,6 +254,8 @@ function BrushAngleDiagram() {
 }
 
 function NailQuickDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
   return (
     <View style={dstyles.single}>
       <Svg width={150} height={70} viewBox="0 0 150 70">
@@ -266,7 +273,7 @@ function NailQuickDiagram() {
   );
 }
 
-const dstyles = StyleSheet.create({
+const makeDstyles = (colors: Colors) => StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-around", width: "100%" },
   item: { alignItems: "center", gap: 4 },
   label: { fontSize: 11, fontFamily: font.semibold },

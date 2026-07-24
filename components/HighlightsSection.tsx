@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { IconCircle, PressableScale, SectionHeader } from "@/components/ui";
 import { Icon, type IconName } from "@/components/Icons";
 import type { Pet, Supply } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 /** Supply categories surfaced collectively, keyed by the supply's icon. */
 const CATEGORIES: { key: string; title: string; icon: IconName; tint: string; bg: string; matchIcon: string }[] = [
@@ -12,7 +13,7 @@ const CATEGORIES: { key: string; title: string; icon: IconName; tint: string; bg
   { key: "litter", title: "Litter", icon: "broom", tint: "#636366", bg: "rgba(120,120,128,0.12)", matchIcon: "broom" },
 ];
 
-function statusFor(level: number): { label: string; color: string } {
+function statusFor(level: number, colors: Colors): { label: string; color: string } {
   if (level < 20) return { label: "Restock soon", color: colors.red };
   if (level < 50) return { label: "Getting low", color: colors.orange };
   return { label: "Well stocked", color: colors.green };
@@ -25,6 +26,8 @@ function statusFor(level: number): { label: string; color: string } {
  * (where restocking lives) on tap.
  */
 export default function HighlightsSection() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state } = useStore();
   const router = useRouter();
 
@@ -45,7 +48,7 @@ export default function HighlightsSection() {
       <SectionHeader>Highlights</SectionHeader>
       <View style={styles.row}>
         {cards.map(({ cat, worst, lowCount, multiPet }) => {
-          const status = statusFor(worst.supply.level);
+          const status = statusFor(worst.supply.level, colors);
           const detail =
             lowCount > 1
               ? `${lowCount} pets running low`
@@ -87,22 +90,23 @@ export default function HighlightsSection() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 12 },
-  cardWrap: { flex: 1 },
-  card: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    padding: 16,
-    ...cardShadow,
-  },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: 10 },
-  cardTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  meterTrack: { marginTop: 14, height: 8, borderRadius: 4, backgroundColor: colors.fill, overflow: "hidden" },
-  meterFill: { height: "100%", borderRadius: 4 },
-  cardFoot: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  pct: { fontSize: 17, fontFamily: font.bold, letterSpacing: -0.2 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statusLabel: { fontSize: 12, fontFamily: font.semibold },
-  detail: { marginTop: 6, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    row: { flexDirection: "row", gap: 12 },
+    cardWrap: { flex: 1 },
+    card: {
+      borderRadius: radius.lg,
+      backgroundColor: colors.card,
+      padding: 16,
+      ...cardShadow,
+    },
+    cardHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+    cardTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
+    meterTrack: { marginTop: 14, height: 8, borderRadius: 4, backgroundColor: colors.fill, overflow: "hidden" },
+    meterFill: { height: "100%", borderRadius: 4 },
+    cardFoot: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    pct: { fontSize: 17, fontFamily: font.bold, letterSpacing: -0.2 },
+    statusRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    statusLabel: { fontSize: 12, fontFamily: font.semibold },
+    detail: { marginTop: 6, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
+  });

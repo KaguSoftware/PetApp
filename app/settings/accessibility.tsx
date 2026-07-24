@@ -1,12 +1,15 @@
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
+import { useMemo } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Chevron, Group, IconCircle, Row, SectionHeader, Toggle } from "@/components/ui";
 import { PushedScreen } from "@/components/Screen";
 import { useA11yPrefs } from "@/lib/a11y";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function AccessibilitySettingsPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { reduceMotion, reduceTransparency, haptics, setReduceMotion, setReduceTransparency, setHaptics } = useA11yPrefs();
 
   const toggles = [
@@ -94,6 +97,7 @@ export default function AccessibilitySettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
+  });

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import { ACTIONS, PORTIONS, shortcutTileLabel, type ActionType, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /** Glyphs offered in the icon picker — the "you pick the icon" part of a shortcut. */
 const ICON_CHOICES: IconName[] = [
@@ -43,6 +43,8 @@ function actionsForPets(selected: Pet[]): ActionType[] {
 
 /** Builder for a new Home shortcut: pick pet(s) → action → (portion / med) → icon → label. */
 export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, addShortcut, toast } = useStore();
   const pets = state.pets;
 
@@ -217,7 +219,7 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
   // Same 8pt gap as the chip rows above so every selection group shares one

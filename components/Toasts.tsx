@@ -1,15 +1,16 @@
+import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeOutDown, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Tile tone derives from the icon name, mirroring the web toast API:
  * alert/trash = red, check/star = green, flame = orange (streaks), else accent.
  */
-function tone(icon: string): { tint: string; bg: string } {
+function tone(colors: Colors, icon: string): { tint: string; bg: string } {
   if (icon === "alert" || icon === "trash") return { tint: colors.red, bg: colors.redSoft };
   if (icon === "check" || icon === "star") return { tint: colors.green, bg: colors.greenSoft };
   if (icon === "flame") return { tint: colors.orange, bg: colors.orangeSoft };
@@ -17,6 +18,8 @@ function tone(icon: string): { tint: string; bg: string } {
 }
 
 export default function Toasts() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { toasts, dismissToast, stopNotifications } = useStore();
   const insets = useSafeAreaInsets();
   if (toasts.length === 0) return null;
@@ -46,7 +49,7 @@ export default function Toasts() {
           scroll, so an unbounded list would push the oldest toasts off-screen
           where they can't be read or dismissed. "Clear all" handles the rest. */}
       {toasts.slice(-MAX_VISIBLE).map((t) => {
-        const { tint, bg } = tone(t.icon);
+        const { tint, bg } = tone(colors, t.icon);
         return (
           <Animated.View
             key={t.id}
@@ -104,7 +107,7 @@ const TAB_BAR_CLEARANCE = 64;
 /** Most toasts shown at once; older ones stay in the store for "Clear all". */
 const MAX_VISIBLE = 3;
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   wrap: { position: "absolute", left: 12, right: 12, gap: 8, zIndex: 100 },
   clearRow: { alignItems: "center" },
   clearBtn: {

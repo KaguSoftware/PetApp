@@ -12,7 +12,7 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { hapticsEnabled } from "@/lib/a11y";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 
 const ITEM_HEIGHT = 44;
 const VISIBLE = 5; // odd, so one row sits centered under the selection band
@@ -45,6 +45,8 @@ function WheelColumn<T>({
    *  matcher since decimal values don't always land exactly on the grid. */
   findIndex?: (values: T[], value: T) => number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const ref = useRef<ScrollView>(null);
   const scrolling = useRef(false);
   const lastHaptic = useRef(-1);
@@ -175,6 +177,8 @@ export default function WheelPicker({
   unit?: string;
   decimalPlaces?: number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scale = 10 ** decimalPlaces;
   const wholePart = Math.floor(value + 1e-9);
   const decPart = Math.round((value - wholePart) * scale);
@@ -261,6 +265,8 @@ export function TimeWheelPicker({
   /** Minute granularity — 5 by default; pass 1 for exact times. */
   minuteStep?: number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { hour12, minute, pm } = parseTime(value);
   const minutes = useMemo(
     () => Array.from({ length: Math.ceil(60 / minuteStep) }, (_, i) => i * minuteStep),
@@ -336,6 +342,8 @@ export function SingleWheelPicker({
   onChange: (v: string) => void;
   width?: number;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [rowW, setRowW] = useState(0);
   const onRowLayout = (e: LayoutChangeEvent) => setRowW(e.nativeEvent.layout.width);
 
@@ -349,7 +357,7 @@ export function SingleWheelPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   wrap: { alignSelf: "center", justifyContent: "center", alignItems: "center", height: ITEM_HEIGHT * VISIBLE },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "center", alignSelf: "center" },
   band: {

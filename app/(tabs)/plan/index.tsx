@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
@@ -15,7 +15,7 @@ import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, Se
 import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
 type CustomTargetKey = Exclude<keyof NonNullable<Pet["customPlan"]>, "cadences">;
@@ -117,6 +117,8 @@ const LOCKED_PREVIEWS: { icon: IconName; title: string; text: string }[] = [
  * opens the full list.
  */
 function CareGuides() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   return (
     <View style={styles.guidesWrap}>
@@ -178,6 +180,7 @@ function CareGuides() {
  * a reminder are not premium features, so the paywall must not bury them.
  */
 function CareLinks({ petId, petName }: { petId: string; petName: string }) {
+  const colors = useColors();
   const router = useRouter();
   const { state } = useStore();
   const open = state.reminders.filter((r) => !r.done && r.petId === petId);
@@ -213,6 +216,8 @@ function CareLinks({ petId, petName }: { petId: string; petName: string }) {
 }
 
 export default function PlanPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state, hydrated, editPet, logAction, toast } = useStore();
   const refreshControl = usePullToRefresh();
@@ -570,7 +575,7 @@ export default function PlanPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   guidesWrap: { marginTop: 8, marginBottom: 8 },
   guidesHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
   guidesHeaderText: { flexShrink: 1, minWidth: 0 },

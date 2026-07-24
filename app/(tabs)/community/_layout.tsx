@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
-import { tabStackScreenOptions } from "@/components/Screen";
+import { useTabStackScreenOptions } from "@/components/Screen";
 
 export default function TabStack() {
+  const tabStackScreenOptions = useTabStackScreenOptions();
   return <Stack screenOptions={tabStackScreenOptions} />;
 }

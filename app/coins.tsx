@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
@@ -6,7 +7,7 @@ import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { PushedScreen } from "@/components/Screen";
 import { Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 type Pack = { id: string; coins: number; price: string; bonus?: string; best?: boolean };
 
@@ -24,6 +25,8 @@ const EARN: { icon: IconName; title: string; sub: string }[] = [
 ];
 
 export default function CoinsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state, toast } = useStore();
 
@@ -89,7 +92,7 @@ export default function CoinsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   balanceCard: {
     alignItems: "center",
     gap: 4,

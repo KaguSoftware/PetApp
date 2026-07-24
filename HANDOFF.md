@@ -339,6 +339,14 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 
 **Device-verify priorities**: back button label on pet profile + settings; header island alignment on Home; scroll-to-bottom on all five tabs (iOS buffer, Android not doubled); sheet spring + chip selection animation (plus reduce-motion instant paths); disabled CTA reads gray (reminder sheet with empty task); day toggles + timeChip in Fed/Groomed schedule; Android hairline borders render.
 
+### App-wide dark mode (2026-07-24, owner request) — built, statically verified, NEEDS device walkthrough + migration 0025
+
+- **`lib/theme.ts`**: `lightColors`/`darkColors` (same shape, `Colors` type), `useColors()` hook resolves the live palette from `useStore().themeMode`. Every screen/component that previously imported the static `colors` const now calls the hook (`const colors = useColors();`) and, where a module-scope `StyleSheet.create` baked colors in at import time, a `makeStyles(colors: Colors)` factory memoized per-render via `useMemo` — module-scope JS only runs once per app load, so a plain static object could never react to the toggle.
+- **Settings > General > Appearance** (`app/settings/general.tsx`): new section above Units, sun/moon `Segmented` toggle (icon support added to `components/ui.tsx`'s `Segmented`).
+- **Per-user, not per-device**: `themeMode` is keyed to the signed-in account (`user_profiles.theme_mode`, migration `0025_user_theme_mode.sql`, **NOT YET APPLIED** — same CLI-access blocker as 0017/0018/0022–0024), not to the household or a single global on-device flag. Degrades gracefully pre-migration (probe/learn pattern in `lib/store.tsx`, `themeModeSchemaRef`): writes/reads fall back to an on-device cache keyed by user id (`petpal.themeMode.<uid>`) so switching accounts on a shared device still can't leak one person's appearance onto another's session — it just doesn't follow the account across devices until 0025 is applied.
+- Native header colors (`components/Screen.tsx`) converted from a static exported object to `useNativeHeaderOptions()`/`useTabStackScreenOptions()` hooks called from each Stack's parent (`app/_layout.tsx`, `app/(tabs)/*/_layout.tsx`).
+- `npx tsc --noEmit` clean, `expo lint` clean (one pre-existing unrelated warning in `Pet3D.tsx`), `expo export --platform ios` bundles clean (1957 modules).
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
 - `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
@@ -347,7 +355,7 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 - `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
 ## Roadmap
-1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch + the 2026-07-24 header fixes & sheet redesign** (priorities listed at the end of that batch's section) and applies migrations **0022–0024** (plus 0017/0018 still pending) in the Supabase SQL editor.
+1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch + the 2026-07-24 header fixes & sheet redesign + dark mode** (priorities listed at the end of each batch's section) and applies migrations **0022–0025** (plus 0017/0018 still pending) in the Supabase SQL editor.
 2. Two-account household audit on-device (invite → join → switch) — code fixes landed, flow untested.
 3. **Make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
    "for all the tasks that you schedule, you can also not schedule and just track it normal."

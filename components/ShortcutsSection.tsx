@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
@@ -9,7 +9,7 @@ import { AccentButton, IconCircle, PressableScale, PRESS_SCALE_SMALL, SectionHea
 import { useReduceMotion } from "@/lib/a11y";
 import { shortcutPets, shortcutTileLabel, type Pet, type Shortcut } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius, withAlpha } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 const COLS = 3;
 const GAP = 10;
@@ -23,6 +23,8 @@ const FLASH_MS = 900;
  * reveals per-tile remove badges.
  */
 export default function ShortcutsSection() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, logAction, deleteShortcut, toast } = useStore();
   const pets = state.pets;
 
@@ -157,6 +159,8 @@ export default function ShortcutsSection() {
 
 /** Up to two overlapping pet avatars plus a "+N" chip — who this tile logs for. */
 function PetBadges({ covered }: { covered: Pet[] }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const shown = covered.slice(0, 2);
   const extra = covered.length - shown.length;
   return (
@@ -192,6 +196,8 @@ function ShortcutTile({
   onPress: () => void;
   onRemove: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
   const flash = useSharedValue(0);
   useEffect(() => {
@@ -243,6 +249,8 @@ function ShortcutTile({
 }
 
 function AddTile({ width, onPress }: { width: number; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel="Add a shortcut" style={{ width }}>
       <View style={[styles.tile, styles.addTile]}>
@@ -259,7 +267,7 @@ function AddTile({ width, onPress }: { width: number; onPress: () => void }) {
 
 const TILE_MIN_H = 116;
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   editLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
   tile: {

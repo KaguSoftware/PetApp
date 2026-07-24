@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { DrillView } from "@/components/Motion";
@@ -29,7 +29,7 @@ import {
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const MAX_SLOTS = 12;
@@ -84,6 +84,8 @@ export default function ScheduleEditorSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, setCareSchedule, deleteCareSchedule, toast } = useStore();
   const existing = findSchedule(state.schedules, pet.id, type, medId);
   const canInterval = type === "groomed" || type === "vet";
@@ -426,41 +428,42 @@ export default function ScheduleEditorSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  // Clips the horizontal slide so a drilling view can't spill past the sheet's
-  // edges mid-transition.
-  drillClip: { overflow: "hidden" },
-  slotList: { gap: 12 },
-  slotBlock: { gap: 8 },
-  slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  timeChip: {
-    minWidth: 96,
-    // Matches TextField's 48pt min height so the time chip and the name field
-    // share one baseline across the slot row.
-    minHeight: 48,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(28, 28, 35, 0.1)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
-  // The drilled-in wheel sits in an inset card (same surface as the slot's time
-  // chip) so it reads as that slot's own editing surface, not a floating
-  // control. Card bg keeps the wheel's fill selection band visible.
-  pickerBody: { marginTop: 16, borderRadius: radius.md, backgroundColor: colors.card, paddingVertical: 8, ...cardShadow },
-  slotName: { flex: 1, marginTop: 0 },
-  removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
-  portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 2 },
-  addTime: { marginTop: 12, alignSelf: "flex-start" },
-  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  intervalRow: { flexDirection: "row" },
-  cadenceWrap: { gap: 12 },
-  cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
-  removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    // Clips the horizontal slide so a drilling view can't spill past the sheet's
+    // edges mid-transition.
+    drillClip: { overflow: "hidden" },
+    slotList: { gap: 12 },
+    slotBlock: { gap: 8 },
+    slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    timeChip: {
+      minWidth: 96,
+      // Matches TextField's 48pt min height so the time chip and the name field
+      // share one baseline across the slot row.
+      minHeight: 48,
+      paddingHorizontal: 14,
+      borderRadius: radius.md,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: "rgba(28, 28, 35, 0.1)",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+    },
+    timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
+    // The drilled-in wheel sits in an inset card (same surface as the slot's time
+    // chip) so it reads as that slot's own editing surface, not a floating
+    // control. Card bg keeps the wheel's fill selection band visible.
+    pickerBody: { marginTop: 16, borderRadius: radius.md, backgroundColor: colors.card, paddingVertical: 8, ...cardShadow },
+    slotName: { flex: 1, marginTop: 0 },
+    removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
+    portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 2 },
+    addTime: { marginTop: 12, alignSelf: "flex-start" },
+    daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    intervalRow: { flexDirection: "row" },
+    cadenceWrap: { gap: 12 },
+    cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
+    removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
+  });

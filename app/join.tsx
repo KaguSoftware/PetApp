@@ -1,12 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { AccentButton } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, floatShadow } from "@/lib/theme";
+import { font, radius, floatShadow, useColors, type Colors } from "@/lib/theme";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -15,6 +15,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * /join?f=<familyId>). Lives inside the auth gate — the user is signed in.
  */
 export default function JoinPage() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state, hydrated, joinHousehold } = useStore();
   const params = useLocalSearchParams<{ f?: string }>();
@@ -95,7 +97,7 @@ export default function JoinPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   card: {
     marginTop: 24,
     alignItems: "center",

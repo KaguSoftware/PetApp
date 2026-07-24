@@ -35,7 +35,7 @@ import {
 import { careItemStatus, type CareItemStatus } from "@/lib/careStatus";
 import { ACTIONS, type ActionType } from "@/lib/data";
 import { ALERT_VERB, useStore } from "@/lib/store";
-import { colors, font } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
 const CAT_ACTIONS: ActionType[] = ["fed", "water", "litter", "groomed"];
@@ -48,6 +48,8 @@ const CARE_WARNING_EMOJI: Partial<Record<string, ActionType>> = { "🍖": "fed",
 type CareItem = { key: string; type: ActionType; medId?: string };
 
 export default function LogsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, logAction, addVetVisit, toast } = useStore();
   const refreshControl = usePullToRefresh();
   const router = useRouter();
@@ -503,7 +505,7 @@ export default function LogsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   retroHint: { marginTop: 8, fontSize: 13, fontFamily: font.regular, color: colors.red },
   addMedTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
   scheduleHint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },

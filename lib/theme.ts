@@ -1,10 +1,15 @@
+import { useStore } from "@/lib/store";
+
 /**
  * PetPal design tokens — exact sRGB conversions of the web demo's oklch
  * palette (globals.css), accent hue 285. RN has no oklch(); these values were
  * generated with culori from the source tokens. Screens must pull from here,
  * never hardcode colors.
+ *
+ * Light/dark are both tone ramps against the same accent hue, kept the same
+ * shape so `useColors()` can swap between them without callers changing.
  */
-export const colors = {
+export const lightColors = {
   bg: "#f4f3f8", // grouped background, faint warm tint — oklch(0.966 0.006 292)
   card: "#fefeff", // near-white card — oklch(0.998 0.003 292)
   label: "#1c1c23", // ink — oklch(0.23 0.014 288)
@@ -31,6 +36,45 @@ export const colors = {
   arcadeGrid: "rgba(94, 90, 154, 0.05)",
   white: "#ffffff",
 } as const;
+
+export const darkColors = {
+  bg: "#121016", // grouped background — dark, warm-tinted ink
+  card: "#1c1a22", // elevated card surface
+  label: "#f2f1f6", // near-white ink
+  label2: "#b3b1bd", // secondary label
+  label3: "#7c7a86", // tertiary label
+  sep: "rgba(255, 255, 255, 0.09)",
+  fill: "rgba(255, 255, 255, 0.07)",
+  accent: "#8f7cf0", // brighter indigo/violet for contrast on dark
+  accentSoft: "rgba(143, 124, 240, 0.18)",
+  accentDeep: "#a597ff",
+  green: "#37c983",
+  greenSoft: "rgba(55, 201, 131, 0.16)",
+  red: "#ff5d6c",
+  redSoft: "rgba(255, 93, 108, 0.14)",
+  orange: "#f5994a",
+  orangeSoft: "rgba(245, 153, 74, 0.16)",
+  // Per-action tones outside the core ramp (groomed / vet)
+  groomTint: "#cb8ada",
+  groomBg: "rgba(203, 138, 218, 0.15)",
+  vetTint: "#33c2cc",
+  vetBg: "rgba(51, 194, 204, 0.14)",
+  // Arcade stage (pet world only)
+  arcadeGlow: "rgba(143, 124, 240, 0.2)",
+  arcadeGrid: "rgba(143, 124, 240, 0.08)",
+  white: "#ffffff",
+} as const;
+
+export type Colors = { readonly [K in keyof typeof lightColors]: string };
+
+/** Default/fallback palette for non-component call sites (e.g. reducers). */
+export const colors = lightColors;
+
+/** Live color palette for the current theme — the only way components should read colors. */
+export function useColors(): Colors {
+  const { themeMode } = useStore();
+  return themeMode === "dark" ? darkColors : lightColors;
+}
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, full: 999 } as const;
 

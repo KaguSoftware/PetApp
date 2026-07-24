@@ -4,7 +4,7 @@ import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
 import { PRESS_SCALE_SMALL, PressableScale, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { colors, font, radius, withAlpha } from "@/lib/theme";
+import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTH_NAMES = [
@@ -15,6 +15,8 @@ const MONTH_NAMES = [
 const CELL_PCT = `${100 / 7}%` as const;
 
 export default function StreakCalendarSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state } = useStore();
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date();
@@ -125,7 +127,7 @@ export default function StreakCalendarSheet({ open, onClose }: { open: boolean; 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   monthRow: { marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   monthButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },

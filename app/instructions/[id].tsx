@@ -1,12 +1,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PushedScreen } from "@/components/Screen";
 import { AccentButton } from "@/components/ui";
 import { GuideDiagram, guideById } from "@/lib/guides";
-import { colors, font, radius } from "@/lib/theme";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 export default function GuideDetailScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const guide = guideById(id);
@@ -71,7 +74,7 @@ export default function GuideDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: Colors) => StyleSheet.create({
   hero: { borderRadius: radius.lg, padding: 20, alignItems: "flex-start", gap: 12 },
   heroIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   heroSummary: { fontSize: 16, fontFamily: font.semibold, color: colors.label, lineHeight: 22 },
