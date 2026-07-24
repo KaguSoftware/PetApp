@@ -13,7 +13,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { Easing, interpolateColor, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
@@ -251,12 +251,17 @@ export function AccentButton({
   size?: "md" | "sm";
   style?: StyleProp<ViewStyle>;
 }) {
-  const variantStyle = {
-    primary: { backgroundColor: colors.accent },
-    tinted: { backgroundColor: colors.accentSoft },
-    gray: { backgroundColor: colors.fill },
-  }[variant];
-  const labelColor = { primary: colors.white, tinted: colors.accent, gray: colors.label }[variant];
+  // Disabled is a full state of its own (gray fill + muted label), not a
+  // half-transparent accent — a washed-out lavender CTA read as "half on".
+  const off = disabled && !loading;
+  const variantStyle = off
+    ? { backgroundColor: colors.fill }
+    : {
+        primary: { backgroundColor: colors.accent },
+        tinted: { backgroundColor: colors.accentSoft },
+        gray: { backgroundColor: colors.fill },
+      }[variant];
+  const labelColor = off ? colors.label3 : { primary: colors.white, tinted: colors.accent, gray: colors.label }[variant];
   return (
     <PressableScale
       onPress={onPress}
@@ -266,7 +271,7 @@ export function AccentButton({
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
       <View
-        style={[styles.accentButton, size === "sm" ? styles.accentButtonSm : null, variantStyle, disabled && !loading && { opacity: 0.4 }]}
+        style={[styles.accentButton, size === "sm" ? styles.accentButtonSm : null, variantStyle]}
       >
         {loading ? (
           <ActivityIndicator color={labelColor} />
@@ -385,7 +390,7 @@ const styles = StyleSheet.create({
   rowSubtitle: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
   accentButton: {
     height: 50,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -496,6 +501,17 @@ export function SelectableChip({
   disabled?: boolean;
   leading?: React.ReactNode;
 }) {
+  const reduceMotion = useReduceMotion();
+  // Crossfade the container colors between the quiet and tinted states instead
+  // of hard-swapping — selection reads as a state change, not a repaint.
+  const t = useSharedValue(selected ? 1 : 0);
+  useEffect(() => {
+    t.value = reduceMotion ? (selected ? 1 : 0) : withTiming(selected ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
+  }, [selected, t, reduceMotion]);
+  const containerAnim = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(t.value, [0, 1], [colors.card, colors.accentSoft]),
+    borderColor: interpolateColor(t.value, [0, 1], [CHIP_BORDER, CHIP_BORDER_SELECTED]),
+  }));
   return (
     <PressableScale
       scaleTo={PRESS_SCALE_SMALL}
@@ -505,13 +521,18 @@ export function SelectableChip({
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
     >
-      <View style={[primStyles.chipBase, selected ? primStyles.chipSelected : null, disabled && { opacity: 0.4 }]}>
+      <Animated.View style={[primStyles.chipBase, containerAnim, disabled && { opacity: 0.4 }]}>
         {leading}
         <Text style={[primStyles.chipBaseLabel, selected ? primStyles.chipSelectedLabel : null]}>{label}</Text>
-      </View>
+      </Animated.View>
     </PressableScale>
   );
 }
+
+// Chip border tints — module scope so the animated style (a UI-thread worklet)
+// captures stable strings rather than recomputing withAlpha per frame.
+const CHIP_BORDER = withAlpha(colors.label, 0.1);
+const CHIP_BORDER_SELECTED = withAlpha(colors.accent, 0.35);
 
 /**
  * iOS-style switch, accent on-state, animated knob. The whole 51×31 control is
@@ -578,7 +599,7 @@ export function SmallButton({
   disabled?: boolean;
 }) {
   const bg = { accent: colors.accentSoft, red: colors.redSoft, green: colors.greenSoft, gray: colors.fill }[tone];
-  const fg = { accent: colors.accent, red: colors.red, green: colors.green, gray: colors.label }[tone];
+  const fg = { accent: colors.accentDeep, red: colors.red, green: colors.green, gray: colors.label }[tone];
   return (
     <PressableScale
       scaleTo={PRESS_SCALE_SMALL}
@@ -588,7 +609,7 @@ export function SmallButton({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
     >
-      <View style={[primStyles.smallButton, { backgroundColor: bg }, disabled && { opacity: 0.4 }]}>
+      <View style={[primStyles.smallButton, { backgroundColor: bg }, tone === "accent" && primStyles.smallButtonAccentBorder, disabled && { opacity: 0.4 }]}>
         <Text style={[primStyles.smallButtonLabel, { color: fg }]}>{label}</Text>
       </View>
     </PressableScale>
@@ -596,16 +617,16 @@ export function SmallButton({
 }
 
 const primStyles = StyleSheet.create({
-  sheetTitle: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label, paddingHorizontal: 4 },
-  sheetSubtitle: { marginTop: 4, fontSize: 13, fontFamily: font.regular, lineHeight: 18, color: colors.label2, paddingHorizontal: 4 },
+  sheetTitle: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.4, color: colors.label, paddingHorizontal: 4 },
+  sheetSubtitle: { marginTop: 2, fontSize: 14, fontFamily: font.regular, lineHeight: 19, color: colors.label2, paddingHorizontal: 4 },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontFamily: font.semibold,
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
     color: colors.label2,
-    marginTop: 16,
-    marginBottom: 6,
+    marginTop: 22,
+    marginBottom: 8,
     paddingHorizontal: 4,
   },
   textField: {
@@ -617,25 +638,34 @@ const primStyles = StyleSheet.create({
     fontSize: 16,
     fontFamily: font.medium,
     color: colors.label,
-    borderWidth: 1.5,
-    borderColor: "transparent",
+    borderWidth: 1,
+    borderColor: "rgba(28, 28, 35, 0.1)",
   },
-  textFieldFocused: { borderColor: colors.accent },
-  sheetFooter: { marginTop: 24 },
+  textFieldFocused: {
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  sheetFooter: { marginTop: 28 },
   footnote: { marginTop: 10, textAlign: "center", fontSize: 12, fontFamily: font.regular, lineHeight: 17, color: colors.label3 },
+  // Quiet by default (card fill + hairline border); selection is a soft accent
+  // tint — full-saturation accent is reserved for the sheet's primary CTA.
   chipBase: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     minHeight: 36,
     borderRadius: radius.full,
-    backgroundColor: colors.fill,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(28, 28, 35, 0.1)",
     paddingHorizontal: 14,
     paddingVertical: 7,
   },
-  chipSelected: { backgroundColor: colors.accent },
   chipBaseLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
-  chipSelectedLabel: { color: colors.white },
+  chipSelectedLabel: { color: colors.accentDeep },
   toggleTrack: { width: 51, height: 31, borderRadius: 16, padding: 2, justifyContent: "center" },
   toggleKnob: {
     width: 27,
@@ -655,5 +685,6 @@ const primStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  smallButtonAccentBorder: { borderWidth: 1, borderColor: "rgba(107, 85, 223, 0.25)" },
   smallButtonLabel: { fontSize: 14, fontFamily: font.semibold },
 });

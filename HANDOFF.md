@@ -323,6 +323,22 @@ From Parsa's ~21 on-device reports. `tsc --noEmit` clean, `expo lint` 0 errors (
 
 **Device-verify priorities for this batch**: back tap on every pushed screen (the custom headerLeft), reminders "+" render, walk→duration→timeline, avatar selectors, two-account household join/switch, alert dedupe after 0023, 10-day streak bonus once-only, notifications page, pet card share/variants, vet detail links.
 
+### Header fixes + premium sheet redesign (2026-07-24, plan-mode collab) — built, statically verified, NEEDS device walkthrough
+
+Batch 1 — header/nav fixes (`components/Screen.tsx`, `NotificationBell.tsx`, `ui.tsx`, home):
+- **"< B" back button**: the UIBarButtonItem squeezed the custom back label to one glyph — `numberOfLines={1}` + `flexShrink: 0` on `backButton`/`backLabel`. Applies to every pushed screen.
+- **Header island centering**: removed the bell's iOS-only `translateY: 2` nudge; coin pill fixed at `height: 32` (was padding-derived ~26), Home streak pill 30→32 — both now fill the island next to the 38pt icon pills.
+- **iOS bottom overlap**: new `IOS_TAB_BAR_HEIGHT = 49` added to `TabScreen`'s content `paddingBottom` (mirrors the Android 56 allowance) — `unstable-native-tabs` does NOT feed the bar into `insets.bottom` on either platform; the old comment claiming iOS did was wrong.
+
+Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved direction: **refined chips** — accent discipline, both platforms). All ~30 sheets restyle through the shared shell + primitives:
+- **`components/Sheet.tsx`**: panel radius 22→`radius.xl` (28), tighter/deeper shadow, slimmer handle (36×4 @ 0.16), spring entrance (`withSpring` damping 26 / stiffness 300 / mass 0.9; reduce-motion → 120ms timing).
+- **`components/ui.tsx`** — the new control vocabulary: full-saturation accent appears ONLY on the primary CTA. `SelectableChip` unselected = card fill + hairline border + `label2` label; selected = `accentSoft` tint + accent-tinted border + `accentDeep` label, colors animated 180ms via `interpolateColor` (border tints hoisted to module consts `CHIP_BORDER`/`CHIP_BORDER_SELECTED` per the worklet rule). `AccentButton` disabled = gray fill + `label3` label (a real state, not opacity 0.4); radius md→lg. `SmallButton` accent tone gets a tinted border + `accentDeep` label. `SheetTitle` 22pt/−0.4; `SheetSubtitle` 14pt; `FieldLabel` 11.5pt/+0.8, section rhythm marginTop 22/bottom 8; `SheetFooter` marginTop 28. `TextField` always has a hairline border; focus = accent border + soft accent glow.
+- **`components/ScheduleEditorSheet.tsx`**: timeChip → quiet bordered card with a chevron-down affordance (shadow gone, radius.md); grace hint bumped `label3`→`label2` for contrast. Day letters/portions/cadence chips inherit the new SelectableChip automatically.
+- **`components/TimeStepper.tsx`**: stepper card → hairline border (shadow gone), radius.md, `accentDeep` +/− signs.
+- Straggler grep confirmed no sheet declares local chip/title/input styles — everything flows from the primitives.
+
+**Device-verify priorities**: back button label on pet profile + settings; header island alignment on Home; scroll-to-bottom on all five tabs (iOS buffer, Android not doubled); sheet spring + chip selection animation (plus reduce-motion instant paths); disabled CTA reads gray (reminder sheet with empty task); day toggles + timeChip in Fed/Groomed schedule; Android hairline borders render.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
 - `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
@@ -331,7 +347,7 @@ From Parsa's ~21 on-device reports. `tsc --noEmit` clean, `expo lint` 0 errors (
 - `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
 ## Roadmap
-1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch** (priorities listed at the end of that batch's section) and applies migrations **0022–0024** (plus 0017/0018 still pending) in the Supabase SQL editor.
+1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch + the 2026-07-24 header fixes & sheet redesign** (priorities listed at the end of that batch's section) and applies migrations **0022–0024** (plus 0017/0018 still pending) in the Supabase SQL editor.
 2. Two-account household audit on-device (invite → join → switch) — code fixes landed, flow untested.
 3. **Make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
    "for all the tasks that you schedule, you can also not schedule and just track it normal."

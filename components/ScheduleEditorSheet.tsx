@@ -308,6 +308,7 @@ export default function ScheduleEditorSheet({
               >
                 <View style={styles.timeChip}>
                   <Text style={styles.timeChipLabel}>{formatSlotTime(slot.time)}</Text>
+                  <Icon name="chevron-down" size={13} color={colors.label3} />
                 </View>
               </PressableScale>
               <TextField
@@ -433,16 +434,19 @@ const styles = StyleSheet.create({
   slotBlock: { gap: 8 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   timeChip: {
-    minWidth: 92,
+    minWidth: 96,
     // Matches TextField's 48pt min height so the time chip and the name field
     // share one baseline across the slot row.
     minHeight: 48,
     paddingHorizontal: 14,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(28, 28, 35, 0.1)",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    ...cardShadow,
+    gap: 6,
   },
   timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
   // The drilled-in wheel sits in an inset card (same surface as the slot's time
@@ -457,6 +461,6 @@ const styles = StyleSheet.create({
   intervalRow: { flexDirection: "row" },
   cadenceWrap: { gap: 12 },
   cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
+  graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
   removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
 });

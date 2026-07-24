@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
-import { cardShadow, colors, font, radius } from "@/lib/theme";
+import { colors, font, radius } from "@/lib/theme";
 
 /**
  * The no-dependency −/+ picker controls, extracted from the reminders add
@@ -86,14 +86,15 @@ const styles = StyleSheet.create({
   stepper: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: "rgba(28, 28, 35, 0.1)",
     minHeight: 44,
     flexShrink: 1,
-    ...cardShadow,
   },
-  stepperButton: { width: 44, height: 44, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
-  stepperSign: { fontSize: 20, fontFamily: font.semibold, color: colors.accent, lineHeight: 22 },
+  stepperButton: { width: 44, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  stepperSign: { fontSize: 20, fontFamily: font.semibold, color: colors.accentDeep, lineHeight: 22 },
   stepperValue: {
     minWidth: 56,
     paddingHorizontal: 4,

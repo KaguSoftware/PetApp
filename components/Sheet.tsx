@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useA11yPrefs } from "@/lib/a11y";
-import { colors } from "@/lib/theme";
+import { useA11yPrefs, useReduceMotion } from "@/lib/a11y";
+import { colors, radius } from "@/lib/theme";
 
 /**
  * Bottom sheet, matching the web demo's Sheet: backdrop tap or swipe-down to
@@ -28,19 +28,24 @@ export default function Sheet({
   // could run off the bottom of the screen, taking its footer button with it.
   const { height: SCREEN_H } = useWindowDimensions();
   const { reduceTransparency } = useA11yPrefs();
+  const reduceMotion = useReduceMotion();
   const [mounted, setMounted] = useState(open);
   const progress = useSharedValue(0); // 0 hidden → 1 shown
 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      progress.value = withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) });
+      // Spring entrance (high damping — settles fast, no visible overshoot);
+      // reduce-motion gets a quick fade-adjacent timing instead of a slide feel.
+      progress.value = reduceMotion
+        ? withTiming(1, { duration: 120 })
+        : withSpring(1, { damping: 26, stiffness: 300, mass: 0.9 });
     } else if (mounted) {
       progress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [open, mounted, progress]);
+  }, [open, mounted, progress, reduceMotion]);
 
   const dragY = useSharedValue(0);
   const pan = Gesture.Pan()
@@ -144,18 +149,18 @@ const styles = StyleSheet.create({
   panel: {
     flexShrink: 1,
     backgroundColor: colors.bg,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingHorizontal: 20,
     shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 40,
+    shadowOpacity: 0.22,
+    shadowRadius: 32,
     shadowOffset: { width: 0, height: -8 },
     elevation: 16,
   },
   // Constrained to the grabber itself (alignSelf, not a full-width row) so the
   // pan only claims the handle — a full-width zone made the top 33pt of every
   // sheet drag-only, swallowing taps aimed at the content beneath it.
-  handleZone: { alignSelf: "center", alignItems: "center", paddingTop: 12, paddingBottom: 16, paddingHorizontal: 28 },
-  handle: { width: 44, height: 5, borderRadius: 999, backgroundColor: "rgba(25, 25, 32, 0.22)" },
+  handleZone: { alignSelf: "center", alignItems: "center", paddingTop: 10, paddingBottom: 12, paddingHorizontal: 28 },
+  handle: { width: 36, height: 4, borderRadius: 999, backgroundColor: "rgba(25, 25, 32, 0.16)" },
 });
