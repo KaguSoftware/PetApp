@@ -359,7 +359,7 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${amount.toLocaleString()} coins. Spend them on your pets.`}
-      // The pill is only ~26pt tall — without slop it's well under the 44pt
+      // The pill is only 32pt tall — without slop it's under the 44pt
       // minimum and reads as a button that ignores taps.
       hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
     >
@@ -414,7 +414,9 @@ const styles = StyleSheet.create({
   },
   segmentLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   segmentLabelActive: { color: colors.label },
-  coinPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.full, backgroundColor: colors.orangeSoft, paddingHorizontal: 10, paddingVertical: 6 },
+  // Fixed 32pt height (not padding-derived ~26pt) so the pill fills the header
+  // island next to the 38pt icon pills instead of floating with big gaps.
+  coinPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.full, backgroundColor: colors.orangeSoft, paddingHorizontal: 10, height: 32 },
   // The whole header-right group shares one iOS 26 Liquid Glass capsule. To keep
   // the coin reading as its OWN container inset within that glass — rather than
   // dissolving into it — give it an opaque, saturated warm fill and a hairline

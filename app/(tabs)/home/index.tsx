@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
-    height: 30,
+    height: 32,
     borderRadius: radius.full,
     backgroundColor: colors.orangeSoft,
   },

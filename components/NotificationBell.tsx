@@ -32,14 +32,7 @@ export default function NotificationBell() {
       hitSlop={6}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
-      {/* The bell glyph's mass sits in the top half of its box (wide body up top,
-          thin clapper below), so geometric-centering leaves it reading ~2pt high
-          next to the gear (which is centered on cy=12). Nudge it down to align
-          the optical centers. iOS only — that's where the bigger 25pt icon made
-          the offset visible in the header row. */}
-      <View style={Platform.OS === "ios" ? { transform: [{ translateY: 2 }] } : null}>
-        <Icon name="bell" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />
-      </View>
+      <Icon name="bell" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />
       {count > 0 ? (
         <View style={styles.badge}>
           <Text style={styles.badgeLabel}>{count > 9 ? "9+" : count}</Text>

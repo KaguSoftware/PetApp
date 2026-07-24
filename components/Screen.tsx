@@ -67,7 +67,9 @@ function HeaderBackButton() {
       style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.35 }]}
     >
       <Icon name="chevron-left" size={24} color={colors.accent} />
-      <Text style={styles.backLabel}>Back</Text>
+      <Text style={styles.backLabel} numberOfLines={1}>
+        Back
+      </Text>
     </Pressable>
   );
 }
@@ -124,14 +126,14 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * On iOS, UITabBarController participates in the safe-area chain, so
- * `insets.bottom` already accounts for the real tab bar height. On Android,
- * `NativeTabs` (expo-router/unstable-native-tabs) paints its own opaque bar
- * above the system nav bar, but the safe-area inset it reports only reflects
- * the system nav/gesture inset underneath it — not the bar itself. Without
- * this, the last ~56dp of scrollable content sits behind the opaque tab bar.
+ * `NativeTabs` (expo-router/unstable-native-tabs) does not feed the tab bar's
+ * height into the safe-area chain on either platform: `insets.bottom` only
+ * reflects the home-indicator/gesture inset underneath the bar, not the bar
+ * itself. Without an explicit allowance, the last ~50–56pt of scrollable
+ * content sits behind the bar.
  */
 const ANDROID_TAB_BAR_HEIGHT = 56;
+const IOS_TAB_BAR_HEIGHT = 49;
 
 /** Height of the Android sticky header bar itself, sitting below the status-bar inset. */
 const ANDROID_HEADER_HEIGHT = 48;
@@ -153,7 +155,7 @@ export function TabScreen({
   subtitle?: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
-  /** Extra bottom breathing room — the native tab bar inset is handled by the system. */
+  /** Extra bottom breathing room, on top of the tab-bar + safe-area allowance. */
   contentBottomPad?: number;
 } & ScrollViewProps) {
   const navigation = useNavigation();
@@ -207,7 +209,7 @@ export function TabScreen({
           // tucked under the native header.
           paddingTop: isAndroid ? insets.top + ANDROID_HEADER_HEIGHT : 0,
           paddingBottom:
-            contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : 0),
+            contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : IOS_TAB_BAR_HEIGHT),
           paddingHorizontal: 16,
         }}
         {...scrollProps}
@@ -319,8 +321,10 @@ const styles = StyleSheet.create({
   headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
   // Custom back item (see HeaderBackButton). Mirrors the system metrics: 17pt
   // label, chevron tucked 4px left of it, 44pt-tall touch area via hitSlop.
-  backButton: { flexDirection: "row", alignItems: "center", minHeight: 32, paddingRight: 6 },
-  backLabel: { fontSize: 17, fontFamily: font.regular, color: colors.accent, marginLeft: 2 },
+  // flexShrink: 0 on both: the UIBarButtonItem width-constrains this row, and
+  // without it the label gets squeezed down to a single glyph ("< B").
+  backButton: { flexDirection: "row", alignItems: "center", minHeight: 32, paddingRight: 6, flexShrink: 0 },
+  backLabel: { fontSize: 17, fontFamily: font.regular, color: colors.accent, marginLeft: 2, flexShrink: 0 },
   // Compact nav-bar title that fades in on scroll (WhatsApp-style). Larger than
   // the stock 17pt inline title so it reads prominently, still well below the
   // big in-content pageTitle.
