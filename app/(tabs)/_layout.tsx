@@ -2,6 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
+import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 import { useSession } from "@/providers/session";
 
@@ -19,6 +20,7 @@ const androidIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => (
 
 export default function TabsLayout() {
   const colors = useColors();
+  const { themeMode } = useStore();
   const { session } = useSession();
   if (!session) return <Redirect href="/(auth)/login" />;
 
@@ -26,6 +28,13 @@ export default function TabsLayout() {
   // Settings moved off the tab bar to the gear icon in HeaderActions.
   return (
     <NativeTabs
+      // Android's BottomNavigationView doesn't reliably re-apply a new
+      // standardAppearance to an already-mounted tab bar when only color
+      // props change (the bar keeps the colors from when it first mounted),
+      // so toggling theme in Settings and returning left the bar stuck on
+      // the old theme. Keying on themeMode forces a full remount, which
+      // always paints fresh with the current colors.
+      key={themeMode}
       tintColor={colors.accent}
       iconColor={Platform.OS === "android" ? colors.label2 : undefined}
       backgroundColor={Platform.OS === "android" ? colors.card : undefined}

@@ -33,6 +33,7 @@ export default function NotificationBell() {
       // 50pt, comfortably past the 44pt minimum, without overlapping its
       // neighbours (the island's gap is 8).
       hitSlop={6}
+      android_ripple={null}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
       <Icon name="bell" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />

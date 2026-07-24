@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Appearance, LogBox, View } from "react-native";
+import { Appearance, LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import NotificationSync from "@/components/NotificationSync";
 import { useNativeHeaderOptions } from "@/components/Screen";
@@ -43,7 +43,10 @@ function AppChrome() {
   // views, not this native-level default. Overriding the runtime color scheme
   // makes fresh native screens default to OUR dark palette instead.
   useEffect(() => {
-    Appearance.setColorScheme(themeMode);
+    // react-native-web doesn't implement this (no native screens to patch
+    // there anyway — the web canvas repaints from React state directly),
+    // and calling it unconditionally crashed the whole app on web.
+    if (Platform.OS !== "web") Appearance.setColorScheme(themeMode);
   }, [themeMode]);
   return <StatusBar style={themeMode === "dark" ? "light" : "dark"} />;
 }

@@ -25,6 +25,7 @@ export default function SettingsButton() {
       // 38pt pill + 6pt each side = a 50pt touch target (>= the 44pt minimum),
       // sized so it can't overlap the neighbouring control.
       hitSlop={6}
+      android_ripple={null}
       style={({ pressed }) => [styles.wrap, pressed && { opacity: 0.6 }]}
     >
       <Icon name="gear" size={Platform.OS === "ios" ? 25 : 21} color={colors.label} />

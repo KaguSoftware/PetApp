@@ -38,6 +38,7 @@ export default function Toasts() {
             accessibilityRole="button"
             accessibilityLabel="Clear all notifications"
             hitSlop={8}
+            android_ripple={null}
             style={({ pressed }) => [styles.clearBtn, pressed && { opacity: 0.7 }]}
           >
             <Icon name="xmark" size={13} color={colors.white} />
@@ -51,18 +52,8 @@ export default function Toasts() {
       {toasts.slice(-MAX_VISIBLE).map((t) => {
         const { tint, bg } = tone(colors, t.icon);
         return (
-          <Animated.View
-            key={t.id}
-            entering={SlideInDown.duration(240)}
-            exiting={FadeOutDown.duration(180)}
-            // Android draws `elevation` shadows in a pass that doesn't fade
-            // with the exit animation's opacity, leaving a flash of the
-            // shadow's rectangle behind after the toast content is gone.
-            // Compositing the view into one hardware texture fades the
-            // shadow along with everything else.
-            renderToHardwareTextureAndroid={Platform.OS === "android"}
-          >
-            <Pressable style={styles.toast} onPress={() => dismissToast(t.id)} accessibilityRole="alert">
+          <Animated.View key={t.id} entering={SlideInDown.duration(240)} exiting={FadeOutDown.duration(180)}>
+            <Pressable style={styles.toast} onPress={() => dismissToast(t.id)} accessibilityRole="alert" android_ripple={null}>
               <View style={[styles.tile, { backgroundColor: bg }]}>
                 <Icon name={t.icon} size={18} color={tint} />
               </View>
@@ -80,6 +71,7 @@ export default function Toasts() {
                 <Pressable
                   style={styles.action}
                   hitSlop={8}
+                  android_ripple={null}
                   onPress={(e) => {
                     e.stopPropagation();
                     t.action!.onClick();
@@ -118,6 +110,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     backgroundColor: "rgba(28, 28, 35, 0.82)",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   clearLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.white },
   toast: {
@@ -128,16 +121,42 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    // iOS: a real soft shadow. Android: a hairline border instead of
+    // `elevation` — this view used to be wrapped with
+    // `renderToHardwareTextureAndroid` (to stop the exit-animation shadow
+    // flash), but that rasterizes into a bitmap sized to the view's own
+    // layout box, which hard-clips an `elevation` shadow's blur wherever it
+    // reaches past that box, leaving a sharp rectangular smudge poking out
+    // past the rounded corners. A hairline border has no blur to clip, so it
+    // stays clean and the texture-compositing workaround is no longer
+    // needed. Matches the same Android-only hairline pattern used for
+    // rounded pills in NotificationBell/SettingsButton.
+    ...(Platform.OS === "android"
+      ? { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.sep }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.12,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 6 },
+        }),
+    // On web, Pressable renders as a focusable div[role=button] — the
+    // browser's default focus outline is a sharp, unrounded rectangle that
+    // pokes out past this card's borderRadius. Suppress it since the
+    // pressed-opacity feedback already communicates focus/press state.
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   tile: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   textCol: { flex: 1 },
   title: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
   body: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
-  action: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accentSoft, minHeight: 36, justifyContent: "center" },
+  action: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.accentSoft,
+    minHeight: 36,
+    justifyContent: "center",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
+  },
   actionLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
 });
