@@ -319,6 +319,7 @@ export default function Home() {
                       onPress={() => router.push(`/pet/${p.id}`)}
                       accessibilityLabel={`Open ${p.name}'s details`}
                       hitSlop={6}
+                      overflowsBounds
                     >
                       <PetAvatar pet={p} size="lg" idle />
                     </PressableScale>

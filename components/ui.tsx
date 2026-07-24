@@ -35,6 +35,7 @@ export function PressableScale({
   onPress,
   children,
   style,
+  overflowsBounds = false,
   ...props
 }: PressableProps & {
   /** @deprecated Press feedback is now the system dim; kept so call sites compile. */
@@ -42,6 +43,17 @@ export function PressableScale({
   /** Light impact on press (iOS). */
   haptic?: boolean;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Set when a child intentionally renders outside its own layout box (e.g. a
+   * pet's crown/hat cosmetic, positioned with a negative `top` so it spills
+   * above the avatar disc). On Android, `needsOffscreenAlphaCompositing`
+   * rasterizes the pressed subtree into a buffer sized to the view's laid-out
+   * bounds, which clips/squishes anything drawn outside them. This skips that
+   * compositing so the overflow stays intact, at the cost of the elevation-
+   * shadow-leak fix below — fine, since content that overflows its bounds
+   * doesn't carry a card shadow anyway.
+   */
+  overflowsBounds?: boolean;
 }) {
   const reduceMotion = useReduceMotion();
   const dim = useSharedValue(1);
@@ -51,7 +63,7 @@ export function PressableScale({
     // with `elevation` (card shadow) otherwise leaks the shadow as a lighter
     // rectangle mid-press. Compositing the subtree to one layer fixes it so the
     // press is a clean, uniform dim.
-    <Animated.View style={[anim, style]} needsOffscreenAlphaCompositing>
+    <Animated.View style={[anim, style]} needsOffscreenAlphaCompositing={!overflowsBounds}>
       <Pressable
         android_ripple={null}
         {...props}

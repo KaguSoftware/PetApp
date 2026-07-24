@@ -75,6 +75,7 @@ function PetSelectorItem({ pet, selected, onPress }: { pet: Pet; selected: boole
       accessibilityRole="button"
       accessibilityLabel={pet.name}
       accessibilityState={{ selected }}
+      overflowsBounds
     >
       <View style={styles.item}>
         <Animated.View style={[styles.avatarWrap, selected ? styles.avatarSelected : styles.avatarUnselected, anim]}>
