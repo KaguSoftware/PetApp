@@ -1,3 +1,5 @@
+import { DarkTheme, DefaultTheme, type Theme } from "@react-navigation/native";
+import { useMemo } from "react";
 import { useStore } from "@/lib/store";
 
 /**
@@ -74,6 +76,36 @@ export const colors = lightColors;
 export function useColors(): Colors {
   const { themeMode } = useStore();
   return themeMode === "dark" ? darkColors : lightColors;
+}
+
+/**
+ * React Navigation's own theme — separate from `useColors()`. The navigator
+ * paints `theme.colors.background`/`card` as the base layer beneath every
+ * screen, including during push/pop transitions; left at its light-mode
+ * default (react-navigation's `DefaultTheme`, white) that base layer flashed
+ * through for a frame on every push while in dark mode, since nothing had
+ * told the navigator itself to go dark. Wrap the root `<Stack>` in
+ * `<ThemeProvider value={useNavTheme()}>` so the two stay in sync.
+ */
+export function useNavTheme(): Theme {
+  const colors = useColors();
+  const { themeMode } = useStore();
+  return useMemo(() => {
+    const base = themeMode === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      dark: themeMode === "dark",
+      colors: {
+        ...base.colors,
+        primary: colors.accent,
+        background: colors.bg,
+        card: colors.card,
+        text: colors.label,
+        border: colors.sep,
+        notification: colors.red,
+      },
+    };
+  }, [colors, themeMode]);
 }
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, full: 999 } as const;

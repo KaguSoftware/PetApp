@@ -164,6 +164,10 @@ interface Store {
   /** On-device appearance preference — not synced to the household. */
   themeMode: "light" | "dark";
   setThemeMode: (mode: "light" | "dark") => void;
+  /** True once the device-level last-theme cache has been read at startup, so
+   *  the UI can hold its first paint until the correct appearance is known
+   *  instead of flashing the "light" default. */
+  themeReady: boolean;
   /** Set, change, or remove (pass null) the family password. Verifies `currentPassword` against the stored hash first if one is already set — returns false and toasts on mismatch. */
   setFamilyPassword: (newPassword: string | null, currentPassword?: string) => Promise<boolean>;
   verifyFamilyPassword: (input: string) => Promise<boolean>;
@@ -528,6 +532,12 @@ const shortcutsLocalKey = (householdId: string) => `petpal.shortcuts.${household
 // Keyed by user id so switching accounts on a shared device doesn't leak one
 // person's appearance preference onto another's session.
 const themeModeLocalKey = (userId: string) => `petpal.themeMode.${userId}`;
+// Device-level "last theme used", NOT keyed by user. Read once at startup —
+// before the session (and thus the per-user value) is known — so the very
+// first frame the app paints already matches the last chosen appearance
+// instead of the "light" default, killing the light→dark flash on cold start
+// and on the first push before the per-user preference resolves.
+const THEME_MODE_LAST_KEY = "petpal.themeMode.last";
 function writeShortcutsLocal(householdId: string, list: Shortcut[]) {
   AsyncStorage.setItem(shortcutsLocalKey(householdId), JSON.stringify(list)).catch((e) =>
     console.error("[petpal] shortcuts local cache write failed:", e)
@@ -544,6 +554,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [themeMode, setThemeModeState] = useState<"light" | "dark">("light");
+  const [themeReady, setThemeReady] = useState(false);
+  // Read the device-level last-theme cache once, before anything paints, so the
+  // first frame already matches the chosen appearance (see THEME_MODE_LAST_KEY).
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_MODE_LAST_KEY)
+      .then((v) => {
+        if (v === "dark" || v === "light") setThemeModeState(v);
+      })
+      .finally(() => setThemeReady(true));
+  }, []);
   const householdIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
@@ -557,6 +577,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const setThemeMode = useCallback(
     (mode: "light" | "dark") => {
       setThemeModeState(mode);
+      // Always keep the device-level cache current so the next cold start /
+      // first push paints this appearance immediately, before the per-user
+      // value resolves.
+      AsyncStorage.setItem(THEME_MODE_LAST_KEY, mode).catch(() => {});
       const uid = userIdRef.current;
       if (uid) AsyncStorage.setItem(themeModeLocalKey(uid), mode).catch((e) => console.error("[petpal] themeMode local cache failed:", e));
       if (uid && !themeModeSchemaRef.current) {
@@ -998,7 +1022,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // the network round trip below settles), then reconcile with the synced
       // value once user_profiles answers.
       AsyncStorage.getItem(themeModeLocalKey(user.id)).then((v) => {
-        if (!cancelled && (v === "dark" || v === "light")) setThemeModeState(v);
+        if (!cancelled && (v === "dark" || v === "light")) {
+          setThemeModeState(v);
+          AsyncStorage.setItem(THEME_MODE_LAST_KEY, v).catch(() => {});
+        }
       });
 
       // Resolve which household is on-screen: the user's saved active household,
@@ -1024,6 +1051,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!cancelled && profile?.theme_mode) {
         setThemeModeState(profile.theme_mode);
         AsyncStorage.setItem(themeModeLocalKey(user.id), profile.theme_mode).catch(() => {});
+        AsyncStorage.setItem(THEME_MODE_LAST_KEY, profile.theme_mode).catch(() => {});
       }
       const { data: memberships } = await supabase
         .from("household_members")
@@ -2858,6 +2886,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setUnits,
         themeMode,
         setThemeMode,
+        themeReady,
         setFamilyPassword,
         verifyFamilyPassword,
         joinHousehold,
