@@ -11,7 +11,8 @@ import { Icon } from "@/components/Icons";
 import {
   AccentButton,
   Chip,
-  FieldLabel,
+  ChipRow,
+  FormSection,
   PressableScale,
   SelectableChip,
   SheetFooter,
@@ -225,26 +226,28 @@ export default function Community() {
 
       {state.pets.length > 0 ? (
         <>
-          <FieldLabel>About which pet?</FieldLabel>
-          <View style={styles.petChips}>
-            {state.pets.map((p) => (
-              <SelectableChip key={p.id} label={`${speciesEmoji(p.species)} ${p.name}`} selected={p.id === petId} onPress={() => setPetId(p.id)} />
-            ))}
-          </View>
-          {selectedPet ? <Text style={styles.breedHint}>Posting as a {selectedPet.breed} owner.</Text> : null}
+          <FormSection label="About which pet?" hint={selectedPet ? `Posting as a ${selectedPet.breed} owner.` : undefined}>
+            <ChipRow>
+              {state.pets.map((p) => (
+                <SelectableChip key={p.id} label={`${speciesEmoji(p.species)} ${p.name}`} selected={p.id === petId} onPress={() => setPetId(p.id)} />
+              ))}
+            </ChipRow>
+          </FormSection>
 
-          <FieldLabel>Question</FieldLabel>
-          <TextField value={title} onChangeText={setTitle} placeholder="e.g. How much should I feed a 6-month-old?" returnKeyType="next" maxLength={200} />
+          <FormSection label="Question">
+            <TextField value={title} onChangeText={setTitle} placeholder="e.g. How much should I feed a 6-month-old?" returnKeyType="next" maxLength={200} />
+          </FormSection>
 
-          <FieldLabel>Details (optional)</FieldLabel>
-          <TextField
-            value={body}
-            onChangeText={setBody}
-            placeholder="Add any context that helps others answer…"
-            multiline
-            style={styles.multiline}
-            maxLength={5000}
-          />
+          <FormSection label="Details (optional)">
+            <TextField
+              value={body}
+              onChangeText={setBody}
+              placeholder="Add any context that helps others answer…"
+              multiline
+              style={styles.multiline}
+              maxLength={5000}
+            />
+          </FormSection>
 
           <SheetFooter>
             <AccentButton disabled={!canSubmit} loading={submitting} onPress={submit}>
@@ -269,24 +272,26 @@ export default function Community() {
       <SheetTitle>Advertise your caregiving service</SheetTitle>
       <SheetSubtitle>Shown under Pet care, tagged so families know it&apos;s a service offer.</SheetSubtitle>
 
-      <FieldLabel>Title</FieldLabel>
-      <TextField
-        value={caregiveTitle}
-        onChangeText={setCaregiveTitle}
-        placeholder="e.g. Weekday dog walks in the downtown area"
-        returnKeyType="next"
-        maxLength={200}
-      />
+      <FormSection label="Title">
+        <TextField
+          value={caregiveTitle}
+          onChangeText={setCaregiveTitle}
+          placeholder="e.g. Weekday dog walks in the downtown area"
+          returnKeyType="next"
+          maxLength={200}
+        />
+      </FormSection>
 
-      <FieldLabel>Description</FieldLabel>
-      <TextField
-        value={caregiveBody}
-        onChangeText={setCaregiveBody}
-        placeholder="Tell families what you offer, your availability, and rates…"
-        multiline
-        style={styles.multiline}
-        maxLength={5000}
-      />
+      <FormSection label="Description">
+        <TextField
+          value={caregiveBody}
+          onChangeText={setCaregiveBody}
+          placeholder="Tell families what you offer, your availability, and rates…"
+          multiline
+          style={styles.multiline}
+          maxLength={5000}
+        />
+      </FormSection>
 
       <SheetFooter>
         <AccentButton disabled={!canSubmitCaregive} loading={caregiveSubmitting} onPress={submitCaregive}>
@@ -419,7 +424,5 @@ const styles = StyleSheet.create({
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   meta: { fontSize: 13, fontFamily: font.medium, color: colors.label3 },
   dot: { fontSize: 13, color: colors.label3 },
-  petChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  breedHint: { marginTop: 8, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
   multiline: { minHeight: 90, paddingTop: 12, textAlignVertical: "top" },
 });

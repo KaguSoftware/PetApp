@@ -8,11 +8,14 @@ import { Stepper } from "@/components/TimeStepper";
 import { TimeWheelPicker } from "@/components/WheelPicker";
 import {
   AccentButton,
-  FieldLabel,
+  ChipGrid,
+  FormSection,
+  OptionRow,
   PRESS_SCALE_SMALL,
   PressableScale,
   Segmented,
   SelectableChip,
+  Separator,
   SheetFooter,
   SheetSubtitle,
   SheetTitle,
@@ -95,6 +98,8 @@ export default function ScheduleEditorSheet({
   // True when the cadence isn't one of the presets, so the day stepper shows.
   const [customCadence, setCustomCadence] = useState(false);
   const [grace, setGrace] = useState(30);
+  // Grace is a secondary control — collapsed behind a disclosure row.
+  const [graceOpen, setGraceOpen] = useState(false);
   // Index of the slot whose time is being picked — the sheet swaps to a
   // dedicated wheel view while this is set. Null = editing the schedule form.
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
@@ -188,27 +193,28 @@ export default function ScheduleEditorSheet({
    * cadences (where "how often" is the real question) and below them otherwise,
    * so it's defined once here rather than duplicated at both positions.
    */
-  const cadenceSection = (
-    <>
-      {canInterval ? (
-        <>
-          <FieldLabel>Repeats</FieldLabel>
-          <Segmented
-            options={[
-              { value: "interval", label: "Every so often" },
-              { value: "weekly", label: "Days of week" },
-            ]}
-            value={cadence}
-            onChange={setCadence}
-          />
-        </>
-      ) : null}
+  const cadenceHint =
+    canInterval && cadence === "interval"
+      ? intervalDays >= 60
+        ? `We'll remind everyone when it's due — about ${describeCadence(intervalDays).toLowerCase()}.`
+        : `Repeats ${describeCadence(intervalDays).toLowerCase()}, starting today.`
+      : undefined;
 
-      {canInterval && cadence === "interval" ? (
-        <View style={styles.cadenceWrap}>
+  const cadenceSection = canInterval ? (
+    <FormSection label="Repeats" hint={cadenceHint}>
+      <Segmented
+        options={[
+          { value: "interval", label: "Every so often" },
+          { value: "weekly", label: "Days of week" },
+        ]}
+        value={cadence}
+        onChange={setCadence}
+      />
+      {cadence === "interval" ? (
+        <>
           {/* Presets first — a vet visit is "every 6 months", not "every 182
               days". Custom reveals the day stepper for anything unusual. */}
-          <View style={styles.cadenceRow}>
+          <ChipGrid columns={3}>
             {CADENCE_PRESETS.map((p) => (
               <SelectableChip
                 key={p.days}
@@ -220,9 +226,14 @@ export default function ScheduleEditorSheet({
                 }}
               />
             ))}
-            <SelectableChip label="Custom" selected={customCadence} onPress={() => setCustomCadence(true)} />
-          </View>
-          {customCadence ? (
+          </ChipGrid>
+          <OptionRow
+            label="Custom…"
+            value={customCadence ? describeCadence(intervalDays) : undefined}
+            selected={customCadence}
+            expanded={customCadence}
+            onPress={() => setCustomCadence(true)}
+          >
             <View style={styles.intervalRow}>
               <Stepper
                 label={describeCadence(intervalDays)}
@@ -232,29 +243,34 @@ export default function ScheduleEditorSheet({
                 accessibilityLabel="Repeat every N days"
               />
             </View>
-          ) : null}
-          <Text style={styles.graceHint}>
-            {intervalDays >= 60
-              ? `We'll remind everyone when it's due — about ${describeCadence(intervalDays).toLowerCase()}.`
-              : `Repeats ${describeCadence(intervalDays).toLowerCase()}, starting today.`}
-          </Text>
-        </View>
-      ) : (
-        <>
-          <FieldLabel>Days</FieldLabel>
-          <View style={styles.daysRow}>
-            {DAY_LETTERS.map((letter, day) => (
-              <SelectableChip
-                key={day}
-                label={letter}
-                selected={maskHasDay(daysMask, day)}
-                onPress={() => setDaysMask((m) => m ^ (1 << day))}
-              />
-            ))}
-          </View>
+          </OptionRow>
         </>
+      ) : (
+        <ChipGrid columns={7}>
+          {DAY_LETTERS.map((letter, day) => (
+            <SelectableChip
+              key={day}
+              label={letter}
+              selected={maskHasDay(daysMask, day)}
+              onPress={() => setDaysMask((m) => m ^ (1 << day))}
+            />
+          ))}
+        </ChipGrid>
       )}
-    </>
+    </FormSection>
+  ) : (
+    <FormSection label="Days">
+      <ChipGrid columns={7}>
+        {DAY_LETTERS.map((letter, day) => (
+          <SelectableChip
+            key={day}
+            label={letter}
+            selected={maskHasDay(daysMask, day)}
+            onPress={() => setDaysMask((m) => m ^ (1 << day))}
+          />
+        ))}
+      </ChipGrid>
+    </FormSection>
   );
 
   const picking = pickingSlot != null && slots[pickingSlot] != null;
@@ -293,10 +309,17 @@ export default function ScheduleEditorSheet({
           Below that, times ARE the schedule, so they stay on top. */}
       {longCadence ? cadenceSection : null}
 
-      <FieldLabel>{longCadence ? "Remind at" : "Times"}</FieldLabel>
-      <View style={styles.slotList}>
+      <FormSection
+        label={longCadence ? "Remind at" : "Times"}
+        trailing={
+          slots.length < MAX_SLOTS ? (
+            <SmallButton label="Add time" onPress={() => setSlots((prev) => [...prev, { time: nextSlotTime(prev) }])} />
+          ) : undefined
+        }
+      >
         {slots.map((slot, i) => (
           <View key={i} style={styles.slotBlock}>
+            {i > 0 ? <Separator inset={0} /> : null}
             <View style={styles.slotRow}>
               {/* Tapping the time drills into the wheel picker (DrillView slide
                   below) rather than expanding inline — an inline wheel grew this
@@ -332,7 +355,7 @@ export default function ScheduleEditorSheet({
               ) : null}
             </View>
             {type === "fed" ? (
-              <View style={styles.portionRow}>
+              <ChipGrid columns={4}>
                 {PORTIONS.map((p) => {
                   const grams = Math.round(p.frac * pet.cupGrams);
                   const selected = slot.grams === grams;
@@ -345,19 +368,11 @@ export default function ScheduleEditorSheet({
                     />
                   );
                 })}
-              </View>
+              </ChipGrid>
             ) : null}
           </View>
         ))}
-      </View>
-      {slots.length < MAX_SLOTS ? (
-        <View style={styles.addTime}>
-          <SmallButton
-            label="Add time"
-            onPress={() => setSlots((prev) => [...prev, { time: nextSlotTime(prev) }])}
-          />
-        </View>
-      ) : null}
+      </FormSection>
 
       {/* Already rendered above the times when the cadence is long. */}
       {longCadence ? null : cadenceSection}
@@ -365,23 +380,31 @@ export default function ScheduleEditorSheet({
       {/* A minute-level grace window only means something for items that recur
           within a day or two. On a 6-monthly vet visit "stays checked until 30
           min before the next time" is nonsense — the checkmark should simply
-          hold until the next visit is due. */}
+          hold until the next visit is due. Secondary control, so it hides
+          behind a disclosure row until asked for. */}
       {longCadence ? null : (
-        <>
-          <FieldLabel>Grace window</FieldLabel>
-          <View style={styles.intervalRow}>
-            <Stepper
-              label={grace === 0 ? "Off" : `${grace} min`}
-              onDec={() => setGrace((g) => Math.max(0, g - 15))}
-              onInc={() => setGrace((g) => Math.min(720, g + 15))}
-              decDisabled={grace <= 0}
-              accessibilityLabel="Grace window in minutes"
-            />
-          </View>
-          <Text style={styles.graceHint}>
-            After logging, this stays checked until {grace === 0 ? "the next time arrives" : `${grace} min before the next time`}.
-          </Text>
-        </>
+        <FormSection>
+          <OptionRow
+            label="Grace window"
+            value={grace === 0 ? "Off" : `${grace} min`}
+            expanded={graceOpen}
+            divider={false}
+            onPress={() => setGraceOpen((v) => !v)}
+          >
+            <View style={styles.intervalRow}>
+              <Stepper
+                label={grace === 0 ? "Off" : `${grace} min`}
+                onDec={() => setGrace((g) => Math.max(0, g - 15))}
+                onInc={() => setGrace((g) => Math.min(720, g + 15))}
+                decDisabled={grace <= 0}
+                accessibilityLabel="Grace window in minutes"
+              />
+            </View>
+            <Text style={styles.graceHint}>
+              After logging, this stays checked until {grace === 0 ? "the next time arrives" : `${grace} min before the next time`}.
+            </Text>
+          </OptionRow>
+        </FormSection>
       )}
 
       <SheetFooter>
@@ -430,19 +453,19 @@ const styles = StyleSheet.create({
   // Clips the horizontal slide so a drilling view can't spill past the sheet's
   // edges mid-transition.
   drillClip: { overflow: "hidden" },
-  slotList: { gap: 12 },
-  slotBlock: { gap: 8 },
+  slotBlock: { gap: 10 },
   slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   timeChip: {
     minWidth: 96,
     // Matches TextField's 48pt min height so the time chip and the name field
-    // share one baseline across the slot row.
+    // share one baseline across the slot row. Inset bg fill — it always sits
+    // on a FormSection card.
     minHeight: 48,
     paddingHorizontal: 14,
     borderRadius: radius.md,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: "rgba(28, 28, 35, 0.1)",
+    backgroundColor: colors.bg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.sep,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -455,12 +478,7 @@ const styles = StyleSheet.create({
   pickerBody: { marginTop: 16, borderRadius: radius.md, backgroundColor: colors.card, paddingVertical: 8, ...cardShadow },
   slotName: { flex: 1, marginTop: 0 },
   removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
-  portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 2 },
-  addTime: { marginTop: 12, alignSelf: "flex-start" },
-  daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   intervalRow: { flexDirection: "row" },
-  cadenceWrap: { gap: 12 },
-  cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
+  graceHint: { paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
   removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
 });

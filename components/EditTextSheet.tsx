@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Sheet from "@/components/Sheet";
-import { AccentButton, FieldLabel, SheetFooter, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, FormSection, SheetFooter, SheetTitle, TextField } from "@/components/ui";
 
 /** Small tap-to-edit sheet for a single free-text pet field (e.g. a care
  *  activity's frequency). Mirrors EditStatSheet, but the value is a string. */
@@ -45,8 +45,9 @@ export default function EditTextSheet({
     <Sheet open={open} onClose={onClose}>
       <SheetTitle>{title}</SheetTitle>
 
-      <FieldLabel>{label}</FieldLabel>
-      <TextField value={value} onChangeText={setValue} placeholder={placeholder} returnKeyType="done" onSubmitEditing={save} />
+      <FormSection label={label}>
+        <TextField value={value} onChangeText={setValue} placeholder={placeholder} returnKeyType="done" onSubmitEditing={save} />
+      </FormSection>
 
       <SheetFooter>
         <AccentButton disabled={!valid} onPress={save}>

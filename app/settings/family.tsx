@@ -13,7 +13,7 @@ import {
   AccentButton,
   Chevron,
   ConfirmRow,
-  FieldLabel,
+  FormSection,
   Group,
   IconCircle,
   Row,
@@ -61,7 +61,7 @@ The Pet caregiver role is currently a label only, with no special app permission
 
 By tapping "Accept terms and conditions" below, you confirm that you understand and agree to the above.`;
 
-/** Labelled text field — FieldLabel + TextField primitives plus an optional hint line. */
+/** Labelled text field — a FormSection card around the TextField, with an optional hint line. */
 function Field({
   label,
   value,
@@ -84,8 +84,7 @@ function Field({
   style?: object;
 }) {
   return (
-    <View style={style}>
-      <FieldLabel>{label}</FieldLabel>
+    <FormSection label={label} hint={hint} style={style}>
       <TextField
         value={value}
         onChangeText={onChangeText}
@@ -95,8 +94,7 @@ function Field({
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
       />
-      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
-    </View>
+    </FormSection>
   );
 }
 
@@ -461,14 +459,15 @@ export default function FamilySettingsPage() {
 
             <Field label="Name" value={editPetName} onChangeText={setEditPetName} />
 
-            <FieldLabel>Breed</FieldLabel>
-            <BreedField
-              species={editingPet.species}
-              breed={editPetBreed}
-              customBreed={editPetCustomBreed}
-              onChangeBreed={setEditPetBreed}
-              onChangeCustomBreed={setEditPetCustomBreed}
-            />
+            <FormSection label="Breed">
+              <BreedField
+                species={editingPet.species}
+                breed={editPetBreed}
+                customBreed={editPetCustomBreed}
+                onChangeBreed={setEditPetBreed}
+                onChangeCustomBreed={setEditPetCustomBreed}
+              />
+            </FormSection>
 
             <View style={styles.twoCol}>
               <Field style={{ flex: 1 }} label="Age (years)" value={editPetAge} onChangeText={setEditPetAge} keyboardType="decimal-pad" />
@@ -481,23 +480,24 @@ export default function FamilySettingsPage() {
               />
             </View>
 
-            <FieldLabel>Sex</FieldLabel>
-            <Segmented
-              options={[
-                { value: "male", label: "Male" },
-                { value: "female", label: "Female" },
-                { value: "unset", label: "Not set" },
-              ]}
-              value={editPetSex}
-              onChange={setEditPetSex}
-            />
-            <Text style={styles.fieldHint}>Used for the age-and-sex-specific weight & feeding guide.</Text>
+            <FormSection label="Sex" hint="Used for the age-and-sex-specific weight & feeding guide.">
+              <Segmented
+                options={[
+                  { value: "male", label: "Male" },
+                  { value: "female", label: "Female" },
+                  { value: "unset", label: "Not set" },
+                ]}
+                value={editPetSex}
+                onChange={setEditPetSex}
+              />
+            </FormSection>
 
-            <FieldLabel>Birth date (optional)</FieldLabel>
-            <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear />
-            {editPetBirth != null ? (
-              <Text style={styles.fieldHint}>With a birth date set, age is calculated automatically.</Text>
-            ) : null}
+            <FormSection
+              label="Birth date (optional)"
+              hint={editPetBirth != null ? "With a birth date set, age is calculated automatically." : undefined}
+            >
+              <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear />
+            </FormSection>
 
             <Field
               label="Microchip number (optional)"
@@ -631,7 +631,7 @@ export default function FamilySettingsPage() {
 
             <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
 
-            <FieldLabel>Role</FieldLabel>
+            <FormSection label="Role">
             <RoleField
               isAdmin={newMemberIsAdmin}
               isCaregiver={newMemberIsCaregiver}
@@ -648,6 +648,7 @@ export default function FamilySettingsPage() {
               onChangeFunRole={setNewMemberFunRole}
               onChangeCustomFunRole={setNewMemberCustomFunRole}
             />
+            </FormSection>
 
             <View style={{ marginTop: 28 }}>
               {newMemberCaregiverGateActive ? (
@@ -697,7 +698,7 @@ export default function FamilySettingsPage() {
 
               <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
 
-              <FieldLabel>Role</FieldLabel>
+              <FormSection label="Role">
               <RoleField
                 isAdmin={editMemberIsAdmin}
                 isCaregiver={editMemberIsCaregiver}
@@ -714,6 +715,7 @@ export default function FamilySettingsPage() {
                 onChangeFunRole={setEditMemberFunRole}
                 onChangeCustomFunRole={setEditMemberCustomFunRole}
               />
+              </FormSection>
 
               <View style={{ marginTop: 28 }}>
                 {editMemberCaregiverGateActive ? (
@@ -762,14 +764,15 @@ export default function FamilySettingsPage() {
         <SheetSubtitle>
           Paste the Family ID another member shared with you. You&apos;ll be added as a member and switched to it.
         </SheetSubtitle>
-        <TextField
-          value={joinId}
-          onChangeText={setJoinId}
-          placeholder="Family ID"
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={{ marginTop: 20 }}
-        />
+        <FormSection style={{ marginTop: 20 }}>
+          <TextField
+            value={joinId}
+            onChangeText={setJoinId}
+            placeholder="Family ID"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </FormSection>
         <View style={{ marginTop: 28 }}>
           <AccentButton
             disabled={!joinId.trim()}
@@ -815,6 +818,5 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   errorText: { marginTop: 8, alignSelf: "stretch", textAlign: "left", fontSize: 14, fontFamily: font.medium, color: colors.red },
-  fieldHint: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
   twoCol: { flexDirection: "row", gap: 12 },
 });

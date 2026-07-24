@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import PetAvatar from "@/components/PetAvatar";
 import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
 import {
   AccentButton,
-  FieldLabel,
+  ChipRow,
+  FormSection,
   PressableScale,
   PRESS_SCALE_SMALL,
   SelectableChip,
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui";
 import { ACTIONS, PORTIONS, shortcutTileLabel, type ActionType, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { colors, font, radius } from "@/lib/theme";
+import { colors, radius } from "@/lib/theme";
 
 /** Glyphs offered in the icon picker — the "you pick the icon" part of a shortcut. */
 const ICON_CHOICES: IconName[] = [
@@ -128,60 +129,58 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
       <SheetTitle>New shortcut</SheetTitle>
       <SheetSubtitle>One tap on Home logs it for the family.</SheetSubtitle>
 
-      <FieldLabel>Pets</FieldLabel>
-      <View style={styles.chips}>
-        {pets.length > 1 ? <SelectableChip label="All pets" selected={allSelected} onPress={toggleAll} /> : null}
-        {pets.map((p) => (
-          <SelectableChip
-            key={p.id}
-            label={p.name}
-            selected={petIds.includes(p.id)}
-            onPress={() => togglePet(p.id)}
-            leading={<PetAvatar pet={p} size="xs" showCosmetics={false} />}
-          />
-        ))}
-      </View>
-      {selected.length > 1 ? <Text style={styles.hint}>One tap logs this for all {selected.length} selected pets.</Text> : null}
+      <FormSection label="Pets" hint={selected.length > 1 ? `One tap logs this for all ${selected.length} selected pets.` : undefined}>
+        <ChipRow>
+          {pets.length > 1 ? <SelectableChip label="All pets" selected={allSelected} onPress={toggleAll} /> : null}
+          {pets.map((p) => (
+            <SelectableChip
+              key={p.id}
+              label={p.name}
+              selected={petIds.includes(p.id)}
+              onPress={() => togglePet(p.id)}
+              leading={<PetAvatar pet={p} size="xs" showCosmetics={false} />}
+            />
+          ))}
+        </ChipRow>
+      </FormSection>
 
-      <FieldLabel>Action</FieldLabel>
-      <View style={styles.chips}>
-        {actions.map((t) => (
-          <SelectableChip
-            key={t}
-            label={ACTIONS[t].label}
-            selected={type === t}
-            onPress={() => setType(t)}
-            leading={<Icon name={ACTION_ICON[t].icon} size={14} color={type === t ? colors.white : colors.label2} />}
-          />
-        ))}
-      </View>
+      <FormSection label="Action">
+        <ChipRow>
+          {actions.map((t) => (
+            <SelectableChip
+              key={t}
+              label={ACTIONS[t].label}
+              selected={type === t}
+              onPress={() => setType(t)}
+              leading={<Icon name={ACTION_ICON[t].icon} size={14} color={type === t ? colors.white : colors.label2} />}
+            />
+          ))}
+        </ChipRow>
+      </FormSection>
 
       {needsMedPick ? (
-        <>
-          <FieldLabel>Which med?</FieldLabel>
-          <View style={styles.chips}>
+        <FormSection label="Which med?">
+          <ChipRow>
             {selected[0].meds.map((m) => (
               <SelectableChip key={m.id} label={m.name} selected={activeMedId === m.id} onPress={() => setMedId(m.id)} />
             ))}
-          </View>
-        </>
+          </ChipRow>
+        </FormSection>
       ) : null}
 
       {type === "fed" ? (
-        <>
-          <FieldLabel>Portion</FieldLabel>
-          <View style={styles.chips}>
+        <FormSection label="Portion" hint={fedHint}>
+          <ChipRow>
             {PORTIONS.map((p) => (
               <SelectableChip key={p.value} label={p.label} selected={portion === p.value} onPress={() => setPortion(p.value)} />
             ))}
             {canAsk ? <SelectableChip label="Ask each time" selected={portion === "ask"} onPress={() => setPortion("ask")} /> : null}
-          </View>
-          <Text style={styles.hint}>{fedHint}</Text>
-        </>
+          </ChipRow>
+        </FormSection>
       ) : null}
 
-      <FieldLabel>Icon</FieldLabel>
-      <View style={styles.iconGrid}>
+      <FormSection label="Icon">
+        <ChipRow>
         {ICON_CHOICES.map((name) => {
           const selectedIcon = icon === name;
           return (
@@ -203,10 +202,12 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
             </PressableScale>
           );
         })}
-      </View>
+        </ChipRow>
+      </FormSection>
 
-      <FieldLabel>Label</FieldLabel>
-      <TextField value={label} onChangeText={setLabel} placeholder={previewLabel} maxLength={20} returnKeyType="done" />
+      <FormSection label="Label">
+        <TextField value={label} onChangeText={setLabel} placeholder={previewLabel} maxLength={20} returnKeyType="done" />
+      </FormSection>
 
       <SheetFooter>
         <AccentButton disabled={selected.length === 0} onPress={save}>
@@ -218,12 +219,6 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  hint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-  // Same 8pt gap as the chip rows above so every selection group shares one
-  // rhythm; the selected state is the flat accent fill SelectableChip uses —
-  // no extra ring.
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   iconCell: {
     width: 46,
     height: 46,

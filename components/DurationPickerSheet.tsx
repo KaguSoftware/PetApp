@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import Sheet from "@/components/Sheet";
-import { AccentButton, SelectableChip, SheetSubtitle, SheetTitle } from "@/components/ui";
+import { AccentButton, ChipGrid, FormSection, SelectableChip, SheetSubtitle, SheetTitle } from "@/components/ui";
 import type { Pet } from "@/lib/data";
 
 /** The closed set of session lengths. Covers a quick garden break through a
@@ -38,21 +38,19 @@ export default function DurationPickerSheet({
     <Sheet open={open} onClose={onClose}>
       <SheetTitle>How long was it?</SheetTitle>
       <SheetSubtitle>Exercise &amp; play with {pet.name}</SheetSubtitle>
-      <View style={styles.chips}>
-        {DURATIONS.map((m) => (
-          <SelectableChip key={m} label={m === 90 ? "1½ hr" : m === 60 ? "1 hr" : `${m} min`} selected={minutes === m} onPress={() => setMinutes(m)} />
-        ))}
-      </View>
+      <FormSection style={{ marginTop: 20 }}>
+        <ChipGrid columns={4}>
+          {DURATIONS.map((m) => (
+            <SelectableChip key={m} label={m === 90 ? "1½ hr" : m === 60 ? "1 hr" : `${m} min`} selected={minutes === m} onPress={() => setMinutes(m)} />
+          ))}
+        </ChipGrid>
+      </FormSection>
       <View style={{ marginTop: 28 }}>
         <AccentButton onPress={confirm}>Log {minutes >= 60 ? (minutes === 60 ? "1 hour" : "1½ hours") : `${minutes} minutes`}</AccentButton>
       </View>
     </Sheet>
   );
 }
-
-const styles = StyleSheet.create({
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 20 },
-});
 
 /** Renders a logged duration back out ("25 min", "1 hr", "1 hr 30 min"). */
 export function formatDuration(minutes: number): string {

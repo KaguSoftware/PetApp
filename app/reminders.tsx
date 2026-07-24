@@ -9,9 +9,12 @@ import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import {
   AccentButton,
-  FieldLabel,
+  ChipGrid,
+  ChipRow,
+  FormSection,
   Group,
   IconCircle,
+  OptionRow,
   PressableScale,
   PRESS_SCALE_SMALL,
   Row,
@@ -235,37 +238,42 @@ export default function RemindersScreen() {
         <SheetTitle>New reminder</SheetTitle>
         <SheetSubtitle>Visible to the whole family</SheetSubtitle>
 
-        <FieldLabel>Task</FieldLabel>
-        <TextField value={title} onChangeText={setTitle} placeholder="e.g. Buy litter, flea treatment…" />
+        <FormSection label="Task">
+          <TextField value={title} onChangeText={setTitle} placeholder="e.g. Buy litter, flea treatment…" />
+        </FormSection>
 
-        <FieldLabel>Pet</FieldLabel>
-        <View style={styles.chipRow}>
-          {state.pets.map((p) => (
-            <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
-          ))}
-        </View>
+        <FormSection label="Pet">
+          <ChipRow>
+            {state.pets.map((p) => (
+              <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
+            ))}
+          </ChipRow>
+        </FormSection>
 
-        <FieldLabel>Due</FieldLabel>
-        <View style={styles.chipRow}>
-          {[
-            { d: 0, label: "Today" },
-            { d: 1, label: "Tomorrow" },
-            { d: 3, label: "In 3 days" },
-            { d: 7, label: "Next week" },
-          ].map((o) => (
-            <SelectableChip
-              key={o.d}
-              label={o.label}
-              selected={!pickDate && days === o.d}
-              onPress={() => {
-                setDays(o.d);
-                setPickDate(false);
-              }}
-            />
-          ))}
-          <SelectableChip
-            label="Pick date…"
+        <FormSection label="Due">
+          <ChipGrid columns={2}>
+            {[
+              { d: 0, label: "Today" },
+              { d: 1, label: "Tomorrow" },
+              { d: 3, label: "In 3 days" },
+              { d: 7, label: "Next week" },
+            ].map((o) => (
+              <SelectableChip
+                key={o.d}
+                label={o.label}
+                selected={!pickDate && days === o.d}
+                onPress={() => {
+                  setDays(o.d);
+                  setPickDate(false);
+                }}
+              />
+            ))}
+          </ChipGrid>
+          <OptionRow
+            label="On a date & time…"
+            value={pickDate && pickTs != null ? new Date(pickTs).toLocaleDateString([], { month: "short", day: "numeric" }) : undefined}
             selected={pickDate}
+            expanded={pickDate}
             onPress={() => {
               setPickDate(true);
               if (pickTs == null) {
@@ -274,15 +282,10 @@ export default function RemindersScreen() {
                 setPickTs(noon.getTime());
               }
             }}
-          />
-        </View>
-        {pickDate ? (
-          <View style={styles.pickerRow}>
-            <DateField value={pickTs} onChange={setPickTs} mode="future" />
-          </View>
-        ) : null}
-        {pickDate ? (
-          <View style={styles.pickerBlock}>
+          >
+            <View style={styles.pickerRow}>
+              <DateField value={pickTs} onChange={setPickTs} mode="future" />
+            </View>
             <TimeWheelPicker
               value={`${pad(hour)}:${pad(minute)}`}
               onChange={(t) => {
@@ -291,33 +294,34 @@ export default function RemindersScreen() {
                 setMinute(Number(m));
               }}
             />
-          </View>
-        ) : null}
+          </OptionRow>
+        </FormSection>
 
-        <FieldLabel>Repeat</FieldLabel>
-        <View style={styles.chipRow}>
-          {(
-            [
-              { value: "none", label: "Once" },
-              { value: "daily", label: "Daily" },
-              { value: "weekly", label: "Weekly" },
-              { value: "every_n_days", label: "Every… days" },
-            ] as { value: "none" | RepeatKind; label: string }[]
-          ).map((o) => (
-            <SelectableChip key={o.value} label={o.label} selected={repeat === o.value} onPress={() => setRepeat(o.value)} />
-          ))}
-        </View>
-        {repeat === "every_n_days" ? (
-          <View style={styles.pickerRow}>
-            <Stepper
-              label={`Every ${intervalDays} days`}
-              onDec={() => setIntervalDays((n) => Math.max(1, n - 1))}
-              onInc={() => setIntervalDays((n) => n + 1)}
-              decDisabled={intervalDays <= 1}
-              accessibilityLabel="Days between repeats"
-            />
-          </View>
-        ) : null}
+        <FormSection label="Repeat">
+          <ChipGrid columns={2}>
+            {(
+              [
+                { value: "none", label: "Once" },
+                { value: "daily", label: "Daily" },
+                { value: "weekly", label: "Weekly" },
+                { value: "every_n_days", label: "Every… days" },
+              ] as { value: "none" | RepeatKind; label: string }[]
+            ).map((o) => (
+              <SelectableChip key={o.value} label={o.label} selected={repeat === o.value} onPress={() => setRepeat(o.value)} />
+            ))}
+          </ChipGrid>
+          {repeat === "every_n_days" ? (
+            <View style={styles.pickerRow}>
+              <Stepper
+                label={`Every ${intervalDays} days`}
+                onDec={() => setIntervalDays((n) => Math.max(1, n - 1))}
+                onInc={() => setIntervalDays((n) => n + 1)}
+                decDisabled={intervalDays <= 1}
+                accessibilityLabel="Days between repeats"
+              />
+            </View>
+          ) : null}
+        </FormSection>
 
         <SheetFooter>
           <AccentButton
@@ -409,7 +413,5 @@ const styles = StyleSheet.create({
   emptyWrap: { alignItems: "center", paddingHorizontal: 24, paddingVertical: 36 },
   emptyTitle: { marginTop: 12, fontSize: 15, fontFamily: font.semibold, color: colors.label },
   emptyBody: { marginTop: 2, fontSize: 13, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  pickerRow: { marginTop: 12, flexDirection: "row", gap: 8 },
-  pickerBlock: { marginTop: 12 },
+  pickerRow: { flexDirection: "row", gap: 8 },
 });

@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { createContext, forwardRef, useContext, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -449,13 +449,142 @@ export function SheetSubtitle({ children }: { children: React.ReactNode }) {
   return <Text style={primStyles.sheetSubtitle}>{children}</Text>;
 }
 
-export function FieldLabel({ children }: { children: string }) {
-  return <Text style={primStyles.fieldLabel}>{children}</Text>;
+/* ---------------------------------------------------------------------------
+ * Sheet layout system — "one card per question".
+ * Grid for closed sets, wrap-row for open sets, OptionRow for escapes.
+ * FormSection provides SurfaceContext="card" so chips / fields / steppers
+ * flip to an inset bg fill automatically — no call-site styling.
+ * ------------------------------------------------------------------------- */
+
+const SurfaceContext = createContext<"bg" | "card">("bg");
+/** Which surface a form control is sitting on ("card" inside FormSection). */
+export function useSurface() {
+  return useContext(SurfaceContext);
+}
+
+/**
+ * One form question: uppercase label (+ optional trailing action) above an
+ * inset card that contains the controls. `hint` renders as small print at the
+ * card's bottom.
+ */
+export function FormSection({
+  label,
+  hint,
+  trailing,
+  children,
+  style,
+}: {
+  label?: string;
+  hint?: string;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={style}>
+      {label || trailing ? (
+        <View style={primStyles.formSectionHeader}>
+          {label ? <Text style={primStyles.fieldLabel}>{label}</Text> : <View />}
+          {trailing}
+        </View>
+      ) : null}
+      <View style={primStyles.formSectionCard}>
+        <SurfaceContext.Provider value="card">
+          {children}
+          {hint ? <Text style={primStyles.formSectionHint}>{hint}</Text> : null}
+        </SurfaceContext.Provider>
+      </View>
+    </View>
+  );
+}
+
+const ChipGridContext = createContext(false);
+
+/**
+ * Equal-width tile grid for a CLOSED set of chip options — no ragged wrap
+ * lines. Chips inside render in block mode (centered, radius.md tiles, 44pt).
+ * `columns={7}` fits the day letters on one even line.
+ */
+export function ChipGrid({ columns = 2, children }: { columns?: 2 | 3 | 4 | 7; children: React.ReactNode }) {
+  const basis = `${Math.floor(1000 / columns) / 10 - 2}%` as const;
+  return (
+    <ChipGridContext.Provider value>
+      <View style={primStyles.chipGrid}>
+        {(Array.isArray(children) ? children : [children]).flat().map((child, i) => (
+          <View key={(child as React.ReactElement)?.key ?? i} style={{ flexBasis: basis, flexGrow: 1 }}>
+            {child}
+          </View>
+        ))}
+      </View>
+    </ChipGridContext.Provider>
+  );
+}
+
+/** Free-wrap chip row for OPEN sets (pet names, breeds, icon pickers). */
+export function ChipRow({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[primStyles.chipRow, style]}>{children}</View>;
+}
+
+/**
+ * The escape-option grammar inside a FormSection card: a full-width row below
+ * a separator — label left, current value + chevron right. Chevron "down"
+ * expands `children` in place; "right" signals a drill. Selected state uses
+ * the same accent-tint vocabulary as chips, but the row SHAPE says "this
+ * opens more UI".
+ */
+export function OptionRow({
+  label,
+  value,
+  selected = false,
+  onPress,
+  expanded = false,
+  divider = true,
+  children,
+}: {
+  label: string;
+  value?: string;
+  selected?: boolean;
+  onPress: () => void;
+  expanded?: boolean;
+  /** Leading separator — on by default (row follows other content in the card). */
+  divider?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View>
+      {divider ? <Separator inset={0} /> : null}
+      <PressableScale
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ selected, expanded: children ? expanded : undefined }}
+      >
+        <View style={primStyles.optionRow}>
+          {selected ? <Icon name="check" size={15} color={colors.accentDeep} /> : null}
+          <Text style={[primStyles.optionRowLabel, selected && { color: colors.accentDeep }]} numberOfLines={1}>
+            {label}
+          </Text>
+          {value ? (
+            <Text style={primStyles.optionRowValue} numberOfLines={1}>
+              {value}
+            </Text>
+          ) : null}
+          <Icon name={children ? "chevron-down" : "chevron-right"} size={14} color={colors.label3} />
+        </View>
+      </PressableScale>
+      {children && expanded ? (
+        <>
+          <Separator inset={0} />
+          <View style={primStyles.optionRowBody}>{children}</View>
+        </>
+      ) : null}
+    </View>
+  );
 }
 
 /** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
 export const TextField = forwardRef<TextInput, TextInputProps>(function TextField(props, ref) {
   const [focused, setFocused] = useState(false);
+  const onCard = useSurface() === "card";
   return (
     <TextInput
       ref={ref}
@@ -469,7 +598,7 @@ export const TextField = forwardRef<TextInput, TextInputProps>(function TextFiel
         setFocused(false);
         props.onBlur?.(e);
       }}
-      style={[primStyles.textField, focused && primStyles.textFieldFocused, props.style]}
+      style={[primStyles.textField, onCard && primStyles.textFieldOnCard, focused && primStyles.textFieldFocused, props.style]}
     />
   );
 });
@@ -502,6 +631,12 @@ export function SelectableChip({
   leading?: React.ReactNode;
 }) {
   const reduceMotion = useReduceMotion();
+  // On a FormSection card the quiet state flips to an inset bg well; in a
+  // ChipGrid the chip renders as an equal-width centered tile.
+  const onCard = useSurface() === "card";
+  const block = useContext(ChipGridContext);
+  const baseBg = onCard ? colors.bg : colors.card;
+  const baseBorder = onCard ? CHIP_BORDER_ON_CARD : CHIP_BORDER;
   // Crossfade the container colors between the quiet and tinted states instead
   // of hard-swapping — selection reads as a state change, not a repaint.
   const t = useSharedValue(selected ? 1 : 0);
@@ -509,8 +644,8 @@ export function SelectableChip({
     t.value = reduceMotion ? (selected ? 1 : 0) : withTiming(selected ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
   }, [selected, t, reduceMotion]);
   const containerAnim = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(t.value, [0, 1], [colors.card, colors.accentSoft]),
-    borderColor: interpolateColor(t.value, [0, 1], [CHIP_BORDER, CHIP_BORDER_SELECTED]),
+    backgroundColor: interpolateColor(t.value, [0, 1], [baseBg, colors.accentSoft]),
+    borderColor: interpolateColor(t.value, [0, 1], [baseBorder, CHIP_BORDER_SELECTED]),
   }));
   return (
     <PressableScale
@@ -521,9 +656,11 @@ export function SelectableChip({
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
     >
-      <Animated.View style={[primStyles.chipBase, containerAnim, disabled && { opacity: 0.4 }]}>
+      <Animated.View style={[primStyles.chipBase, block && primStyles.chipBlock, containerAnim, disabled && { opacity: 0.4 }]}>
         {leading}
-        <Text style={[primStyles.chipBaseLabel, selected ? primStyles.chipSelectedLabel : null]}>{label}</Text>
+        <Text style={[primStyles.chipBaseLabel, selected ? primStyles.chipSelectedLabel : null]} numberOfLines={1}>
+          {label}
+        </Text>
       </Animated.View>
     </PressableScale>
   );
@@ -532,6 +669,7 @@ export function SelectableChip({
 // Chip border tints — module scope so the animated style (a UI-thread worklet)
 // captures stable strings rather than recomputing withAlpha per frame.
 const CHIP_BORDER = withAlpha(colors.label, 0.1);
+const CHIP_BORDER_ON_CARD = withAlpha(colors.label, 0.07);
 const CHIP_BORDER_SELECTED = withAlpha(colors.accent, 0.35);
 
 /**
@@ -641,6 +779,8 @@ const primStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(28, 28, 35, 0.1)",
   },
+  // Inset well when sitting on a FormSection card (figure/ground flip).
+  textFieldOnCard: { backgroundColor: colors.bg, borderColor: colors.sep },
   textFieldFocused: {
     borderColor: colors.accent,
     shadowColor: colors.accent,
@@ -687,4 +827,29 @@ const primStyles = StyleSheet.create({
   },
   smallButtonAccentBorder: { borderWidth: 1, borderColor: "rgba(107, 85, 223, 0.25)" },
   smallButtonLabel: { fontSize: 14, fontFamily: font.semibold },
+  // --- sheet layout system ---
+  formSectionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    // The label carries its own top/bottom margins; keep the trailing action on
+    // the label's baseline band.
+    paddingRight: 2,
+  },
+  formSectionCard: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.sep,
+    padding: 14,
+    gap: 10,
+  },
+  formSectionHint: { fontSize: 12, fontFamily: font.regular, lineHeight: 17, color: colors.label2, paddingHorizontal: 2 },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  chipBlock: { justifyContent: "center", borderRadius: radius.md, minHeight: 44, paddingHorizontal: 8 },
+  optionRow: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 46, paddingHorizontal: 2 },
+  optionRowLabel: { flex: 1, fontSize: 16, fontFamily: font.medium, color: colors.label },
+  optionRowValue: { flexShrink: 1, maxWidth: "50%", fontSize: 15, fontFamily: font.regular, color: colors.label2 },
+  optionRowBody: { paddingTop: 12, paddingBottom: 2, gap: 10 },
 });

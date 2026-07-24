@@ -339,6 +339,19 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 
 **Device-verify priorities**: back button label on pet profile + settings; header island alignment on Home; scroll-to-bottom on all five tabs (iOS buffer, Android not doubled); sheet spring + chip selection animation (plus reduce-motion instant paths); disabled CTA reads gray (reminder sheet with empty task); day toggles + timeChip in Fed/Groomed schedule; Android hairline borders render.
 
+### Sheet LAYOUT recomposition — "sections in cards" (2026-07-24, same session) — built, statically verified, NEEDS device walkthrough
+
+Owner liked the new visuals but called the composition messy (ragged chip wraps, equal-weight label piles, vet/groom schedule padding issues). New layout system in `components/ui.tsx` — **the sheet grammar is now: grid for closed sets, wrap-row for open sets, OptionRow for escapes, one card per question**:
+- **`SurfaceContext`/`useSurface()`** — `FormSection` provides `"card"`; `SelectableChip`, `TextField`, and `Stepper` (TimeStepper.tsx) automatically flip to an inset `colors.bg` fill + `colors.sep` border on cards. No call-site styling.
+- **`FormSection`** `{label, hint, trailing}` — uppercase label (+ optional right-aligned action, e.g. "Add time") above a `radius.lg` card (hairline border, padding 14, gap 10); `hint` renders as small print inside the card bottom.
+- **`ChipGrid`** `{columns: 2|3|4|7}` — equal-width tile cells (flexBasis %), chips render block-mode (centered, `radius.md`, minHeight 44) via `ChipGridContext`. 7-col fits the day letters on one line.
+- **`OptionRow`** `{label, value, selected, expanded, divider, children}` — escape/disclosure row inside a card: separator, label left, value + chevron right (down = expands children in place, right = drills); selected = accentDeep + check. Used for "On a date & time…" (reminders), "Custom…" cadence, and the collapsed Grace-window disclosure.
+- **`ChipRow`** — the one shared free-wrap row; local `chipRow`-style copies deleted. `FieldLabel` is REMOVED (zero call sites) — use `FormSection label`.
+- Recomposed by hand: `app/reminders.tsx` (Due 2×2 grid + date OptionRow; Repeat 2×2), `components/ScheduleEditorSheet.tsx` (Times card with `Separator`-ledger slots + portions `ChipGrid 4`; Repeats card = Segmented + cadence `ChipGrid 3` + Custom OptionRow + days `ChipGrid 7`; grace behind a disclosure OptionRow, `graceOpen` state — fixes the vet/groom padding mess). Mechanical subagent pass over: ShortcutBuilderSheet, MedPickerSheet, Meds, DurationPickerSheet (`ChipGrid 4`), EditStatSheet, EditTextSheet, logs retro-log/visit sheets, pets add-a-pet, pet/[id] record sheets, settings/family (its local `Field` helper now renders FormSection), settings/account, community ask/advertise/answer. FeedPortionSheet + VetBookingSheet + Group/Row sheets already conformed.
+- Verified: `tsc --noEmit` + `expo lint` clean apart from the 2 known pre-existing errors (vets route type, missing datetimepicker module) + pre-existing Pet3D warning.
+
+**Device-verify**: New reminder (grids, date-row expand/collapse), Fed schedule slot ledger, **Groomed + Vet schedules (3×2 cadence grid, Custom row, uniform spacing)**, day letters on one line, grace disclosure, add-a-pet, retro-log, ShortcutBuilder, family sheets — both platforms.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
 - `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
