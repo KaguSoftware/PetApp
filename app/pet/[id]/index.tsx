@@ -15,7 +15,8 @@ import {
   AccentButton,
   Chip,
   ConfirmRow,
-  FormSection,
+  FieldLabel,
+  Footnote,
   Group,
   IconCircle,
   PRESS_SCALE_SMALL,
@@ -683,7 +684,7 @@ export default function PetDetailPage() {
       <Sheet open={sexOpen} onClose={() => setSexOpen(false)}>
         <SheetTitle>{pet.name}&apos;s sex</SheetTitle>
         <SheetSubtitle>Used for the age-and-sex-specific weight &amp; feeding guide</SheetSubtitle>
-        <FormSection style={{ marginTop: 20 }}>
+        <View style={{ marginTop: 20 }}>
           <Segmented
             options={[
               { value: "male", label: "Male" },
@@ -693,7 +694,7 @@ export default function PetDetailPage() {
             value={sexVal}
             onChange={setSexVal}
           />
-        </FormSection>
+        </View>
         <SheetFooter>
           <AccentButton
             onPress={() => {
@@ -711,17 +712,15 @@ export default function PetDetailPage() {
         <SheetTitle>Add vaccination</SheetTitle>
         <SheetSubtitle>For {pet.name} — from the vaccine booklet or vet record</SheetSubtitle>
 
-        <FormSection label="Vaccine">
-          <TextField value={vaccName} onChangeText={setVaccName} placeholder="e.g. Rabies, FVRCP, DHPP…" returnKeyType="done" />
-        </FormSection>
+        <FieldLabel>Vaccine</FieldLabel>
+        <TextField value={vaccName} onChangeText={setVaccName} placeholder="e.g. Rabies, FVRCP, DHPP…" returnKeyType="done" />
 
-        <FormSection label="Date given">
-          <DateField value={vaccGiven} onChange={setVaccGiven} mode="past" />
-        </FormSection>
+        <FieldLabel>Date given</FieldLabel>
+        <DateField value={vaccGiven} onChange={setVaccGiven} mode="past" />
 
-        <FormSection label="Next due (optional)" hint="With a next-due date, a reminder is created for the family automatically.">
-          <DateField value={vaccNext} onChange={setVaccNext} mode="future" allowClear />
-        </FormSection>
+        <FieldLabel>Next due (optional)</FieldLabel>
+        <DateField value={vaccNext} onChange={setVaccNext} mode="future" allowClear />
+        <Footnote>With a next-due date, a reminder is created for the family automatically.</Footnote>
 
         <SheetFooter>
           <AccentButton
@@ -747,27 +746,24 @@ export default function PetDetailPage() {
         <SheetTitle>Log a vet visit</SheetTitle>
         <SheetSubtitle>Builds {pet.name}&apos;s health history</SheetSubtitle>
 
-        <FormSection label="Date">
-          <DateField value={visitDate} onChange={setVisitDate} mode="past" />
-        </FormSection>
+        <FieldLabel>Date</FieldLabel>
+        <DateField value={visitDate} onChange={setVisitDate} mode="past" />
 
-        <FormSection label="Reason (optional)">
-          <TextField
-            value={visitReason}
-            onChangeText={setVisitReason}
-            placeholder="e.g. Annual checkup, limping, dental…"
-            returnKeyType="done"
-          />
-        </FormSection>
+        <FieldLabel>Reason (optional)</FieldLabel>
+        <TextField
+          value={visitReason}
+          onChangeText={setVisitReason}
+          placeholder="e.g. Annual checkup, limping, dental…"
+          returnKeyType="done"
+        />
 
-        <FormSection label="Vet or clinic (optional)">
-          <TextField
-            value={visitVet}
-            onChangeText={setVisitVet}
-            placeholder="e.g. Dr. Weber, Happy Paws Clinic"
-            returnKeyType="done"
-          />
-        </FormSection>
+        <FieldLabel>Vet or clinic (optional)</FieldLabel>
+        <TextField
+          value={visitVet}
+          onChangeText={setVisitVet}
+          placeholder="e.g. Dr. Weber, Happy Paws Clinic"
+          returnKeyType="done"
+        />
 
         <SheetFooter>
           <AccentButton
@@ -792,9 +788,8 @@ export default function PetDetailPage() {
         <SheetTitle>{pet.name}&apos;s birth date</SheetTitle>
         <SheetSubtitle>Age updates automatically from now on</SheetSubtitle>
 
-        <FormSection label="Born">
-          <DateField value={birthdayTs} onChange={setBirthdayTs} mode="past" />
-        </FormSection>
+        <FieldLabel>Born</FieldLabel>
+        <DateField value={birthdayTs} onChange={setBirthdayTs} mode="past" />
 
         <SheetFooter>
           <AccentButton
@@ -819,19 +814,17 @@ export default function PetDetailPage() {
         <SheetTitle>Past weight entry</SheetTitle>
         <SheetSubtitle>For {pet.name} — from an old vet note or memory</SheetSubtitle>
 
-        <FormSection label={`Weight (${weightUnitLabel(state.units)})`}>
-          <TextField
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            value={bfWeight}
-            onChangeText={setBfWeight}
-            returnKeyType="done"
-          />
-        </FormSection>
+        <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
+        <TextField
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          value={bfWeight}
+          onChangeText={setBfWeight}
+          returnKeyType="done"
+        />
 
-        <FormSection label="Date">
-          <DateField value={bfDate} onChange={setBfDate} mode="past" />
-        </FormSection>
+        <FieldLabel>Date</FieldLabel>
+        <DateField value={bfDate} onChange={setBfDate} mode="past" />
 
         <SheetFooter>
           <AccentButton

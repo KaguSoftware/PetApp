@@ -4,7 +4,7 @@ import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
 import {
   AccentButton,
-  FormSection,
+  FieldLabel,
   Group,
   IconCircle,
   Row,
@@ -73,17 +73,14 @@ export default function MedPickerSheet({
           <SheetTitle>New medication</SheetTitle>
           <SheetSubtitle>For {pet.name}</SheetSubtitle>
 
-          <FormSection label="Name">
-            <TextField value={name} onChangeText={setName} placeholder="e.g. Apoquel" returnKeyType="done" onSubmitEditing={saveNew} />
-          </FormSection>
+          <FieldLabel>Name</FieldLabel>
+          <TextField value={name} onChangeText={setName} placeholder="e.g. Apoquel" returnKeyType="done" onSubmitEditing={saveNew} />
 
-          <FormSection label="Dosage">
-            <TextField value={dosage} onChangeText={setDosage} placeholder="e.g. 16 mg (optional)" returnKeyType="done" onSubmitEditing={saveNew} />
-          </FormSection>
+          <FieldLabel>Dosage</FieldLabel>
+          <TextField value={dosage} onChangeText={setDosage} placeholder="e.g. 16 mg (optional)" returnKeyType="done" onSubmitEditing={saveNew} />
 
-          <FormSection label="Frequency">
-            <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
-          </FormSection>
+          <FieldLabel>Frequency</FieldLabel>
+          <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
 
           <SheetFooter>
             <View style={{ gap: 10 }}>

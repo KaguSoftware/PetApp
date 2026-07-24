@@ -20,8 +20,7 @@ import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
   Chevron,
-  ChipRow,
-  FormSection,
+  FieldLabel,
   Group,
   IconCircle,
   Row,
@@ -352,8 +351,8 @@ export default function LogsScreen() {
         <SheetTitle>Log an earlier action</SheetTitle>
         <SheetSubtitle>For {pet.name} — backfill something you forgot</SheetSubtitle>
 
-        <FormSection label="What happened">
-          <ChipRow>
+        <FieldLabel>What happened</FieldLabel>
+        <View style={styles.chipsWrap}>
           {retroActions
             .filter((t) => !(t === "meds" && pet.meds.length === 0))
             .map((type) => {
@@ -372,31 +371,30 @@ export default function LogsScreen() {
                 />
               );
             })}
-          </ChipRow>
-        </FormSection>
+        </View>
 
         {retroType === "meds" && pet.meds.length > 1 ? (
-          <FormSection label="Which med?">
-            <ChipRow>
+          <>
+            <FieldLabel>Which med?</FieldLabel>
+            <View style={styles.chipsWrap}>
               {pet.meds.map((m) => (
                 <SelectableChip key={m.id} label={m.name} selected={retroMedId === m.id} onPress={() => setRetroMedId(m.id)} />
               ))}
-            </ChipRow>
-          </FormSection>
+            </View>
+          </>
         ) : null}
 
-        <FormSection label="When">
-          <Segmented
-            options={[
-              { value: "today", label: "Earlier today" },
-              { value: "yesterday", label: "Yesterday" },
-            ]}
-            value={retroDay}
-            onChange={setRetroDay}
-          />
-          <TimeWheelPicker value={retroTime} onChange={setRetroTime} minuteStep={1} />
-          {retroTimeIsFuture ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
-        </FormSection>
+        <FieldLabel>When</FieldLabel>
+        <Segmented
+          options={[
+            { value: "today", label: "Earlier today" },
+            { value: "yesterday", label: "Yesterday" },
+          ]}
+          value={retroDay}
+          onChange={setRetroDay}
+        />
+        <TimeWheelPicker value={retroTime} onChange={setRetroTime} minuteStep={1} />
+        {retroTimeIsFuture ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
 
         <SheetFooter>
           <AccentButton
@@ -421,26 +419,24 @@ export default function LogsScreen() {
         <SheetTitle>Add visit details?</SheetTitle>
         <SheetSubtitle>Saved to {pet.name}&apos;s health history — skip if it was nothing</SheetSubtitle>
 
-        <FormSection label="Reason">
-          <TextField
-            value={vetReason}
-            onChangeText={setVetReason}
-            placeholder="e.g. Annual checkup, vaccination…"
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => vetClinicRef.current?.focus()}
-          />
-        </FormSection>
+        <FieldLabel>Reason</FieldLabel>
+        <TextField
+          value={vetReason}
+          onChangeText={setVetReason}
+          placeholder="e.g. Annual checkup, vaccination…"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => vetClinicRef.current?.focus()}
+        />
 
-        <FormSection label="Vet or clinic (optional)">
-          <TextField
-            ref={vetClinicRef}
-            value={vetClinic}
-            onChangeText={setVetClinic}
-            placeholder="e.g. Dr. Weber, Happy Paws Clinic"
-            returnKeyType="done"
-          />
-        </FormSection>
+        <FieldLabel>Vet or clinic (optional)</FieldLabel>
+        <TextField
+          ref={vetClinicRef}
+          value={vetClinic}
+          onChangeText={setVetClinic}
+          placeholder="e.g. Dr. Weber, Happy Paws Clinic"
+          returnKeyType="done"
+        />
 
         <SheetFooter>
           <View style={{ gap: 10 }}>
@@ -515,4 +511,5 @@ const styles = StyleSheet.create({
   emptyToday: { paddingHorizontal: 4, paddingVertical: 10 },
   emptyTodayText: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   footnote: { marginTop: 16, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

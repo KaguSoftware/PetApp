@@ -9,7 +9,6 @@ import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import {
   AccentButton,
   Chevron,
-  FormSection,
   Group,
   IconCircle,
   Row,
@@ -189,10 +188,8 @@ export default function AccountSettingsPage() {
       >
         <SheetTitle>Change password</SheetTitle>
         <View style={styles.form}>
-          <FormSection label="New password">
-            <TextField secureTextEntry placeholder="New password" value={newPw} onChangeText={setNewPw} />
-            <TextField secureTextEntry placeholder="Confirm new password" value={confirmPw} onChangeText={setConfirmPw} />
-          </FormSection>
+          <TextField secureTextEntry placeholder="New password" value={newPw} onChangeText={setNewPw} />
+          <TextField secureTextEntry placeholder="Confirm new password" value={confirmPw} onChangeText={setConfirmPw} />
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
           <AccentButton loading={busy} onPress={changePassword}>
             Update password
@@ -211,16 +208,14 @@ export default function AccountSettingsPage() {
         <SheetTitle>Change email</SheetTitle>
         <SheetSubtitle>We&apos;ll email a confirmation link to the new address before the change takes effect.</SheetSubtitle>
         <View style={styles.form}>
-          <FormSection label="New email">
-            <TextField
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="New email"
-              value={newEmail}
-              onChangeText={setNewEmail}
-            />
-          </FormSection>
+          <TextField
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="New email"
+            value={newEmail}
+            onChangeText={setNewEmail}
+          />
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
           <AccentButton loading={busy} onPress={changeEmail}>
             Send confirmation

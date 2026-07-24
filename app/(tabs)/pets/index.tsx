@@ -16,7 +16,7 @@ import {
   Chevron,
   Chip,
   CoinPill,
-  FormSection,
+  FieldLabel,
   Group,
   IconCircle,
   PRESS_SCALE_SMALL,
@@ -249,56 +249,51 @@ export default function PetsScreen() {
     >
       <SheetTitle>Add a pet</SheetTitle>
 
-      <FormSection label="Name">
-        <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
-      </FormSection>
+      <FieldLabel>Name</FieldLabel>
+      <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
 
-      <FormSection label="Species">
-        <SpeciesField
-          species={species}
-          onChangeSpecies={(s) => {
-            setSpecies(s);
-            setBreed(BREEDS_BY_SPECIES[s][0]);
-            setCustomBreed("");
-            prefillFor(s);
-          }}
-        />
-      </FormSection>
+      <FieldLabel>Species</FieldLabel>
+      <SpeciesField
+        species={species}
+        onChangeSpecies={(s) => {
+          setSpecies(s);
+          setBreed(BREEDS_BY_SPECIES[s][0]);
+          setCustomBreed("");
+          prefillFor(s);
+        }}
+      />
 
-      <FormSection
-        label="Breed"
-        hint={
-          isOtherBreed
-            ? "Not on the list — you'll set custom feeding/water/care targets on the Care tab."
-            : "This breed has a vet-built care plan."
-        }
-      >
-        <BreedField species={species} breed={breed} customBreed={customBreed} onChangeBreed={setBreed} onChangeCustomBreed={setCustomBreed} />
-      </FormSection>
+      <FieldLabel>Breed</FieldLabel>
+      <BreedField species={species} breed={breed} customBreed={customBreed} onChangeBreed={setBreed} onChangeCustomBreed={setCustomBreed} />
+      <Text style={styles.breedHint}>
+        {isOtherBreed
+          ? "Not on the list — you'll set custom feeding/water/care targets on the Care tab."
+          : "This breed has a vet-built care plan."}
+      </Text>
 
-      <FormSection label="Sex">
-        <Segmented
-          options={[
-            { value: "female", label: "Female" },
-            { value: "male", label: "Male" },
-          ]}
-          value={sex}
-          onChange={setSex}
-        />
-      </FormSection>
+      <FieldLabel>Sex</FieldLabel>
+      <Segmented
+        options={[
+          { value: "female", label: "Female" },
+          { value: "male", label: "Male" },
+        ]}
+        value={sex}
+        onChange={setSex}
+      />
 
       <View style={{ flexDirection: "row", gap: 12 }}>
-        <FormSection label="Age (years)" style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
+          <FieldLabel>Age (years)</FieldLabel>
           <TextField value={ageInput} onChangeText={setAgeInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="1" />
-        </FormSection>
-        <FormSection label={`Weight (${weightUnitLabel(state.units)})`} style={{ flex: 1 }}>
+        </View>
+        <View style={{ flex: 1 }}>
+          <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
           <TextField value={weightInput} onChangeText={setWeightInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="0" />
-        </FormSection>
+        </View>
       </View>
 
-      <FormSection label="Cup size (grams of food per cup)">
-        <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
-      </FormSection>
+      <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
+      <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
 
       <SheetFooter>
         <AccentButton
@@ -556,4 +551,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   itemButtonLabel: { fontSize: 13, fontFamily: font.semibold },
+  breedHint: { marginTop: 6, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
 });

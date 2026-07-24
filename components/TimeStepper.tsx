@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { PRESS_SCALE_SMALL, PressableScale, useSurface } from "@/components/ui";
+import { PRESS_SCALE_SMALL, PressableScale } from "@/components/ui";
 import { colors, font, radius } from "@/lib/theme";
 
 /**
@@ -21,9 +21,8 @@ export function Stepper({
   decDisabled?: boolean;
   accessibilityLabel: string;
 }) {
-  const onCard = useSurface() === "card";
   return (
-    <View style={[styles.stepper, onCard && styles.stepperOnCard]} accessibilityLabel={accessibilityLabel}>
+    <View style={styles.stepper} accessibilityLabel={accessibilityLabel}>
       <PressableScale
         scaleTo={PRESS_SCALE_SMALL}
         onPress={onDec}
@@ -94,8 +93,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 1,
   },
-  // Inset well when sitting on a FormSection card (figure/ground flip).
-  stepperOnCard: { backgroundColor: colors.bg, borderColor: colors.sep },
   stepperButton: { width: 44, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
   stepperSign: { fontSize: 20, fontFamily: font.semibold, color: colors.accentDeep, lineHeight: 22 },
   stepperValue: {

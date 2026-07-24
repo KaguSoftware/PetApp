@@ -10,8 +10,7 @@ import VoteControl from "@/components/VoteControl";
 import {
   AccentButton,
   Chip,
-  ChipRow,
-  FormSection,
+  FieldLabel,
   PressableScale,
   SelectableChip,
   SheetFooter,
@@ -225,19 +224,19 @@ export default function PostDetail() {
       <SheetSubtitle>Shown with your family ID{state.pets.length > 0 ? " (and pet breed, if you pick one)" : ""}.</SheetSubtitle>
 
       {state.pets.length > 0 ? (
-        <FormSection label="Answering about a pet? (optional)">
-          <ChipRow>
+        <>
+          <FieldLabel>Answering about a pet? (optional)</FieldLabel>
+          <View style={styles.petChips}>
             <SelectableChip label="No pet" selected={petId === null} onPress={() => setPetId(null)} />
             {state.pets.map((p) => (
               <SelectableChip key={p.id} label={`${speciesEmoji(p.species)} ${p.name}`} selected={p.id === petId} onPress={() => setPetId(p.id)} />
             ))}
-          </ChipRow>
-        </FormSection>
+          </View>
+        </>
       ) : null}
 
-      <FormSection label="Your answer">
-        <TextField value={body} onChangeText={setBody} placeholder="Share what worked for you…" multiline style={styles.multiline} maxLength={5000} />
-      </FormSection>
+      <FieldLabel>Your answer</FieldLabel>
+      <TextField value={body} onChangeText={setBody} placeholder="Share what worked for you…" multiline style={styles.multiline} maxLength={5000} />
 
       <SheetFooter>
         <AccentButton disabled={!canSubmit} loading={submitting} onPress={submit}>
@@ -330,6 +329,7 @@ const styles = StyleSheet.create({
   answerHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   answerBody: { fontSize: 15, fontFamily: font.regular, color: colors.label, lineHeight: 21 },
   answerFooter: { marginTop: 12, flexDirection: "row", alignItems: "center" },
+  petChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   multiline: { minHeight: 100, paddingTop: 12, textAlignVertical: "top" },
   deleteButton: { width: 34, height: 34, borderRadius: radius.full, backgroundColor: colors.redSoft, alignItems: "center", justifyContent: "center" },
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Sheet from "@/components/Sheet";
 import WheelPicker from "@/components/WheelPicker";
-import { AccentButton, FormSection, SheetFooter, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, FieldLabel, SheetFooter, SheetTitle, TextField } from "@/components/ui";
 
 /** Small tap-to-edit sheet for a single numeric pet stat (weight or age). */
 export default function EditStatSheet({
@@ -99,27 +99,26 @@ export default function EditStatSheet({
     <Sheet open={open} onClose={onClose} scrollable={!wheel}>
       <SheetTitle>{title}</SheetTitle>
 
-      <FormSection label={label}>
-        {wheel ? (
-          <WheelPicker
-            whole={wholeValues}
-            decimals={decimalValues}
-            value={wheelValue}
-            onChange={setWheelValue}
-            unit={unit}
-            decimalPlaces={decimalPlaces}
-          />
-        ) : (
-          <TextField
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            value={value}
-            onChangeText={setValue}
-            returnKeyType="done"
-            onSubmitEditing={save}
-          />
-        )}
-      </FormSection>
+      <FieldLabel>{label}</FieldLabel>
+      {wheel ? (
+        <WheelPicker
+          whole={wholeValues}
+          decimals={decimalValues}
+          value={wheelValue}
+          onChange={setWheelValue}
+          unit={unit}
+          decimalPlaces={decimalPlaces}
+        />
+      ) : (
+        <TextField
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          value={value}
+          onChangeText={setValue}
+          returnKeyType="done"
+          onSubmitEditing={save}
+        />
+      )}
 
       <SheetFooter>
         <AccentButton disabled={!valid} onPress={save}>

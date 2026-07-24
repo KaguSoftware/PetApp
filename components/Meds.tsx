@@ -6,7 +6,7 @@ import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
 import {
   AccentButton,
-  FormSection,
+  FieldLabel,
   Group,
   IconCircle,
   PRESS_SCALE_SMALL,
@@ -125,23 +125,20 @@ export default function Meds({ pet }: { pet: Pet }) {
         <SheetTitle>New med</SheetTitle>
         <SheetSubtitle>For {pet.name}</SheetSubtitle>
 
-        <FormSection label="Name">
-          <TextField value={name} onChangeText={setName} placeholder="e.g. Flea treatment" returnKeyType="done" onSubmitEditing={save} />
-        </FormSection>
+        <FieldLabel>Name</FieldLabel>
+        <TextField value={name} onChangeText={setName} placeholder="e.g. Flea treatment" returnKeyType="done" onSubmitEditing={save} />
 
-        <FormSection label="Dosage">
-          <TextField
-            value={dosage}
-            onChangeText={setDosage}
-            placeholder="e.g. 1 pipette (optional)"
-            returnKeyType="done"
-            onSubmitEditing={save}
-          />
-        </FormSection>
+        <FieldLabel>Dosage</FieldLabel>
+        <TextField
+          value={dosage}
+          onChangeText={setDosage}
+          placeholder="e.g. 1 pipette (optional)"
+          returnKeyType="done"
+          onSubmitEditing={save}
+        />
 
-        <FormSection label="Frequency">
-          <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
-        </FormSection>
+        <FieldLabel>Frequency</FieldLabel>
+        <SingleWheelPicker values={MED_FREQUENCIES} value={frequency} onChange={setFrequency} />
 
         <SheetFooter>
           <AccentButton disabled={!valid} onPress={save}>
