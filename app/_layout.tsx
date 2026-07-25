@@ -12,7 +12,7 @@ import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-c
 import NotificationSync from "@/components/NotificationSync";
 import { useNativeHeaderOptions } from "@/components/Screen";
 import Toasts from "@/components/Toasts";
-import { consumePendingInviteCode, setPendingInviteCode } from "@/lib/pendingInvite";
+import { consumePendingInvite, setPendingInvite, type PendingInvite } from "@/lib/pendingInvite";
 import { registerPushToken } from "@/lib/pushTokens";
 import { StoreProvider, useStore } from "@/lib/store";
 import { useColors, useNavTheme } from "@/lib/theme";
@@ -112,24 +112,32 @@ function InboundLinkWatcher() {
   const { session, ready } = useSession();
   const authRef = useRef({ session, ready });
   authRef.current = { session, ready };
-  const earlyRef = useRef<string | null>(null);
+  const earlyRef = useRef<PendingInvite | null>(null);
 
   useEffect(() => {
-    const stash = (code: string) => {
+    const stash = (invite: PendingInvite) => {
       if (!authRef.current.ready) {
-        earlyRef.current = code; // session restore in flight — decide once ready
+        earlyRef.current = invite; // session restore in flight — decide once ready
         return;
       }
-      if (!authRef.current.session) void setPendingInviteCode(code);
+      if (!authRef.current.session) void setPendingInvite(invite);
     };
     const handle = (url: string | null) => {
       if (!url) return;
       const parsed = Linking.parse(url);
+      // `petpal://join?code=…` puts "join" in the URL's HOST, leaving path
+      // empty — only the Expo Go shape (exp://host/--/join?code=…) fills path.
+      // Checking path alone silently dropped every real-build invite link.
       const path = (parsed.path ?? "").replace(/^\/+|\/+$/g, "");
-      if (path !== "join" && !path.endsWith("/join")) return;
-      const raw = parsed.queryParams?.code ?? parsed.queryParams?.f;
-      const code = Array.isArray(raw) ? raw[0] : raw;
-      if (code) stash(String(code));
+      const isJoin = path === "join" || path.endsWith("/join") || parsed.hostname === "join";
+      if (!isJoin) return;
+      const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+      // Kind matters: a legacy ?f= household UUID must NOT be replayed as an
+      // invite code (join.tsx would reformat it into a bogus XXXX-XXXX).
+      const code = first(parsed.queryParams?.code);
+      const legacy = first(parsed.queryParams?.f);
+      if (code) stash({ kind: "code", value: String(code) });
+      else if (legacy) stash({ kind: "f", value: String(legacy) });
     };
     Linking.getInitialURL().then(handle);
     const sub = Linking.addEventListener("url", (e) => handle(e.url));
@@ -138,7 +146,7 @@ function InboundLinkWatcher() {
 
   useEffect(() => {
     if (ready && earlyRef.current) {
-      if (!session) void setPendingInviteCode(earlyRef.current);
+      if (!session) void setPendingInvite(earlyRef.current);
       earlyRef.current = null;
     }
   }, [ready, session]);
@@ -152,8 +160,9 @@ function PendingInviteRunner() {
   const { hydrated } = useStore();
   useEffect(() => {
     if (!session || !hydrated) return;
-    consumePendingInviteCode().then((code) => {
-      if (code) router.push({ pathname: "/join", params: { code } });
+    consumePendingInvite().then((invite) => {
+      if (!invite) return;
+      router.push({ pathname: "/join", params: { [invite.kind]: invite.value } });
     });
   }, [session, hydrated]);
   return null;

@@ -127,6 +127,17 @@ export async function signUpWithEmail(
     options: { data: { name: name || "You", seed_demo: false } },
   });
   if (error) return { error: friendlyAuthError(error.message), needsVerification: false };
+  // With email confirmation on, signing up with an ALREADY-REGISTERED address
+  // returns no error at all — GoTrue hands back an obfuscated user with an
+  // empty `identities` array and no session, and sends nothing. Without this
+  // check the user is sent to the code screen to wait for an email that never
+  // arrives, with no hint that they should just log in.
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    return {
+      error: "An account with this email already exists. Try logging in instead.",
+      needsVerification: false,
+    };
+  }
   return { error: null, needsVerification: !data.session };
 }
 

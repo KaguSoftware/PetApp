@@ -180,6 +180,8 @@ interface Store {
   renameHousehold: (name: string) => void;
   /** Leave a household you're a member (not owner) of. Reloads on success. */
   leaveHousehold: (householdId: string) => Promise<boolean>;
+  /** Owner-only: permanently delete a household and everything in it. */
+  deleteHousehold: (householdId: string) => Promise<boolean>;
   /** Remove another account from the active household (admin+; owner for admins). */
   removeHouseholdMember: (targetUserId: string) => Promise<boolean>;
   /** Owner-only: promote/demote another account between admin and member. */
@@ -1034,7 +1036,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           resolvePendingRefreshes();
           toast("alert", "Couldn't load your households", "Pull to refresh to try again");
         }
-        lastLoadedKey = null; // retry on the next auth event
+        // BOTH must clear, or the in-flight guard above swallows every later
+        // auth event and this session never recovers without a full restart.
+        lastLoadedKey = null;
+        inFlightUserId = null;
         return;
       }
       type MembershipRow = {
@@ -1058,6 +1063,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           setHydrated(true);
           resolvePendingRefreshes();
         }
+        // This state legitimately changes from outside (the user redeems an
+        // invite, or onboarding creates a household), so the next auth event
+        // must be allowed to re-check rather than being deduped away.
+        lastLoadedKey = null;
+        inFlightUserId = null;
         return;
       }
 
@@ -1350,10 +1360,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         shortcuts,
         bookedVet: bookedVets.length > 0,
         bookedVetIds: bookedVets.map((b) => b.vet_id),
-        // Seen anywhere = seen: the per-user flag (0030) travels across
-        // households so switching never re-fires the intro; the household
-        // flag keeps veteran pre-0030 users (and the web demo) suppressed.
-        seenWelcome: (profile?.seen_welcome ?? false) || h.seen_welcome,
+        // The per-user flag (0030) is authoritative once the column exists —
+        // it travels across households (no intro re-fire on switch) AND lets
+        // "Replay intro" work for one person without resetting the family.
+        // Pre-0030 (or for a user_profiles row that predates it) fall back to
+        // the shared household flag, which is what the web demo still uses.
+        // (The `|| h.seen_welcome` keeps veterans suppressed: 0030 defaults
+        // every existing user_profiles row to false, which would otherwise
+        // replay the intro once for the whole userbase.)
+        seenWelcome: welcomeProfileSchemaRef.current
+          ? h.seen_welcome
+          : (profile?.seen_welcome ?? false) || h.seen_welcome,
         units: h.units,
         familyId: h.id,
         familyPasswordSet: !!h.family_password_hash,
@@ -2716,7 +2733,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const h = hid();
       // No rollback here: reverting would re-open the intro overlay mid-session.
       // A failed write just means the intro may replay on next load — harmless.
-      if (h)
+      //
+      // Only DISMISSAL is written to the shared household row (keeps the web
+      // demo and pre-0030 clients suppressed). "Replay intro" (seen=false) is
+      // deliberately per-user only — clearing the household flag would re-fire
+      // the full intro for everyone else in the family too.
+      // (Pre-0030 there is no per-user flag, so a replay has nowhere else to
+      // live and must still clear the household row.)
+      if (h && (seen || welcomeProfileSchemaRef.current))
         supabase
           .from("households")
           .update({ seen_welcome: seen })
@@ -2878,7 +2902,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // The RPC/fallback already set active_household_id; re-upsert is
       // idempotent and covers any replication lag on the pointer read.
       await supabase.from("user_profiles").upsert({ user_id: uid, active_household_id: newId });
+      // Point the ref at the new household IMMEDIATELY. The re-hydration below
+      // is async, and onboarding calls createInvite/addPet on the very next
+      // screen — without this, hid() still returns the old (or null) id and
+      // those writes silently target nothing.
+      // Flush FIRST, while hid() still names the outgoing household.
       flushCounters();
+      householdIdRef.current = newId;
       setReloadNonce((n) => n + 1);
       return true;
     },
@@ -2916,6 +2946,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       toast("home", "Left the household", "");
+      flushCounters();
+      setReloadNonce((n) => n + 1);
+      return true;
+    },
+    [supabase, toast, flushCounters]
+  );
+
+  const deleteHousehold = useCallback(
+    async (householdId: string) => {
+      const { error } = await supabase.rpc("delete_household", { hid: householdId });
+      if (error) {
+        if (isMissingFunction(error)) {
+          toast("alert", "Deleting a household needs the next backend update", "Apply migration 0028 to unlock this");
+        } else if ((error as { code?: string }).code === "42501") {
+          toast("alert", "Not allowed", "Only the owner can delete a household");
+        } else {
+          console.error("[petpal] delete_household failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't delete the household", "Please try again");
+        }
+        return false;
+      }
+      toast("check", "Household deleted", "");
       flushCounters();
       setReloadNonce((n) => n + 1);
       return true;
@@ -3190,6 +3242,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         createHousehold,
         renameHousehold,
         leaveHousehold,
+        deleteHousehold,
         removeHouseholdMember,
         setMemberRole,
         transferOwnership,

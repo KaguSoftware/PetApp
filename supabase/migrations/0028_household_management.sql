@@ -224,6 +224,43 @@ $$;
 revoke all on function public.transfer_ownership(uuid, uuid) from public;
 grant execute on function public.transfer_ownership(uuid, uuid) to authenticated;
 
+-- delete_household ------------------------------------------------------------------
+-- Owner-only. Without this, an owner of a second household has no way out:
+-- leave_household refuses owners, and the RLS DELETE policy alone can't be
+-- reached from the client without also exposing bulk deletes. Everything
+-- cascades from households (pets, activities, members, memberships, invites).
+
+create or replace function public.delete_household(hid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'not authenticated' using errcode = '28000';
+  end if;
+  if not public.has_household_role(hid, array['owner']) then
+    raise exception 'only the owner can delete a household' using errcode = '42501';
+  end if;
+
+  delete from households where id = hid;
+
+  -- Repoint anyone whose active household just vanished (the FK is ON DELETE
+  -- SET NULL, so their pointer would otherwise be null with memberships left).
+  update user_profiles p
+    set active_household_id = (
+      select household_id from household_members
+      where user_id = p.user_id order by joined_at asc limit 1
+    )
+    where p.active_household_id is null;
+end;
+$$;
+revoke all on function public.delete_household(uuid) from public;
+grant execute on function public.delete_household(uuid) to authenticated;
+
 -- prepare_account_deletion ------------------------------------------------------------
 -- SERVICE-ROLE ONLY. Called by the delete-account Edge Function BEFORE
 -- auth.admin.deleteUser so households.owner_id's ON DELETE CASCADE never

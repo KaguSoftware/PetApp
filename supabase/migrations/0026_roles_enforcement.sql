@@ -171,11 +171,17 @@ set search_path = public
 as $$
 begin
   if coalesce(current_setting('petpal.allow_multi_household', true), '') <> 'on'
-     and auth.uid() is not null
-     and exists (select 1 from households where owner_id = new.owner_id) then
-    raise unique_violation using
-      message = 'duplicate key value violates unique constraint "households_owner_id_key"',
-      constraint = 'households_owner_id_key';
+     and auth.uid() is not null then
+    -- Serialize concurrent bootstraps for the SAME owner, so two racing
+    -- inserts can't both pass the exists() check (the dropped UNIQUE index
+    -- used to provide this atomically). Transaction-scoped: released on
+    -- commit/rollback, and only ever contended per-owner.
+    perform pg_advisory_xact_lock(hashtextextended('petpal.household_owner', 0), hashtextextended(new.owner_id::text, 0));
+    if exists (select 1 from households where owner_id = new.owner_id) then
+      raise unique_violation using
+        message = 'duplicate key value violates unique constraint "households_owner_id_key"',
+        constraint = 'households_owner_id_key';
+    end if;
   end if;
   return new;
 end;

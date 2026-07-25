@@ -163,6 +163,7 @@ export default function FamilySettingsPage() {
     createHousehold,
     renameHousehold,
     leaveHousehold,
+    deleteHousehold,
     removeHouseholdMember,
     setMemberRole,
     transferOwnership,
@@ -557,6 +558,25 @@ export default function FamilySettingsPage() {
               subtitle={state.familyPasswordSet ? "Set — tap to change" : "Not set — tap to add one"}
               trailing={<Chevron />}
             />
+            {myRole === "owner" ? (
+              <Row
+                destructive
+                leading={<IconCircle icon="alert" tint={colors.red} bg={colors.redSoft} />}
+                title="Delete this household"
+                onPress={() =>
+                  confirmDestructive(
+                    `Delete ${activeHouseholdName}?`,
+                    state.accounts.length > 1
+                      ? `This removes the household for all ${state.accounts.length} members, along with every pet, log and reminder in it. This can't be undone.`
+                      : "Every pet, log and reminder in it is permanently deleted. This can't be undone.",
+                    "Delete",
+                    async () => {
+                      await deleteHousehold(state.activeHouseholdId);
+                    }
+                  )
+                }
+              />
+            ) : null}
           </Group>
           <Text style={styles.footnote}>
             Invite codes expire and can be revoked — prefer them over the permanent Family ID, which anyone can use to join.
@@ -704,7 +724,9 @@ export default function FamilySettingsPage() {
           </>
         ) : null}
 
-        {!inviteTarget && unclaimedCards.length > 0 ? (
+        {/* Stays mounted once a target is picked — hiding the row made the
+            choice irreversible without closing the whole sheet. */}
+        {unclaimedCards.length > 0 ? (
           <>
             <FieldLabel>For a specific card (optional)</FieldLabel>
             <View style={styles.chipRow}>
