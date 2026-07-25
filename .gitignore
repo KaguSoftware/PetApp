@@ -43,3 +43,6 @@ app-example
 /android
 .env
 supabase/.temp/
+
+# Stray media dropped into the project folder
+*.mp4
