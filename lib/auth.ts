@@ -2,6 +2,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 import type { UserIdentity } from "@supabase/supabase-js";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { supabase } from "@/lib/supabase";
@@ -92,29 +93,61 @@ function paramFromRedirect(url: string, key: string): string | null {
  * exchanges the returned PKCE code for a session. Shared by sign-in and
  * identity linking (both hand back the same ?code= shape). */
 async function completeBrowserOAuth(url: string, redirectTo: string): Promise<AuthResult> {
-  // On Android, Chrome Custom Tabs frequently reports `dismiss` even on a
-  // SUCCESSFUL redirect — the app is foregrounded by the deep link and the
-  // browser result races it. The redirect URL then arrives only through the
-  // Linking listener, so we race the two and take whichever produces a URL.
-  // Treating `type !== "success"` as a cancel silently swallowed every
-  // Android sign-in.
+  // The redirect can come back two ways, and on some devices ONLY the second:
+  //  1. WebBrowser resolves with {type:"success", url}
+  //  2. The OS deep-links the app and the URL arrives on the Linking listener
+  // Android Chrome Custom Tabs frequently reports "dismiss" even on a
+  // successful redirect (the deep link foregrounds the app and races the
+  // browser result), so the listener is armed BEFORE the browser opens and
+  // whichever fires first wins.
   let resolveUrl: (u: string | null) => void = () => {};
   const linkPromise = new Promise<string | null>((resolve) => {
     resolveUrl = resolve;
   });
   const sub = Linking.addEventListener("url", (e) => resolveUrl(e.url));
+  const waitForLink = (ms: number) =>
+    Promise.race([linkPromise, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
 
   let redirectUrl: string | null = null;
   try {
-    const result = await WebBrowser.openAuthSessionAsync(url, redirectTo);
-    if (result.type === "success") {
-      redirectUrl = result.url;
+    // Devices without Google Mobile Services (Huawei, some Android ROMs) have
+    // NO Custom Tabs provider at all. openAuthSessionAsync then either throws
+    // or opens a browser that never hands control back, so the sign-in appears
+    // to do nothing. Detect that up front and use the plain external browser,
+    // relying entirely on the deep link to return.
+    let hasCustomTabs = true;
+    if (Platform.OS === "android") {
+      try {
+        const browsers = await WebBrowser.getCustomTabsSupportingBrowsersAsync();
+        hasCustomTabs = (browsers.browserPackages?.length ?? 0) > 0;
+      } catch {
+        hasCustomTabs = false;
+      }
+    }
+
+    if (!hasCustomTabs) {
+      await Linking.openURL(url);
+      // No browser result to await — the deep link is the only signal. Allow
+      // a generous window: the user has to pick an account and sign in.
+      redirectUrl = await waitForLink(5 * 60 * 1000);
     } else {
-      // Give the deep link a moment to land before believing the dismissal.
-      redirectUrl = await Promise.race([
-        linkPromise,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),
-      ]);
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectTo);
+      if (result.type === "success") {
+        redirectUrl = result.url;
+      } else {
+        // Give the deep link a moment to land before believing the dismissal.
+        redirectUrl = await waitForLink(1200);
+      }
+    }
+  } catch (e) {
+    // openAuthSessionAsync throws when no browser can handle the intent.
+    console.warn("[petpal] browser auth session failed, falling back to deep link:", e);
+    try {
+      await Linking.openURL(url);
+      redirectUrl = await waitForLink(5 * 60 * 1000);
+    } catch {
+      sub.remove();
+      return { error: "Couldn't open a browser to sign in. Please use email sign-in instead." };
     }
   } finally {
     sub.remove();
