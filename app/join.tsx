@@ -4,24 +4,38 @@ import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { AccentButton } from "@/components/ui";
+import { AccentButton, FieldLabel, TextField } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { font, radius, floatShadow, useColors, type Colors } from "@/lib/theme";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** "abc1 2x.y" → "ABC1-2XY" — uppercase, strip non-alphanumerics, hyphen after 4. */
+function formatCode(raw: string): string {
+  const n = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  return n.length > 4 ? `${n.slice(0, 4)}-${n.slice(4)}` : n;
+}
+
 /**
- * Invite-link landing (petpal://join?f=<familyId>, mirroring the web's
- * /join?f=<familyId>). Lives inside the auth gate — the user is signed in.
+ * Invite landing + manual code entry. Reached from petpal://join?code=XXXX-XXXX
+ * deep links (replayed across sign-in by the root layout when needed), the
+ * onboarding "Join with a code" card, and Settings ▸ Family. Legacy
+ * ?f=<household uuid> links from the web demo still work via join_household.
  */
 export default function JoinPage() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
-  const { state, hydrated, joinHousehold } = useStore();
-  const params = useLocalSearchParams<{ f?: string }>();
-  const familyId = (typeof params.f === "string" ? params.f : "").trim();
+  const { state, hydrated, joinHousehold, redeemInvite } = useStore();
+  const params = useLocalSearchParams<{ code?: string; f?: string }>();
+  const legacyFamilyId = (typeof params.f === "string" ? params.f : "").trim();
+  const [code, setCode] = useState(() => formatCode(typeof params.code === "string" ? params.code : ""));
   const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Flips when the backend predates invite codes (migration 0027) — the form
+  // then falls back to pasting a Family ID.
+  const [legacyMode, setLegacyMode] = useState(false);
+  const [familyIdInput, setFamilyIdInput] = useState("");
 
   if (!hydrated) {
     return (
@@ -31,8 +45,102 @@ export default function JoinPage() {
     );
   }
 
-  const valid = UUID_RE.test(familyId);
-  const alreadyIn = valid && state.households.some((h) => h.id === familyId);
+  // --- Legacy web invite link: petpal://join?f=<uuid> ------------------------
+  if (legacyFamilyId) {
+    const valid = UUID_RE.test(legacyFamilyId);
+    const alreadyIn = valid && state.households.some((h) => h.id === legacyFamilyId);
+    return (
+      <PushedScreen title="Join household">
+        <View style={styles.card}>
+          <View style={styles.iconWrap}>
+            <Icon name="people" size={26} color={colors.accent} />
+          </View>
+          {!valid ? (
+            <>
+              <Text style={styles.title}>This invite link isn&apos;t valid</Text>
+              <Text style={styles.body}>Ask your family member to send a fresh invite from Settings ▸ Family.</Text>
+            </>
+          ) : alreadyIn ? (
+            <>
+              <Text style={styles.title}>You&apos;re already in this household</Text>
+              <Text style={styles.body}>Switch between your households any time from Settings ▸ Family.</Text>
+              <View style={styles.cta}>
+                <AccentButton variant="tinted" onPress={() => router.push("/settings/family")}>
+                  Open family settings
+                </AccentButton>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.title}>Join this household?</Text>
+              <Text style={styles.body}>
+                You&apos;ll see its pets, reminders, and family activity, and everything you log is shared with them. Your view
+                switches to the new household right away.
+              </Text>
+              <View style={styles.idPill}>
+                <Text style={styles.idPillLabel}>{legacyFamilyId.slice(0, 8)}…</Text>
+              </View>
+              <View style={styles.cta}>
+                <AccentButton
+                  loading={joining}
+                  onPress={async () => {
+                    setJoining(true);
+                    const ok = await joinHousehold(legacyFamilyId);
+                    if (!ok) {
+                      setJoining(false);
+                      return;
+                    }
+                    router.replace("/home");
+                  }}
+                >
+                  Join household
+                </AccentButton>
+              </View>
+            </>
+          )}
+        </View>
+      </PushedScreen>
+    );
+  }
+
+  // --- Invite code entry ------------------------------------------------------
+  async function handleRedeem() {
+    if (joining) return;
+    setError(null);
+    setJoining(true);
+    const result = await redeemInvite(code);
+    setJoining(false);
+    if (result.ok) {
+      router.replace("/home");
+      return;
+    }
+    if (result.reason === "unavailable") {
+      setLegacyMode(true);
+      setError(null);
+      return;
+    }
+    setError(
+      result.reason === "notFound"
+        ? "That code doesn't match any invite. Double-check it and try again."
+        : result.reason === "expired"
+          ? "This invite expired or was revoked — ask your family for a fresh one."
+          : "Couldn't join right now. Please try again."
+    );
+  }
+
+  async function handleLegacyJoin() {
+    if (joining) return;
+    setError(null);
+    const target = familyIdInput.trim();
+    if (!UUID_RE.test(target)) {
+      setError("That doesn't look like a Family ID — it's the long code from Settings ▸ Family.");
+      return;
+    }
+    setJoining(true);
+    const ok = await joinHousehold(target);
+    setJoining(false);
+    if (ok) router.replace("/home");
+  }
 
   return (
     <PushedScreen title="Join household">
@@ -40,58 +148,47 @@ export default function JoinPage() {
         <View style={styles.iconWrap}>
           <Icon name="people" size={26} color={colors.accent} />
         </View>
-        {!valid ? (
-          <>
-            <Text style={styles.title}>This invite link isn&apos;t valid</Text>
-            <Text style={styles.body}>
-              Ask your family member to send the invite again from Settings ▸ Family, or paste the Family ID there yourself.
-            </Text>
-            <View style={styles.cta}>
-              <AccentButton variant="tinted" onPress={() => router.push("/settings/family")}>
-                Open family settings
-              </AccentButton>
-            </View>
-          </>
-        ) : alreadyIn ? (
-          <>
-            <Text style={styles.title}>You&apos;re already in this household</Text>
-            <Text style={styles.body}>Switch between your households any time from Settings ▸ Family.</Text>
-            <View style={styles.cta}>
-              <AccentButton variant="tinted" onPress={() => router.push("/settings/family")}>
-                Open family settings
-              </AccentButton>
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Join this household?</Text>
-            <Text style={styles.body}>
-              You&apos;ll see its pets, reminders, and family activity, and everything you log is shared with them. Your view switches
-              to the new household right away.
-            </Text>
-            <View style={styles.idPill}>
-              <Text style={styles.idPillLabel}>{familyId.slice(0, 8)}…</Text>
-            </View>
-            <View style={styles.cta}>
-              <AccentButton
-                loading={joining}
-                onPress={async () => {
-                  setJoining(true);
-                  const ok = await joinHousehold(familyId);
-                  if (!ok) {
-                    setJoining(false);
-                    return;
-                  }
-                  // Land on Home in the newly-active household rather than
-                  // leaving the user parked on the (now stale) invite page.
-                  router.replace("/home");
-                }}
-              >
-                Join household
-              </AccentButton>
-            </View>
-          </>
-        )}
+        <Text style={styles.title}>Enter your invite code</Text>
+        <Text style={styles.body}>
+          Ask a family member for a code — they can create one from Settings ▸ Family ▸ Invite. Codes look like ABCD-EFGH.
+        </Text>
+        <View style={styles.form}>
+          {legacyMode ? (
+            <>
+              <FieldLabel>Family ID</FieldLabel>
+              <TextField
+                value={familyIdInput}
+                onChangeText={setFamilyIdInput}
+                placeholder="Paste the Family ID"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={handleLegacyJoin}
+              />
+              <Text style={styles.hint}>Invite codes go live with the next backend update — the Family ID works today.</Text>
+            </>
+          ) : (
+            <TextField
+              value={code}
+              onChangeText={(t) => {
+                setCode(formatCode(t));
+                setError(null);
+              }}
+              placeholder="XXXX-XXXX"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={styles.codeInput}
+              onSubmitEditing={handleRedeem}
+            />
+          )}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <AccentButton
+            loading={joining}
+            disabled={legacyMode ? !familyIdInput.trim() : code.replace(/[^A-Z0-9]/g, "").length !== 8}
+            onPress={legacyMode ? handleLegacyJoin : handleRedeem}
+          >
+            Join household
+          </AccentButton>
+        </View>
       </View>
     </PushedScreen>
   );
@@ -118,6 +215,10 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     color: colors.label2,
     textAlign: "center",
   },
+  form: { marginTop: 20, width: "100%", gap: 12 },
+  codeInput: { textAlign: "center", fontSize: 20, fontFamily: font.bold, letterSpacing: 3 },
+  hint: { fontSize: 12.5, fontFamily: font.regular, color: colors.label3, lineHeight: 17, paddingHorizontal: 2 },
+  error: { color: colors.red, fontSize: 14, fontFamily: font.medium, paddingHorizontal: 2 },
   idPill: { marginTop: 12, borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 12, paddingVertical: 4 },
   idPillLabel: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
   cta: { marginTop: 24, width: "100%" },

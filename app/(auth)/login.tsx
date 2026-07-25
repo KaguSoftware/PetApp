@@ -3,6 +3,7 @@ import BrandMark from "@/components/BrandMark";
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthProviderButtons from "@/components/AuthProviderButtons";
 import { AccentButton, TextField } from "@/components/ui";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { supabase } from "@/lib/supabase";
@@ -60,6 +61,18 @@ export default function LoginScreen() {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <AccentButton onPress={handleSubmit} loading={loading} disabled={!email || !password}>Log in</AccentButton>
+          <Link
+            href={{ pathname: "/(auth)/forgot", params: email ? { email } : undefined }}
+            style={styles.forgotLink}
+          >
+            Forgot password?
+          </Link>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerLabel}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <AuthProviderButtons onError={setError} disabled={loading} />
         </View>
         <View style={styles.footer}>
           <Text style={styles.footerText}>New to PetPal? </Text>
@@ -79,6 +92,17 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   subtitle: { marginTop: 6, fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   form: { gap: 12 },
   error: { color: colors.red, fontSize: 14, fontFamily: font.medium, textAlign: "left", paddingHorizontal: 4 },
+  forgotLink: {
+    fontSize: 14,
+    fontFamily: font.semibold,
+    color: colors.accent,
+    textAlign: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.sep },
+  dividerLabel: { fontSize: 13, fontFamily: font.medium, color: colors.label3 },
   footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 12 },
   footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   // Padding lifts the link's tap target to >=44pt without shifting the baseline row.

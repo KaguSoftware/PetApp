@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
+import { Alert, Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import BreedField from "@/components/BreedField";
@@ -19,6 +19,7 @@ import {
   Row,
   SectionHeader,
   Segmented,
+  SelectableChip,
   SheetSubtitle,
   SheetTitle,
   SmallButton,
@@ -30,7 +31,7 @@ import {
   formatMemberRoles,
   formatWeight,
   FUN_ROLE_EXAMPLES,
-  isAdminRole,
+  isUnclaimedCard,
   kgToUnit,
   NO_FUN_ROLE,
   OTHER_BREED,
@@ -38,16 +39,13 @@ import {
   parseMemberRoles,
   unitToKg,
   weightUnitLabel,
+  type HouseholdAccount,
+  type HouseholdInvite,
   type Member,
   type Pet,
 } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
-
-// The web builds its invite link as `${window.location.origin}/join?f=<familyId>`;
-// on native the deployed web origin is fixed here. The app itself opens
-// petpal://join?f=<id> (app.json scheme "petpal" → app/join.tsx).
-const WEB_ORIGIN = "https://petpal.app";
 
 const CAREGIVER_TERMS_TEXT = `By assigning the Pet caregiver role to a household member, you acknowledge and agree to the following:
 
@@ -60,6 +58,8 @@ You are solely responsible for deciding who you trust with this role. Only assig
 The Pet caregiver role is currently a label only, with no special app permissions attached. Assigning or removing it does not grant or restrict access to any account, billing, or household-management features.
 
 By tapping "Accept terms and conditions" below, you confirm that you understand and agree to the above.`;
+
+const ROLE_LABEL: Record<HouseholdAccount["role"], string> = { owner: "Owner", admin: "Admin", member: "Member" };
 
 /** Labelled text field — FieldLabel + TextField primitives plus an optional hint line. */
 function Field({
@@ -123,6 +123,19 @@ function CaregiverTermsView({ onAccept, onBack }: { onAccept: () => void; onBack
   );
 }
 
+/** Small role pill shown on account rows ("Owner" / "Admin" / "Member"). */
+function RoleBadge({ role }: { role: HouseholdAccount["role"] }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const owner = role === "owner";
+  const admin = role === "admin";
+  return (
+    <View style={[styles.roleBadge, (owner || admin) && { backgroundColor: colors.accentSoft }]}>
+      <Text style={[styles.roleBadgeLabel, (owner || admin) && { color: colors.accentDeep }]}>{ROLE_LABEL[role]}</Text>
+    </View>
+  );
+}
+
 /* -- Local date helper -- birth-date entry now uses the shared <DateField>. -- */
 
 function atNoon(d: Date) {
@@ -138,7 +151,7 @@ export default function FamilySettingsPage() {
   const {
     state,
     hydrated,
-    switchMember,
+    userId,
     editPet,
     deletePet,
     addMember,
@@ -146,14 +159,18 @@ export default function FamilySettingsPage() {
     removeMember,
     setFamilyPassword,
     verifyFamilyPassword,
-    joinHousehold,
     setActiveHousehold,
+    createHousehold,
+    renameHousehold,
+    leaveHousehold,
+    removeHouseholdMember,
+    setMemberRole,
+    transferOwnership,
+    createInvite,
+    fetchInvites,
+    revokeInvite,
     toast,
   } = useStore();
-
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [joinId, setJoinId] = useState("");
-  const [joining, setJoining] = useState(false);
 
   // Lock gate — component-local so it resets whenever the user leaves the page.
   const [unlocked, setUnlocked] = useState(false);
@@ -161,8 +178,10 @@ export default function FamilySettingsPage() {
   const [unlockError, setUnlockError] = useState("");
   const [unlocking, setUnlocking] = useState(false);
 
-  const currentMember = state.members.find((m) => m.id === state.currentMemberId);
-  const isAdmin = !!currentMember && isAdminRole(currentMember.role);
+  // The ENFORCED role (household_members.role, RLS-backed from 0026) — the
+  // free-text card chips are cosmetic and grant nothing.
+  const myRole = state.myRole;
+  const canManage = myRole === "owner" || myRole === "admin";
 
   const [familyPwOpen, setFamilyPwOpen] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
@@ -248,6 +267,35 @@ export default function FamilySettingsPage() {
     }
   };
 
+  // Account management sheet (tap a signed-in family member).
+  const [managing, setManaging] = useState<HouseholdAccount | null>(null);
+  const [managingBusy, setManagingBusy] = useState(false);
+
+  // Invite sheet.
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
+  const [inviteTarget, setInviteTarget] = useState<string | null>(null);
+  const [inviteExpiry, setInviteExpiry] = useState<24 | 168>(168);
+  const [inviteUses, setInviteUses] = useState<"multi" | "single">("multi");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [activeInvites, setActiveInvites] = useState<HouseholdInvite[]>([]);
+
+  const openInvite = (targetMemberId?: string) => {
+    setInviteRole("member");
+    setInviteTarget(targetMemberId ?? null);
+    setInviteExpiry(168);
+    setInviteUses("multi");
+    setInviteOpen(true);
+    fetchInvites().then(setActiveInvites);
+  };
+
+  // Household create/rename sheets.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameInput, setRenameInput] = useState("");
+
   // Assigning "Pet caregiver" requires accepting the liability disclaimer first —
   // the Save button itself turns into the "Terms and conditions" prompt until then.
   const newMemberCaregiverGateActive = newMemberIsCaregiver && !newMemberTermsAccepted;
@@ -323,17 +371,6 @@ export default function FamilySettingsPage() {
     );
   }
 
-  const shareInvite = async () => {
-    if (!state.familyId) return;
-    const url = `${WEB_ORIGIN}/join?f=${state.familyId}`;
-    const text = "Join our PetPal household to share pet care:";
-    try {
-      await Share.share({ title: "Join our PetPal family", message: `${text} ${url}\nIn the app: petpal://join?f=${state.familyId}` });
-    } catch {
-      // user closed the OS sheet — that's a cancel, not a failure
-    }
-  };
-
   const shareFamilyId = async () => {
     if (!state.familyId) return;
     try {
@@ -343,40 +380,120 @@ export default function FamilySettingsPage() {
     }
   };
 
+  const shareInviteCode = async (invite: HouseholdInvite) => {
+    const expiry = invite.expiresAt - Date.now() > 26 * 3_600_000 ? "7 days" : "24 hours";
+    try {
+      await Share.share({
+        message: `Join our PetPal household — invite code ${invite.code} (valid ${expiry}). In the app: petpal://join?code=${invite.code}`,
+      });
+    } catch {
+      // cancelled
+    }
+  };
+
+  async function handleCreateInvite() {
+    if (inviteBusy) return;
+    setInviteBusy(true);
+    const invite = await createInvite({
+      role: inviteRole,
+      targetMemberId: inviteTarget ?? undefined,
+      ttlHours: inviteExpiry,
+      // Claim-a-card invites are single-use by definition (server enforces too).
+      maxUses: inviteTarget || inviteUses === "single" ? 1 : undefined,
+    });
+    setInviteBusy(false);
+    if (!invite) return;
+    setActiveInvites((prev) => [invite, ...prev]);
+    await shareInviteCode(invite);
+  }
+
+  // Sorted: owner first, then admins, then members; ties by tenure.
+  const sortedAccounts = [...state.accounts].sort((a, b) => {
+    const rank = (r: HouseholdAccount["role"]) => (r === "owner" ? 0 : r === "admin" ? 1 : 2);
+    return rank(a.role) - rank(b.role) || a.joinedAt - b.joinedAt;
+  });
+  const unclaimedCards = state.members.filter((m) => isUnclaimedCard(m.id, state.accounts));
+  const cardFor = (a: HouseholdAccount) => (a.memberId ? state.members.find((m) => m.id === a.memberId) : undefined);
+  const managingCard = managing ? cardFor(managing) : undefined;
+  const managingIsSelf = managing?.userId === userId;
+  const activeHouseholdName = state.households.find((h) => h.id === state.activeHouseholdId)?.name ?? "Household";
+
+  const confirmDestructive = (title: string, message: string, actionLabel: string, action: () => void) => {
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel" },
+      { text: actionLabel, style: "destructive", onPress: action },
+    ]);
+  };
+
   return (
     <PushedScreen title="Family">
-      {/* Members */}
-      <SectionHeader trailing={<SmallButton label="Add member" onPress={() => setAddMemberOpen(true)} />}>Members</SectionHeader>
+      {/* Signed-in family accounts */}
+      <SectionHeader trailing={canManage ? <SmallButton label="Invite" onPress={() => openInvite()} /> : undefined}>
+        Family
+      </SectionHeader>
       <Group>
-        {state.members.map((m) => {
-          const active = m.id === state.currentMemberId;
+        {sortedAccounts.map((a) => {
+          const card = cardFor(a);
+          const isSelf = a.userId === userId;
           return (
             <Row
-              key={m.id}
-              onPress={() => {
-                if (!active) {
-                  switchMember(m.id);
-                  toast("person", `Viewing as ${m.name}`, "Actions will be logged as them");
-                }
-              }}
-              leading={<InitialAvatar name={m.name} gradient={m.gradient} size={38} />}
-              title={m.name}
-              subtitle={m.role}
-              // "Edit" must win its own taps; the row switches member.
-              interactiveTrailing
+              key={a.userId}
+              onPress={() => setManaging(a)}
+              leading={
+                card ? (
+                  <InitialAvatar name={card.name} gradient={card.gradient} size={38} />
+                ) : (
+                  <IconCircle icon="person" tint={colors.label2} bg={colors.fill} size={38} />
+                )
+              }
+              title={`${card?.name ?? "Family member"}${isSelf ? " (you)" : ""}`}
+              subtitle={`Joined ${new Date(a.joinedAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`}
               trailing={
                 <View style={styles.rowActions}>
-                  <SmallButton label="Edit" tone="gray" onPress={() => openEditMember(m)} />
-                  {active ? <Icon name="check" size={18} color={colors.accent} /> : null}
+                  <RoleBadge role={a.role} />
+                  <Chevron />
                 </View>
               }
             />
           );
         })}
       </Group>
-      <Text style={styles.footnote}>Tap a member to view the demo as them, or Edit to manage them.</Text>
+      <Text style={styles.footnote}>
+        Everyone here has their own PetPal account. Roles are enforced — only the owner and admins can invite or manage.
+      </Text>
 
-      {/* Households the user belongs to + join another */}
+      {/* Cards without an account (kids, grandparents, …) */}
+      <SectionHeader trailing={<SmallButton label="Add" tone="gray" onPress={() => setAddMemberOpen(true)} />}>
+        Family without the app
+      </SectionHeader>
+      <Group>
+        {unclaimedCards.length === 0 ? (
+          <Row title="No cards yet" subtitle="Add family who don't use the app — they still show up in care logs" />
+        ) : (
+          unclaimedCards.map((m) => (
+            <Row
+              key={m.id}
+              onPress={() => openEditMember(m)}
+              leading={<InitialAvatar name={m.name} gradient={m.gradient} size={38} />}
+              title={m.name}
+              subtitle={m.role}
+              interactiveTrailing
+              trailing={
+                canManage ? (
+                  <SmallButton label="Invite to claim" tone="gray" onPress={() => openInvite(m.id)} />
+                ) : (
+                  <Chevron />
+                )
+              }
+            />
+          ))
+        )}
+      </Group>
+      <Text style={styles.footnote}>
+        When they get the app, send a claim invite — they sign in and become this card, keeping its history.
+      </Text>
+
+      {/* Households the user belongs to + create/join */}
       <SectionHeader>Households</SectionHeader>
       <Group>
         {state.households.map((hh) => {
@@ -387,39 +504,51 @@ export default function FamilySettingsPage() {
               onPress={active ? undefined : () => setActiveHousehold(hh.id)}
               leading={<IconCircle icon="people" tint={colors.label2} bg={colors.fill} />}
               title={hh.name}
-              subtitle={active ? "Current household" : "Tap to switch"}
+              subtitle={`${ROLE_LABEL[hh.role]}${active ? " · Current household" : " · Tap to switch"}`}
               trailing={active ? <Icon name="check" size={18} color={colors.accent} /> : <Chevron />}
             />
           );
         })}
         <Row
+          onPress={() => router.push("/join")}
+          leading={<IconCircle icon="people" tint={colors.green} bg={colors.greenSoft} />}
+          title="Join a household"
+          subtitle="Enter an invite code someone shared with you"
+          trailing={<Chevron />}
+        />
+        <Row
           onPress={() => {
-            setJoinId("");
-            setJoinOpen(true);
+            setCreateName("");
+            setCreateOpen(true);
           }}
           leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
-          title="Join a household"
-          subtitle="Enter a Family ID someone shared with you"
+          title="Create a household"
+          subtitle="Start a separate home for other pets"
           trailing={<Chevron />}
         />
       </Group>
 
-      {/* Family ID + admin password — admin role only */}
-      {isAdmin && (
+      {/* Household management — admin+ only */}
+      {canManage && (
         <>
           <SectionHeader>Household</SectionHeader>
           <Group>
             <Row
+              onPress={() => {
+                setRenameInput(activeHouseholdName);
+                setRenameOpen(true);
+              }}
+              leading={<IconCircle icon="home" tint={colors.label2} bg={colors.fill} />}
+              title="Household name"
+              subtitle={activeHouseholdName}
+              trailing={<Chevron />}
+            />
+            <Row
               leading={<IconCircle icon="people" tint={colors.label2} bg={colors.fill} />}
               title="Family ID"
-              subtitle={state.familyId ? `${state.familyId.slice(0, 8)}…` : "Loading…"}
-              trailing={
-                <View style={styles.rowActions}>
-                  {/* Native has no clipboard dependency — sharing the raw ID replaces the web's Copy. */}
-                  <SmallButton label="Share" tone="gray" onPress={shareFamilyId} />
-                  <SmallButton label="Invite" onPress={shareInvite} />
-                </View>
-              }
+              subtitle={state.familyId ? `For the web app · ${state.familyId.slice(0, 8)}…` : "Loading…"}
+              interactiveTrailing
+              trailing={<SmallButton label="Share" tone="gray" onPress={shareFamilyId} />}
             />
             <Row
               onPress={() => setFamilyPwOpen(true)}
@@ -430,7 +559,7 @@ export default function FamilySettingsPage() {
             />
           </Group>
           <Text style={styles.footnote}>
-            Share the Family ID so others can find this household. Only admins can see this and lock it with a password.
+            Invite codes expire and can be revoked — prefer them over the permanent Family ID, which anyone can use to join.
           </Text>
         </>
       )}
@@ -439,11 +568,6 @@ export default function FamilySettingsPage() {
       <SectionHeader>Pets</SectionHeader>
       <Group>
         {state.pets.map((p) => (
-          // The row itself opens the pet (the primary, most-expected action) and
-          // "Edit" is the explicit secondary. Previously the row opened the edit
-          // sheet while a nested "View" button tried to navigate — two live
-          // handlers on the same pixels, and on Android the row usually won, so
-          // "View" opened the editor instead of the pet.
           <Row
             key={p.id}
             onPress={() => router.push(`/pet/${p.id}`)}
@@ -458,6 +582,237 @@ export default function FamilySettingsPage() {
       <Text style={styles.footnote}>Tap a pet for full details, or Edit to change its info.</Text>
 
       <View style={{ height: 16 }} />
+
+      {/* Manage a signed-in account */}
+      <Sheet open={managing !== null} onClose={() => setManaging(null)}>
+        {managing && (
+          <>
+            <SheetTitle>{managingCard?.name ?? "Family member"}</SheetTitle>
+            <SheetSubtitle>
+              {ROLE_LABEL[managing.role]} · joined{" "}
+              {new Date(managing.joinedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+            </SheetSubtitle>
+            <Group style={{ marginTop: 16 }}>
+              {managingCard && (managingIsSelf || canManage) ? (
+                <Row
+                  onPress={() => {
+                    setManaging(null);
+                    openEditMember(managingCard);
+                  }}
+                  leading={<IconCircle icon="person" tint={colors.label2} bg={colors.fill} />}
+                  title="Edit card"
+                  subtitle="Name and cosmetic roles"
+                  trailing={<Chevron />}
+                />
+              ) : null}
+              {myRole === "owner" && !managingIsSelf && managing.role !== "owner" ? (
+                <>
+                  <Row
+                    onPress={async () => {
+                      if (managingBusy) return;
+                      setManagingBusy(true);
+                      await setMemberRole(managing.userId, managing.role === "admin" ? "member" : "admin");
+                      setManagingBusy(false);
+                      setManaging(null);
+                    }}
+                    leading={<IconCircle icon="star" tint={colors.accent} bg={colors.accentSoft} />}
+                    title={managing.role === "admin" ? "Make member" : "Make admin"}
+                    subtitle={managing.role === "admin" ? "Removes invite & manage powers" : "Can invite and manage members"}
+                    trailing={<Chevron />}
+                  />
+                  <Row
+                    onPress={() =>
+                      confirmDestructive(
+                        "Transfer ownership?",
+                        `${managingCard?.name ?? "This member"} becomes the owner of ${activeHouseholdName}; you stay on as an admin.`,
+                        "Transfer",
+                        async () => {
+                          await transferOwnership(managing.userId);
+                          setManaging(null);
+                        }
+                      )
+                    }
+                    leading={<IconCircle icon="home" tint={colors.orange} bg={colors.orangeSoft} />}
+                    title="Transfer ownership"
+                    subtitle="They become the owner; you become an admin"
+                    trailing={<Chevron />}
+                  />
+                </>
+              ) : null}
+              {!managingIsSelf && (myRole === "owner" || (myRole === "admin" && managing.role === "member")) ? (
+                <Row
+                  destructive
+                  onPress={() =>
+                    confirmDestructive(
+                      "Remove from household?",
+                      `${managingCard?.name ?? "This member"} loses access to ${activeHouseholdName}. Their card and logged history stay.`,
+                      "Remove",
+                      async () => {
+                        await removeHouseholdMember(managing.userId);
+                        setManaging(null);
+                      }
+                    )
+                  }
+                  leading={<IconCircle icon="alert" tint={colors.red} bg={colors.redSoft} />}
+                  title="Remove from household"
+                />
+              ) : null}
+              {managingIsSelf && myRole !== "owner" ? (
+                <Row
+                  destructive
+                  onPress={() =>
+                    confirmDestructive(
+                      "Leave this household?",
+                      `You'll lose access to ${activeHouseholdName}. Your card and logged history stay for the family.`,
+                      "Leave",
+                      async () => {
+                        const ok = await leaveHousehold(state.activeHouseholdId);
+                        if (ok) setManaging(null);
+                      }
+                    )
+                  }
+                  leading={<IconCircle icon="alert" tint={colors.red} bg={colors.redSoft} />}
+                  title="Leave household"
+                />
+              ) : null}
+            </Group>
+            {managingIsSelf && myRole === "owner" ? (
+              <Text style={styles.footnote}>
+                Owners can{"'"}t leave — transfer ownership to another member first (tap them, then Transfer ownership).
+              </Text>
+            ) : null}
+          </>
+        )}
+      </Sheet>
+
+      {/* Invite sheet */}
+      <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)}>
+        <SheetTitle>Invite family</SheetTitle>
+        <SheetSubtitle>
+          {inviteTarget
+            ? `This code lets one person claim ${state.members.find((m) => m.id === inviteTarget)?.name ?? "the card"} — history included.`
+            : "Share one code with the whole family, or lock it to a single use."}
+        </SheetSubtitle>
+
+        {myRole === "owner" ? (
+          <>
+            <FieldLabel>Role</FieldLabel>
+            <View style={styles.chipRow}>
+              <SelectableChip label="Member" selected={inviteRole === "member"} onPress={() => setInviteRole("member")} />
+              <SelectableChip label="Admin" selected={inviteRole === "admin"} onPress={() => setInviteRole("admin")} />
+            </View>
+          </>
+        ) : null}
+
+        {!inviteTarget && unclaimedCards.length > 0 ? (
+          <>
+            <FieldLabel>For a specific card (optional)</FieldLabel>
+            <View style={styles.chipRow}>
+              {unclaimedCards.map((m) => (
+                <SelectableChip
+                  key={m.id}
+                  label={m.name}
+                  selected={inviteTarget === m.id}
+                  onPress={() => setInviteTarget((prev) => (prev === m.id ? null : m.id))}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <FieldLabel>Expires</FieldLabel>
+        <View style={styles.chipRow}>
+          <SelectableChip label="7 days" selected={inviteExpiry === 168} onPress={() => setInviteExpiry(168)} />
+          <SelectableChip label="24 hours" selected={inviteExpiry === 24} onPress={() => setInviteExpiry(24)} />
+        </View>
+
+        {!inviteTarget ? (
+          <>
+            <FieldLabel>Uses</FieldLabel>
+            <View style={styles.chipRow}>
+              <SelectableChip label="Whole family" selected={inviteUses === "multi"} onPress={() => setInviteUses("multi")} />
+              <SelectableChip label="One person" selected={inviteUses === "single"} onPress={() => setInviteUses("single")} />
+            </View>
+          </>
+        ) : null}
+
+        {activeInvites.length > 0 ? (
+          <>
+            <FieldLabel>Active invites</FieldLabel>
+            <Group>
+              {activeInvites.map((inv) => (
+                <Row
+                  key={inv.id}
+                  title={inv.code}
+                  subtitle={`${inv.role === "admin" ? "Admin · " : ""}${
+                    inv.targetMemberId ? "Claim invite · " : ""
+                  }expires ${new Date(inv.expiresAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}${
+                    inv.maxUses ? ` · ${inv.useCount}/${inv.maxUses} used` : ""
+                  }`}
+                  interactiveTrailing
+                  trailing={
+                    <View style={styles.rowActions}>
+                      <SmallButton label="Share" tone="gray" onPress={() => shareInviteCode(inv)} />
+                      <SmallButton
+                        label="Revoke"
+                        tone="gray"
+                        onPress={async () => {
+                          const ok = await revokeInvite(inv.id);
+                          if (ok) setActiveInvites((prev) => prev.filter((i) => i.id !== inv.id));
+                        }}
+                      />
+                    </View>
+                  }
+                />
+              ))}
+            </Group>
+          </>
+        ) : null}
+
+        <View style={{ marginTop: 28 }}>
+          <AccentButton loading={inviteBusy} onPress={handleCreateInvite}>
+            Create & share code
+          </AccentButton>
+        </View>
+      </Sheet>
+
+      {/* Create household */}
+      <Sheet open={createOpen} onClose={() => setCreateOpen(false)}>
+        <SheetTitle>Create a household</SheetTitle>
+        <SheetSubtitle>A fresh, empty home — your other households aren{"'"}t affected.</SheetSubtitle>
+        <Field label="Name" value={createName} onChangeText={setCreateName} placeholder="e.g. The lake house" style={{ marginTop: 8 }} />
+        <View style={{ marginTop: 28 }}>
+          <AccentButton
+            disabled={!createName.trim()}
+            loading={createBusy}
+            onPress={async () => {
+              setCreateBusy(true);
+              const ok = await createHousehold(createName);
+              setCreateBusy(false);
+              if (ok) setCreateOpen(false);
+            }}
+          >
+            Create household
+          </AccentButton>
+        </View>
+      </Sheet>
+
+      {/* Rename household */}
+      <Sheet open={renameOpen} onClose={() => setRenameOpen(false)}>
+        <SheetTitle>Rename household</SheetTitle>
+        <Field label="Name" value={renameInput} onChangeText={setRenameInput} style={{ marginTop: 8 }} />
+        <View style={{ marginTop: 28 }}>
+          <AccentButton
+            disabled={!renameInput.trim()}
+            onPress={() => {
+              renameHousehold(renameInput);
+              setRenameOpen(false);
+            }}
+          >
+            Save name
+          </AccentButton>
+        </View>
+      </Sheet>
 
       {/* Edit pet */}
       <Sheet open={editingPet !== null} onClose={() => setEditingPet(null)}>
@@ -615,7 +970,7 @@ export default function FamilySettingsPage() {
         )}
       </Sheet>
 
-      {/* Add member */}
+      {/* Add card (family without the app) */}
       <Sheet
         open={addMemberOpen}
         onClose={() => {
@@ -633,11 +988,12 @@ export default function FamilySettingsPage() {
           />
         ) : (
           <>
-            <SheetTitle>Add a member</SheetTitle>
+            <SheetTitle>Add a family card</SheetTitle>
+            <SheetSubtitle>For family who don{"'"}t use the app — they appear in care logs and can claim the card later.</SheetSubtitle>
 
             <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
 
-            <FieldLabel>Role</FieldLabel>
+            <FieldLabel>Card labels</FieldLabel>
             <RoleField
               isAdmin={newMemberIsAdmin}
               isCaregiver={newMemberIsCaregiver}
@@ -680,7 +1036,7 @@ export default function FamilySettingsPage() {
         )}
       </Sheet>
 
-      {/* Edit member */}
+      {/* Edit card */}
       <Sheet
         open={editingMember !== null}
         onClose={() => {
@@ -703,7 +1059,7 @@ export default function FamilySettingsPage() {
 
               <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
 
-              <FieldLabel>Role</FieldLabel>
+              <FieldLabel>Card labels</FieldLabel>
               <RoleField
                 isAdmin={editMemberIsAdmin}
                 isCaregiver={editMemberIsCaregiver}
@@ -738,10 +1094,10 @@ export default function FamilySettingsPage() {
                 )}
               </View>
 
-              {state.members.length > 1 && (
+              {state.members.length > 1 && isUnclaimedCard(editingMember.id, state.accounts) && (
                 <Group style={{ marginTop: 12 }}>
                   <ConfirmRow
-                    label="Remove member"
+                    label="Remove card"
                     confirmLabel="Tap again — also deletes their activity history"
                     onConfirm={() => {
                       const name = editingMember.name;
@@ -755,43 +1111,6 @@ export default function FamilySettingsPage() {
             </>
           ))}
       </Sheet>
-
-      {/* Join a household */}
-      <Sheet
-        open={joinOpen}
-        onClose={() => {
-          setJoinOpen(false);
-          setJoinId("");
-        }}
-      >
-        <SheetTitle>Join a household</SheetTitle>
-        <SheetSubtitle>
-          Paste the Family ID another member shared with you. You&apos;ll be added as a member and switched to it.
-        </SheetSubtitle>
-        <TextField
-          value={joinId}
-          onChangeText={setJoinId}
-          placeholder="Family ID"
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={{ marginTop: 20 }}
-        />
-        <View style={{ marginTop: 28 }}>
-          <AccentButton
-            disabled={!joinId.trim()}
-            loading={joining}
-            onPress={async () => {
-              setJoining(true);
-              const ok = await joinHousehold(joinId.trim());
-              // On success the store reloads the household, so only reset
-              // state if the join failed.
-              if (!ok) setJoining(false);
-            }}
-          >
-            Join household
-          </AccentButton>
-        </View>
-      </Sheet>
     </PushedScreen>
   );
 }
@@ -799,6 +1118,9 @@ export default function FamilySettingsPage() {
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     rowActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    roleBadge: { borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 10, paddingVertical: 4 },
+    roleBadgeLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.label2 },
     termsScroll: { marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, padding: 14 },
     termsBody: { fontSize: 14, lineHeight: 21, fontFamily: font.regular, color: colors.label2 },
     footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },

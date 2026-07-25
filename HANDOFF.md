@@ -339,6 +339,44 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 
 **Device-verify priorities**: back button label on pet profile + settings; header island alignment on Home; scroll-to-bottom on all five tabs (iOS buffer, Android not doubled); sheet spring + chip selection animation (plus reduce-motion instant paths); disabled CTA reads gray (reminder sheet with empty task); day toggles + timeChip in Fed/Groomed schedule; Android hairline borders render.
 
+### FULL ACCOUNTS/AUTH/HOUSEHOLD SYSTEM (2026-07-25/26, plan-mode collab, all 11 owner decisions locked in discovery) — built, statically verified, NEEDS migrations 0026–0030 + dashboard config + two-phone walkthrough
+
+Plan: `~/.claude/plans/i-would-like-to-harmonic-marshmallow.md`. Everything below degrades gracefully against the un-migrated DB (probe patterns) and runs in Expo Go. `tsc --noEmit` clean · `expo lint` clean (pre-existing Pet3D warning only) · iOS 8.80 MB + Android 8.89 MB bundles compile · impeccable detector 0 findings · adversarially reviewed by a 5-dimension agent workflow (its 3 confirmed web-compat defects are FIXED in the migrations as shipped).
+
+**Owner decisions locked (2026-07-25):** stay in Expo Go (Apple native works in Expo Go; Google via system browser, native at EAS cutover) · accounts + claimable cards, view-as REMOVED · owner/admin/member enforced in RLS/RPCs · careful shared-backend changes OK · invites = short codes + petpal:// only (no https origin) · deletion auto-promotes successor (longest-tenured admin→member) · email flows = 6-digit OTP codes in-app · fresh households empty + guided onboarding · default invite multi-use 7-day · admin-granting owner-only · leavers keep their card (unclaimed) + history.
+
+**DB — migrations 0026–0030 (committed, NOT YET APPLIED; apply IN ORDER in the SQL editor):**
+- `0026_roles_enforcement.sql` — `has_household_role()` helper; column-level grant closes the self-promotion hole (authenticated may UPDATE only `household_members.member_id` — web view-as untouched); leave/remove DELETE policy; households DELETE owner-only + rename guard trigger (admin+); claimed-card delete guard (only OTHER users' claims block — web view-as pointers don't); owner_id UNIQUE dropped but **replaced by `households_single_owned_guard`** which re-raises a synthetic 23505 on direct duplicate inserts (web bootstrap recovery unchanged) unless `create_household()` sets its transaction flag.
+- `0027_household_invites.sql` — `household_invites` (code `XXXX-XXXX` ambiguity-free alphabet, role member|admin, optional `target_member_id` claim-a-card, expiry default 7d, optional max_uses, revocable) + `create_invite`/`redeem_invite`/`revoke_invite` RPCs (P0002 = not found, P0003 = expired/revoked; already-member redeem is idempotent). `join_household(uuid)` untouched — web links keep working.
+- `0028_household_management.sql` — `create_household` (EMPTY household + creator card), `leave_household`, `remove_household_member`, `set_member_role` (owner-only), `transfer_ownership`, `prepare_account_deletion` (service-role; sole-member household → delete, owned-shared → promote longest-tenured admin else member) **+ `on_auth_user_deleted` BEFORE DELETE trigger on auth.users** so the web's direct `deleteUser` route gets succession automatically too.
+- `0029_conditional_seed.sql` — `handle_new_user()` skips demo seeding for OAuth signups and mobile email signups (`seed_demo:false` metadata); web signups seed exactly as before.
+- `0030_user_welcome_attribution.sql` — `activities.user_id` (real account attribution, nullable) + `user_profiles.seen_welcome` (per-user; intro no longer re-fires on household switch).
+
+**Client — auth layer:** `lib/supabase.ts` gains `flowType:"pkce"`. New `lib/auth.ts` is THE auth API: `signInWithApple` (expo-apple-authentication, raw nonce→SHA256 to Apple, raw to Supabase — verified against the native source that expo passes nonce verbatim), `signInWithGoogle` (signInWithOAuth + WebBrowser.openAuthSessionAsync + exchangeCodeForSession; `SCOPE(EAS cutover)`: swap internals to native one-tap), `signUpWithEmail` (passes `seed_demo:false`), `verifyEmailOtp`/`requestPasswordReset`/`resendCode`, `getConnectedIdentities`/`linkGoogle`/`unlinkIdentity`. `components/AuthProviderButtons.tsx` = HIG Apple button (theme-aware) + Google button in house style.
+
+**Routing:** root `_layout.tsx` uses `Stack.Protected` — (auth) for signed-out, EVERYTHING else enumerated in the signed-in block (**new root route files MUST be added there or they ship unguarded**); `/verify` + `/reset-password` deliberately unguarded (OTP creates the session mid-screen). `InboundLinkWatcher` stashes signed-out `petpal://join?code=…` links (AsyncStorage `petpal.pendingInviteCode`), `PendingInviteRunner` replays them post-sign-in; `PushTokenRegistrar` now calls the previously-dead `registerPushToken` (self-guards in Expo Go — EAS step 4 done). `app/auth-callback.tsx` = OAuth landing pad.
+
+**Screens:** (auth) welcome (providers + email) / login (+forgot link, providers) / signup (→ `/verify` code entry, no more dead-end) / forgot; `/verify` (6-digit cells, iOS `oneTimeCode` autofill, purposes signup|recovery|email_change incl. secure-email-change dual codes, 60s resend); `/reset-password`. `(onboarding)` group (zero-membership accounts): create-or-join → name household → first pet (via new shared `components/AddPetSheet.tsx`, extracted from the Pets tab) → invite → home. `join.tsx` rewritten around codes (auto-formats `XXXX-XXXX`; legacy `?f=` UUID links + pre-0027 fallback still work). Family screen rebuilt: Family (accounts w/ role badges + manage sheet: promote/demote/transfer/remove/leave per enforced role) · "Family without the app" (unclaimed cards + Invite-to-claim) · Households (role badges, switch, join, create) · Household (rename, Family ID demoted to web-app footnote, family password) · Pets (unchanged). Account screen: Connected accounts (email/Apple/Google link/unlink), Change password only when an email identity exists, change-email via OTP codes, honest successor delete copy. `switchMember` is deleted from the store.
+
+**Store:** state gains `households[].role/joinedAt`, `myRole`, `accounts[]`, `membershipsKnown` (gates the onboarding redirect so a transient fetch failure never shows first-run). Hydration: profile probe loop (theme_mode 0025 / seen_welcome 0030), dedupe key is now `${user}|${household}` with an in-flight guard (email refreshes on USER_UPDATED without full reload), zero-membership → EMPTY_STATE (demo-seeding `bootstrapHousehold` DELETED; slim `createHouseholdFallback` remains for pre-0028 create). New actions: createHousehold/renameHousehold/leaveHousehold/removeHouseholdMember/setMemberRole/transferOwnership/createInvite/fetchInvites/revokeInvite/redeemInvite — all optimistic-with-rollback or reload, all with missing-migration toasts. `flushCounters()` fires the debounced coins/streak write before every household switch (no cross-household bleed). `logAction` stamps `activities.user_id` (learn-from-bounce like duration). `removeMember` refuses claimed cards client-side.
+
+**Edge fn:** `delete-account` now calls `prepare_account_deletion` BEFORE `deleteUser` and returns 409 "backend migration 0028 required" instead of ever cascading a shared household. Still deploys at EAS cutover; app copy stays honest meanwhile.
+
+**⚠️ OWNER SETUP CHECKLIST (everything is inert until these run):**
+1. SQL editor: apply `0026 → 0027 → 0028 → 0029 → 0030` in order. Web smoke test after each (login, log care, family page incl. member switcher, join by `/join?f=` link with a second account, forum).
+2. Auth ▸ Providers ▸ Apple: enable; Client IDs `host.exp.Exponent,com.kagu.petpal` (no secret needed for the native flow).
+3. Auth ▸ Providers ▸ Google: Google Cloud Console → OAuth client (type **Web application**) with redirect URI `https://mpsyprtnejjbnhyaiidn.supabase.co/auth/v1/callback` → paste client ID + secret into Supabase.
+4. Auth ▸ URL Configuration: add `petpal://**` and `exp://**` (if the wildcard is rejected, add the exact `exp://<lan-ip>:8081` shown by `expo start` — changes per network/tunnel; Google bounces with "redirect not allowed" until it matches; Apple is immune).
+5. Auth ▸ Email Templates (Confirm signup / Reset password / Change email): add a line `Your PetPal code: {{ .Token }}` above the existing link (web link flows unaffected).
+6. Auth ▸ Settings: enable **Manual linking** (Connected accounts UI needs it); keep Secure email change ON. Note: built-in SMTP ≈ 2 emails/hour — fine for testing, custom SMTP before launch.
+
+**Two-phone walkthrough (after checklist):** email signup → OTP → onboarding create → first pet → invite; Apple sign-in in Expo Go (name captured once); Google browser round-trip; tap `petpal://join?code=…` while signed OUT → welcome → sign in → join auto-opens → redeem; claim-a-card invite (no duplicate card, history kept); role enforcement (member tries rename/invite → denied; hand-crafted `role` UPDATE → column permission denied); owner promotes → admin powers appear; switch/leave/transfer; forgot-password + change-email OTP; `select prepare_account_deletion('<uid>')` on a throwaway pair in the SQL editor (successor promoted, owner_id moved); intro does NOT re-fire on switch.
+
+**Web-demo follow-ups (small patches in the webdemo repo, found by the review workflow — none block applying the migrations):**
+1. `app/api/account/delete/route.ts` — call `prepare_account_deletion` before `deleteUser` (the 0028 auth.users trigger already covers it server-side; the explicit call just makes it visible).
+2. `lib/store.tsx` bootstrapHousehold — stop force-seeding when the user simply has zero memberships (post-0029 clean mobile accounts logging into the web get a junk demo household otherwise); its 23505 recovery keeps working thanks to the 0026 guard trigger.
+3. `removeMember` — sequence the `current_member_id` repoint after the members DELETE succeeds (partial-write edge if the delete is guard-blocked).
+
 ### App-wide dark mode (2026-07-24, owner request) — built, statically verified, NEEDS device walkthrough + migration 0025
 
 - **`lib/theme.ts`**: `lightColors`/`darkColors` (same shape, `Colors` type), `useColors()` hook resolves the live palette from `useStore().themeMode`. Every screen/component that previously imported the static `colors` const now calls the hook (`const colors = useColors();`) and, where a module-scope `StyleSheet.create` baked colors in at import time, a `makeStyles(colors: Colors)` factory memoized per-render via `useMemo` — module-scope JS only runs once per app load, so a plain static object could never react to the toggle.
@@ -348,15 +386,16 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 - `npx tsc --noEmit` clean, `expo lint` clean (one pre-existing unrelated warning in `Pet3D.tsx`), `expo export --platform ios` bundles clean (1957 modules).
 
 ## File map
-- `lib/store.tsx` — THE app state (ported web store). Stable; don't modify for UI work. `lib/data.ts` — types + reference data (verbatim web copy). `lib/theme.ts` — all tokens.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + data + Pet3D + PixelChart.
-- `app/` — (auth) login/signup; (tabs) index/plan/logs/pets/settings; pushed: activity, reminders, pet/[id](+card), vets, join, settings/{family,account,general,accessibility}.
-- `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts`, `lib/a11y.tsx`.
-- `supabase/migrations/0015_push_tokens.sql`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
+- `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
+- `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + Pet3D + PixelChart.
+- `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: activity, reminders, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
+- `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
+- `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
 ## Roadmap
-1. **← ACTIVE: owner device-verifies the 2026-07-23 bug-fix batch + the 2026-07-24 header fixes & sheet redesign + dark mode** (priorities listed at the end of each batch's section) and applies migrations **0022–0025** (plus 0017/0018 still pending) in the Supabase SQL editor.
-2. Two-account household audit on-device (invite → join → switch) — code fixes landed, flow untested.
+1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030** in the SQL editor, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.
+2. Web-demo follow-up patches (3 small ones listed in the accounts section) in the webdemo repo.
 3. **Make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
    "for all the tasks that you schedule, you can also not schedule and just track it normal."
    Plumbing already supports it (`careItemStatus` returns `state:"unscheduled"` with count-based
@@ -369,23 +408,26 @@ Batch 2 — premium sheet redesign (owner: "menus feel tacky"; approved directio
 ## EAS cutover checklist (when the app is ready for real builds)
 1. `npm i -g eas-cli && eas login && eas init` (sets `extra.eas.projectId` — unlocks push token registration in `lib/pushTokens.ts`).
 2. Apply `supabase/migrations/0015_push_tokens.sql` to the shared project (`supabase migration list` first; verify web demo after).
-3. Deploy Edge Functions: `supabase functions deploy delete-account send-due-reminders rc-webhook`; set `CRON_SECRET`, `RC_WEBHOOK_SECRET`; schedule `send-due-reminders` via pg_cron (SQL in the function header). Point `app/settings/account.tsx` deletion at `delete-account` (SCOPE(P6) comment marks the spot).
-4. Call `registerPushToken(userId)` after sign-in (root layout) — code exists, just not invoked.
+3. Deploy Edge Functions: `supabase functions deploy delete-account send-due-reminders rc-webhook`; set `CRON_SECRET`, `RC_WEBHOOK_SECRET`; schedule `send-due-reminders` via pg_cron (SQL in the function header). delete-account now REQUIRES migration 0028 applied first (it 409s otherwise, by design).
+4. ~~Call `registerPushToken(userId)` after sign-in~~ — DONE 2026-07-26 (`PushTokenRegistrar` in app/_layout.tsx; self-guards until eas init).
 5. RevenueCat: create app + `petpal_plus_monthly` product, `npx expo install react-native-purchases`, add `providers/purchases/revenuecat.ts` adapter (select it in `providers/purchases/index.tsx` when `Constants.appOwnership !== "expo"` && `EXPO_PUBLIC_RC_API_KEY` set — file must not exist before this step or Metro bundles it into Expo Go), configure with Supabase user id as app_user_id, wire the dashboard webhook → `rc-webhook`.
-6. Supabase Auth: add `petpal://` redirect URLs for email confirm on device.
-7. `eas build --profile development --platform ios` (Apple Developer account required) → dev-build walkthrough → `preview`/`production` builds → TestFlight.
+6. Native Google Sign-In: add `android.package` to app.json, create native OAuth client IDs (iOS + Android w/ SHA-1), `npx expo install @react-native-google-signin/google-signin`, swap `signInWithGoogle()`'s internals in `lib/auth.ts` to one-tap + `signInWithIdToken` (the SCOPE(EAS cutover) comment marks the spot — UI doesn't change). Add `ios.usesAppleSignIn: true` + the expo-apple-authentication plugin for the build.
+7. `eas build --profile development --platform ios` (Apple Developer account required) → dev-build walkthrough → `preview`/`production` builds → TestFlight. Universal links for invite codes (associatedDomains) become possible here if a real domain is chosen.
 
 ## Deliberately partial — grows later
 | Area | What shipped now | Intended full shape | Grows in |
 | --- | --- | --- | --- |
 | Purchases | Mock gateway, instant unlock via `households.premium` | RevenueCat adapter + webhook | EAS cutover |
 | Notifications | Local scheduling only | Remote push via 0015 + Edge Function | EAS cutover |
-| Account deletion | Now calls `delete-account` Edge Function + signs out | — (works once function deployed, EAS step 3) | EAS cutover step 3 |
+| Account deletion | Edge Function now runs successor logic (prepare_account_deletion) before deleteUser; app copy honest until deployed | Live deletion with succession | EAS cutover step 3 (needs 0028 applied) |
+| Google sign-in | System-browser OAuth (works in Expo Go; redirect allowlist churn per network) | Native one-tap sheet behind the same lib/auth.ts call | EAS cutover step 6 |
+| Sign in with Apple | Native in Expo Go via host.exp.Exponent client id | Same + com.kagu.petpal entitlement in real builds | EAS cutover (plugin + usesAppleSignIn) |
+| Invite links | Short codes + petpal:// scheme links (no https origin — owner decision) | Universal https links that open the app | EAS cutover step 7 + owner picks a domain |
 | Weight/age inputs | JS `WheelPicker` (iOS clock-style, no native dep) | Fine as-is; native picker optional | — |
 | Date/time inputs | Chip/stepper pickers (no native dep) | Consider native datetimepicker in dev build | Post-verify polish |
 | A11y prefs | Reduce-motion (pref OR OS) + haptics now consumed | Extend gating to more animated surfaces | Polish |
 | Notifications | Local scheduling + immediate local notif on own action | Family-wide remote push (needs notifications table) | EAS cutover |
-| Invite web origin | Placeholder `https://petpal.app` in family.tsx | Real deployed web-demo origin | One-line fix (owner: provide URL) |
+| Invite web origin | RESOLVED 2026-07-26: placeholder removed — invites are codes + petpal:// links; Family ID share (for the web app) remains as a footnote row | — | — |
 | Care schedules | Full UI + local eval; DB table pending (0017 not applied — CLI lacks project access) | Synced family-wide once 0017 runs; later: server push reads care_schedules | Owner runs 0017 (SQL editor or CLI login with project access) |
 | Emergency card | Text share only | Print/PDF variant (needs expo-print) | Optional |
 | Back button | Custom `HeaderBackButton` (iOS-only headerLeft) — rn-screens 4.16 iOS 26 bug in Expo Go | Real system chevron | EAS cutover (pin fixed rn-screens, remove SCOPE(EAS cutover) block in Screen.tsx) |
@@ -436,8 +478,10 @@ shape. **When an animation crashes silently, get the crash report first — do n
 source.** Guessing failed three times running; the stack trace identified it in one pass.
 
 ### Everything else
-- **Web demo is production truth**: never rename/drop/retighten schema it queries; new migrations start at 0015 (no 0008 upstream).
-- Expo Go: never install `react-native-purchases` before the cutover step; typed-route regeneration only happens on `expo start`/`export` — if a new route 404s in types, boot the dev server once.
+- **Web demo is production truth**: never rename/drop/retighten schema it queries; new migrations start at 0015 (no 0008 upstream). Each of 0026–0030 carries its own WEB-DEMO COMPAT note — read it before touching them.
+- **`household_members.member_id` has DUAL semantics**: mobile treats it as the account's claimed-card link; the web demo persists its "view as" pointer into the same column. Deliberately NO unique index on it; the 0026 claimed-card guard only counts OTHER users' pointers as claims. Don't "fix" one side without the other.
+- **New root-level route files ship UNGUARDED unless registered** inside the signed-in `Stack.Protected` block in `app/_layout.tsx` (`/verify` + `/reset-password` are unguarded on purpose — OTP creates the session mid-screen).
+- Expo Go: never install `react-native-purchases` before the cutover step; typed-route regeneration only happens on `expo start` (NOT `export`) — if a new route 404s in types, boot the dev server once (kill stale ports first: a port-conflict boot dies before regenerating).
 - Store hydration falls back to a legacy select when health migrations are missing — keep that path intact.
 - React Compiler is ON; if odd behavior appears on device, try flipping it off in app.json first.
 - Windows: LF→CRLF warnings are harmless.

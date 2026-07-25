@@ -1,11 +1,11 @@
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import BrandMark from "@/components/BrandMark";
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AuthProviderButtons from "@/components/AuthProviderButtons";
 import { AccentButton, TextField } from "@/components/ui";
-import { friendlyAuthError } from "@/lib/authErrors";
-import { supabase } from "@/lib/supabase";
+import { signUpWithEmail } from "@/lib/auth";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function SignupScreen() {
@@ -17,7 +17,6 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit() {
     // See login.tsx — onSubmitEditing bypasses the button's loading guard, and
@@ -26,36 +25,17 @@ export default function SignupScreen() {
     if (loading) return;
     setError(null);
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { name: name || "You" } },
-    });
+    const { error, needsVerification } = await signUpWithEmail(name, email, password);
     setLoading(false);
     if (error) {
-      setError(friendlyAuthError(error.message));
+      setError(error);
       return;
     }
-    // With a session the auth listener redirects to (tabs); otherwise email
-    // confirmation is required first (link currently lands on the web demo).
-    if (!data.session) setConfirmSent(true);
-  }
-
-  if (confirmSent) {
-    // Scrollable + safe-area inset: "Back to log in" is the ONLY exit from this
-    // state, so at large text sizes it must never end up off-screen.
-    return (
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={[styles.confirmWrap, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
-      >
-        <Text style={styles.confirmTitle}>Check your email</Text>
-        <Text style={styles.confirmBody}>We sent a confirmation link to {email}. Confirm it, then log in.</Text>
-        <Link href="/(auth)/login" style={styles.footerLink}>
-          Back to log in
-        </Link>
-      </ScrollView>
-    );
+    // With a session the auth listener redirects to (tabs); otherwise the user
+    // types the 6-digit code from the confirmation email into /verify.
+    if (needsVerification) {
+      router.push({ pathname: "/verify", params: { email: email.trim(), purpose: "signup" } });
+    }
   }
 
   return (
@@ -66,7 +46,7 @@ export default function SignupScreen() {
       >
         <View style={styles.header}>
           <BrandMark />
-          <Text style={styles.subtitle}>Create your household</Text>
+          <Text style={styles.subtitle}>Your family{"'"}s pet care, in one place</Text>
         </View>
         <View style={styles.form}>
           <TextField placeholder="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
@@ -89,6 +69,12 @@ export default function SignupScreen() {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <AccentButton onPress={handleSubmit} loading={loading} disabled={!email || !password}>Create account</AccentButton>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerLabel}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <AuthProviderButtons onError={setError} disabled={loading} />
         </View>
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account? </Text>
@@ -108,13 +94,11 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   subtitle: { marginTop: 6, fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   form: { gap: 12 },
   error: { color: colors.red, fontSize: 14, fontFamily: font.medium, textAlign: "left", paddingHorizontal: 4 },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.sep },
+  dividerLabel: { fontSize: 13, fontFamily: font.medium, color: colors.label3 },
   footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 12 },
   footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
   // Padding lifts the link's tap target to >=44pt without shifting the baseline row.
   footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent, textAlign: "center", paddingVertical: 14, paddingHorizontal: 8 },
-  // flexGrow keeps the content vertically centred when it's shorter than the
-  // screen, while still allowing it to scroll once it outgrows it.
-  confirmWrap: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 },
-  confirmTitle: { fontSize: 18, fontFamily: font.semibold, color: colors.label },
-  confirmBody: { fontSize: 15, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
 });

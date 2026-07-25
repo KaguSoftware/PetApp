@@ -27,6 +27,10 @@ export const supabase = createClient(url ?? "https://missing.supabase.co", anonK
     // Don't persist during SSR — there's no durable store on the server.
     persistSession: !isServer,
     detectSessionInUrl: false,
+    // PKCE: the browser-based OAuth flow (Google) returns a one-time ?code=
+    // that lib/auth.ts exchanges via exchangeCodeForSession. Password grant,
+    // signInWithIdToken (Apple) and OTP verification are unaffected.
+    flowType: "pkce",
   },
 });
 

@@ -1,16 +1,19 @@
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from "@expo-google-fonts/inter";
 import { ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
+import * as Linking from "expo-linking";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Appearance, LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import NotificationSync from "@/components/NotificationSync";
 import { useNativeHeaderOptions } from "@/components/Screen";
 import Toasts from "@/components/Toasts";
+import { consumePendingInviteCode, setPendingInviteCode } from "@/lib/pendingInvite";
+import { registerPushToken } from "@/lib/pushTokens";
 import { StoreProvider, useStore } from "@/lib/store";
 import { useColors, useNavTheme } from "@/lib/theme";
 import { PurchasesProvider } from "@/providers/purchases";
@@ -54,15 +57,118 @@ function AppChrome() {
 function RootStack() {
   const nativeHeaderOptions = useNativeHeaderOptions();
   const navTheme = useNavTheme();
+  const { session } = useSession();
   return (
     <ThemeProvider value={navTheme}>
       <Stack screenOptions={{ ...nativeHeaderOptions, title: "" }}>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* Session gating lives HERE, once, for every route. Screens not
+            listed inside a Protected block are auto-registered UNGUARDED by
+            expo-router — every new root-level route file must be added to the
+            signed-in block below (the (auth) group is the only signed-out
+            surface; verify/reset-password work in both states). */}
+        <Stack.Protected guard={!session}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!!session}>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+          <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+          <Stack.Screen name="activity" />
+          <Stack.Screen name="coins" />
+          <Stack.Screen name="instructions" />
+          <Stack.Screen name="instructions/[id]" />
+          <Stack.Screen name="join" />
+          <Stack.Screen name="reminders" />
+          <Stack.Screen name="pet/[id]/index" />
+          <Stack.Screen name="pet/[id]/card" />
+          <Stack.Screen name="settings/index" />
+          <Stack.Screen name="settings/account" />
+          <Stack.Screen name="settings/family" />
+          <Stack.Screen name="settings/general" />
+          <Stack.Screen name="settings/accessibility" />
+          <Stack.Screen name="vets/index" />
+          <Stack.Screen name="vets/[id]" />
+        </Stack.Protected>
+        {/* Deliberately unguarded: the OTP flow crosses the signed-out →
+            signed-in boundary mid-screen (verifying a signup/recovery code
+            CREATES the session). Guarded either way, the flip would yank the
+            user off the screen before it can route them. */}
+        <Stack.Screen name="verify" />
+        <Stack.Screen name="reset-password" />
       </Stack>
     </ThemeProvider>
   );
+}
+
+/**
+ * Stashes invite deep links that arrive while signed out. Signed-in taps are
+ * routed natively by expo-router (join is a protected route); signed-out taps
+ * would bounce off the guard, so the code parks in AsyncStorage and
+ * PendingInviteRunner replays it after the next sign-in. Mounted directly
+ * under SessionProvider so no link event is missed while splash is up.
+ */
+function InboundLinkWatcher() {
+  const { session, ready } = useSession();
+  const authRef = useRef({ session, ready });
+  authRef.current = { session, ready };
+  const earlyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const stash = (code: string) => {
+      if (!authRef.current.ready) {
+        earlyRef.current = code; // session restore in flight — decide once ready
+        return;
+      }
+      if (!authRef.current.session) void setPendingInviteCode(code);
+    };
+    const handle = (url: string | null) => {
+      if (!url) return;
+      const parsed = Linking.parse(url);
+      const path = (parsed.path ?? "").replace(/^\/+|\/+$/g, "");
+      if (path !== "join" && !path.endsWith("/join")) return;
+      const raw = parsed.queryParams?.code ?? parsed.queryParams?.f;
+      const code = Array.isArray(raw) ? raw[0] : raw;
+      if (code) stash(String(code));
+    };
+    Linking.getInitialURL().then(handle);
+    const sub = Linking.addEventListener("url", (e) => handle(e.url));
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (ready && earlyRef.current) {
+      if (!session) void setPendingInviteCode(earlyRef.current);
+      earlyRef.current = null;
+    }
+  }, [ready, session]);
+
+  return null;
+}
+
+/** Replays a stashed invite once the user is signed in and hydrated. */
+function PendingInviteRunner() {
+  const { session } = useSession();
+  const { hydrated } = useStore();
+  useEffect(() => {
+    if (!session || !hydrated) return;
+    consumePendingInviteCode().then((code) => {
+      if (code) router.push({ pathname: "/join", params: { code } });
+    });
+  }, [session, hydrated]);
+  return null;
+}
+
+/** Registers the device's Expo push token for the signed-in user. Self-guards
+ * to a no-op in Expo Go / simulators / without an EAS projectId — becomes
+ * live automatically at the EAS cutover (HANDOFF step 4, now wired). */
+function PushTokenRegistrar() {
+  const { session } = useSession();
+  const uid = session?.user?.id ?? null;
+  useEffect(() => {
+    if (uid) registerPushToken(uid).catch((e) => console.warn("[petpal] push token registration failed:", e));
+  }, [uid]);
+  return null;
 }
 
 /**
@@ -102,6 +208,8 @@ function ThemedApp() {
       <RootStack />
       <Toasts />
       <NotificationSync />
+      <PendingInviteRunner />
+      <PushTokenRegistrar />
       <AppChrome />
     </View>
   );
@@ -112,6 +220,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <SessionProvider>
+          <InboundLinkWatcher />
           <StoreProvider>
             <PurchasesProvider>
               <ThemedApp />

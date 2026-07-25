@@ -11,7 +11,10 @@ export function friendlyAuthError(message: string): string {
   if (m.includes("password should be at least") || m.includes("password is too short"))
     return "Please use a longer password (at least 6 characters).";
   if (m.includes("invalid") && m.includes("email")) return "That doesn't look like a valid email address.";
+  if (m.includes("token has expired") || m.includes("otp_expired") || (m.includes("token") && m.includes("invalid")))
+    return "That code didn't work — it may have expired. Request a new one and try again.";
   if (m.includes("rate limit") || m.includes("too many")) return "Too many attempts — please wait a moment and try again.";
   if (m.includes("network") || m.includes("failed to fetch")) return "Couldn't reach the server. Check your connection and try again.";
+  if (m.includes("identity") && m.includes("last")) return "You can't disconnect your only sign-in method.";
   return message;
 }

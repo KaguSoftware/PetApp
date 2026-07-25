@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import type { UserIdentity } from "@supabase/supabase-js";
 import PageLoading from "@/components/PageLoading";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
@@ -15,8 +16,10 @@ import {
   SectionHeader,
   SheetSubtitle,
   SheetTitle,
+  SmallButton,
   TextField,
 } from "@/components/ui";
+import { getConnectedIdentities, linkGoogle, unlinkIdentity } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +38,26 @@ export default function AccountSettingsPage() {
   const [newEmail, setNewEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Which sign-in methods are attached to this account (email / apple / google).
+  const [identities, setIdentities] = useState<UserIdentity[]>([]);
+  const [identitiesLoaded, setIdentitiesLoaded] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
+
+  const loadIdentities = useCallback(() => {
+    getConnectedIdentities().then((ids) => {
+      setIdentities(ids);
+      setIdentitiesLoaded(true);
+    });
+  }, []);
+  useEffect(loadIdentities, [loadIdentities]);
+
+  const emailIdentity = identities.find((i) => i.provider === "email");
+  const appleIdentity = identities.find((i) => i.provider === "apple");
+  const googleIdentity = identities.find((i) => i.provider === "google");
+  // Until identities load, assume password sign-in exists (the pre-OAuth default).
+  const hasPassword = !identitiesLoaded || !!emailIdentity;
+  const canUnlink = identities.length >= 2;
 
   if (!hydrated) {
     return (
@@ -62,26 +85,65 @@ export default function AccountSettingsPage() {
 
   async function changeEmail() {
     setFormError(null);
-    if (!newEmail.trim()) return setFormError("Enter a new email.");
+    const target = newEmail.trim();
+    if (!target) return setFormError("Enter a new email.");
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+    const { error } = await supabase.auth.updateUser({ email: target });
     setBusy(false);
     if (error) return setFormError(friendlyAuthError(error.message));
     setEmailOpen(false);
     setNewEmail("");
-    toast("bell", "Confirm your new email", "We sent a link to finish the change");
+    // Secure email change sends codes to BOTH addresses; /verify walks
+    // through them one after the other.
+    router.push({
+      pathname: "/verify",
+      params: { email: target, purpose: "email_change", ...(userEmail ? { secondary: userEmail } : {}) },
+    });
+  }
+
+  async function handleLinkGoogle() {
+    if (linkBusy) return;
+    setLinkBusy(true);
+    const { error, cancelled } = await linkGoogle();
+    setLinkBusy(false);
+    if (error) {
+      Alert.alert("Couldn't connect Google", error);
+      return;
+    }
+    if (!cancelled) {
+      toast("check", "Google connected", "You can sign in with it from now on");
+      loadIdentities();
+    }
+  }
+
+  function handleUnlink(identity: UserIdentity, label: string) {
+    Alert.alert(`Disconnect ${label}?`, `You'll no longer be able to sign in with ${label}.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Disconnect",
+        style: "destructive",
+        onPress: async () => {
+          const { error } = await unlinkIdentity(identity);
+          if (error) Alert.alert("Couldn't disconnect", error);
+          else {
+            toast("check", `${label} disconnected`, "");
+            loadIdentities();
+          }
+        },
+      },
+    ]);
   }
 
   function confirmSignOut() {
-    Alert.alert("Sign out", "You'll need to log back in to see your household.", [
+    Alert.alert("Sign out", "You'll need to log back in to see your households.", [
       { text: "Cancel", style: "cancel" },
       { text: "Sign out", style: "destructive", onPress: () => signOut() },
     ]);
   }
 
   // Deletion runs through the `delete-account` Edge Function: it verifies the
-  // caller's JWT server-side, then deletes the auth user with the service-role
-  // key (DB rows cascade). The local session is cleared afterward.
+  // caller's JWT server-side, hands each shared household to a successor via
+  // prepare_account_deletion (migration 0028), then deletes the auth user.
   //
   // If the function isn't deployed yet, invoke() rejects with a
   // FunctionsFetchError / non-2xx — we surface that honestly instead of a vague
@@ -110,7 +172,7 @@ export default function AccountSettingsPage() {
   function confirmDeleteAccount() {
     Alert.alert(
       "Delete account?",
-      "This permanently deletes your account and the whole household — pets, activity, everything. This can't be undone.",
+      "Households you share are handed to the longest-tenured admin or member; households where you're the only member are deleted. Your account itself is gone for good. This can't be undone.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Delete", style: "destructive", onPress: () => runDeleteAccount() },
@@ -128,19 +190,21 @@ export default function AccountSettingsPage() {
         {currentMember ? (
           <Row
             leading={<InitialAvatar name={currentMember.name} gradient={currentMember.gradient} size={36} />}
-            title={`Viewing as ${currentMember.name}`}
-            subtitle={`${currentMember.role} · switch in Family`}
+            title={currentMember.name}
+            subtitle="Your family card — edit it in Family"
           />
         ) : null}
-        <Row
-          onPress={() => {
-            setFormError(null);
-            setPwOpen(true);
-          }}
-          leading={<IconCircle icon="lock" tint={colors.label2} bg={colors.fill} />}
-          title="Change password"
-          trailing={<Chevron />}
-        />
+        {hasPassword ? (
+          <Row
+            onPress={() => {
+              setFormError(null);
+              setPwOpen(true);
+            }}
+            leading={<IconCircle icon="lock" tint={colors.label2} bg={colors.fill} />}
+            title="Change password"
+            trailing={<Chevron />}
+          />
+        ) : null}
         <Row
           onPress={() => {
             setFormError(null);
@@ -151,6 +215,48 @@ export default function AccountSettingsPage() {
           trailing={<Chevron />}
         />
       </Group>
+
+      <SectionHeader>Connected accounts</SectionHeader>
+      <Group>
+        <Row
+          leading={<IconCircle icon="lock" tint={colors.label2} bg={colors.fill} />}
+          title="Email & password"
+          subtitle={hasPassword ? (userEmail ?? "Connected") : "Not set up for this account"}
+        />
+        <Row
+          leading={<IconCircle icon="sparkles" tint={colors.label2} bg={colors.fill} />}
+          title="Apple"
+          subtitle={
+            appleIdentity
+              ? "Connected"
+              : "Connects automatically when you use Sign in with Apple with this email"
+          }
+          interactiveTrailing={!!appleIdentity && canUnlink}
+          trailing={
+            appleIdentity && canUnlink ? (
+              <SmallButton label="Disconnect" tone="gray" onPress={() => handleUnlink(appleIdentity, "Apple")} />
+            ) : undefined
+          }
+        />
+        <Row
+          leading={<IconCircle icon="star" tint={colors.label2} bg={colors.fill} />}
+          title="Google"
+          subtitle={googleIdentity ? "Connected" : "Sign in with Google from now on"}
+          interactiveTrailing
+          trailing={
+            googleIdentity ? (
+              canUnlink ? (
+                <SmallButton label="Disconnect" tone="gray" onPress={() => handleUnlink(googleIdentity, "Google")} />
+              ) : undefined
+            ) : (
+              <SmallButton label={linkBusy ? "Connecting…" : "Connect"} onPress={handleLinkGoogle} />
+            )
+          }
+        />
+      </Group>
+      <Text style={styles.footnote}>
+        Any connected method signs into this same account. You can&apos;t disconnect your only sign-in method.
+      </Text>
 
       <SectionHeader>App</SectionHeader>
       <Group>
@@ -174,7 +280,8 @@ export default function AccountSettingsPage() {
         <Row destructive title="Delete account" onPress={confirmDeleteAccount} />
       </Group>
       <Text style={styles.footnote}>
-        Permanently deletes your account and the whole household — pets, activity, everything. This can&apos;t be undone.
+        Deleting your account hands shared households to the longest-tenured admin; households where you&apos;re alone are deleted.
+        This can&apos;t be undone.
       </Text>
 
       <View style={{ height: 16 }} />
@@ -208,7 +315,7 @@ export default function AccountSettingsPage() {
         }}
       >
         <SheetTitle>Change email</SheetTitle>
-        <SheetSubtitle>We&apos;ll email a confirmation link to the new address before the change takes effect.</SheetSubtitle>
+        <SheetSubtitle>We&apos;ll email 6-digit codes to confirm the change — enter them on the next screen.</SheetSubtitle>
         <View style={styles.form}>
           <TextField
             keyboardType="email-address"
@@ -220,7 +327,7 @@ export default function AccountSettingsPage() {
           />
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
           <AccentButton loading={busy} onPress={changeEmail}>
-            Send confirmation
+            Send codes
           </AccentButton>
         </View>
       </Sheet>

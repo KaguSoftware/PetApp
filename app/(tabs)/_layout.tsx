@@ -20,9 +20,15 @@ const androidIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => (
 
 export default function TabsLayout() {
   const colors = useColors();
-  const { themeMode } = useStore();
+  const { themeMode, state, hydrated } = useStore();
   const { session } = useSession();
   if (!session) return <Redirect href="/(auth)/login" />;
+  // A signed-in account with zero households goes through create-or-join
+  // first. membershipsKnown gates this so a transient membership-fetch
+  // failure never dumps an existing user into first-run onboarding.
+  if (hydrated && state.membershipsKnown && state.households.length === 0) {
+    return <Redirect href="/(onboarding)" />;
+  }
 
   // Tab order: Logs (leftmost), Care, Home (center), Pets, Community.
   // Settings moved off the tab bar to the gear icon in HeaderActions.

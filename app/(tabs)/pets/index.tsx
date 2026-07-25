@@ -1,4 +1,4 @@
-import BreedField from "@/components/BreedField";
+import AddPetSheet from "@/components/AddPetSheet";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
 import { Icon } from "@/components/Icons";
@@ -10,13 +10,11 @@ import { PixelCosmetic } from "@/components/pixel/PixelPet";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
-import SpeciesField from "@/components/SpeciesField";
 import {
   AccentButton,
   Chevron,
   Chip,
   CoinPill,
-  FieldLabel,
   Group,
   IconCircle,
   PRESS_SCALE_SMALL,
@@ -24,19 +22,15 @@ import {
   Row,
   SectionHeader,
   Segmented,
-  SheetFooter,
   SheetSubtitle,
   SheetTitle,
-  TextField,
 } from "@/components/ui";
 import {
-  BREEDS_BY_SPECIES,
   cosmetic,
   COSMETICS,
   formatAge,
   formatWeight,
   kgToUnit,
-  OTHER_BREED,
   unitToKg,
   weightUnitLabel,
   type Cosmetic,
@@ -60,12 +54,6 @@ const OTHER_SLOTS: { slot: CosmeticSlot; hint: string }[] = [
   { slot: "neck", hint: "Collars & scarves" },
   { slot: "body", hint: "Outfits & capes" },
 ];
-
-/* Sensible starting weight (kg) / cup size (g) per species for the prefilled inputs. */
-const SPECIES_DEFAULTS: Record<"cat" | "dog", { weightKg: number; cupGrams: number }> = {
-  cat: { weightKg: 4, cupGrams: 60 },
-  dog: { weightKg: 20, cupGrams: 120 },
-};
 
 const GRID_STEP = 14;
 
@@ -164,7 +152,7 @@ function ItemCard({
 export default function PetsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, buyCosmetic, toggleEquip, addPet, addWeight, editPet, toast } = useStore();
+  const { state, hydrated, buyCosmetic, toggleEquip, addWeight, editPet, toast } = useStore();
   const refreshControl = usePullToRefresh();
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
@@ -172,14 +160,6 @@ export default function PetsScreen() {
   // Which tab the accessories sheet shows: the head/hat slot, or "other" for everything else.
   const [accessoryTab, setAccessoryTab] = useState<CosmeticSlot | "other">("head");
   const [addPetOpen, setAddPetOpen] = useState(false);
-  const [petName, setPetName] = useState("");
-  const [species, setSpecies] = useState<"cat" | "dog">("cat");
-  const [breed, setBreed] = useState(BREEDS_BY_SPECIES.cat[0]);
-  const [customBreed, setCustomBreed] = useState("");
-  const [sex, setSex] = useState<"female" | "male">("female");
-  const [ageInput, setAgeInput] = useState("1");
-  const [weightInput, setWeightInput] = useState("");
-  const [cupInput, setCupInput] = useState("");
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
@@ -206,122 +186,10 @@ export default function PetsScreen() {
       </TabScreen>
     );
 
-  // Prefill the weight/cup inputs from the species defaults (weight shown in
-  // the household's unit) so the sheet opens with reasonable numbers to tweak.
-  const prefillFor = (sp: "cat" | "dog") => {
-    const d = SPECIES_DEFAULTS[sp];
-    setWeightInput(String(Math.round(kgToUnit(d.weightKg, state.units) * 10) / 10));
-    setCupInput(String(d.cupGrams));
-  };
-  const openAddPet = () => {
-    setSpecies("cat");
-    setBreed(BREEDS_BY_SPECIES.cat[0]);
-    setCustomBreed("");
-    setSex("female");
-    setAgeInput("1");
-    prefillFor("cat");
-    setPetName("");
-    setAddPetOpen(true);
-  };
-  const resetAddPetForm = () => {
-    setPetName("");
-  };
-
-  // A picklist match is saved under its canonical name so it picks up the
-  // vet-built CARE_PLANS entry; "Other" falls back to the typed custom name,
-  // or a species default if that's left blank.
-  const isOtherBreed = breed === OTHER_BREED;
-  const resolvedBreed = isOtherBreed ? customBreed.trim() || (species === "cat" ? "House cat" : "Mixed breed") : breed;
-  const parsedAge = Number(ageInput);
-  const parsedWeightUnit = Number(weightInput);
-  const parsedCup = Number(cupInput);
-  const addPetValid =
-    petName.trim().length > 0 &&
-    Number.isFinite(parsedAge) &&
-    parsedAge >= 0 &&
-    Number.isFinite(parsedWeightUnit) &&
-    parsedWeightUnit > 0 &&
-    Number.isFinite(parsedCup) &&
-    parsedCup > 0;
-
-  const addPetSheet = (
-    <Sheet
-      open={addPetOpen}
-      onClose={() => {
-        setAddPetOpen(false);
-        resetAddPetForm();
-      }}
-    >
-      <SheetTitle>Add a pet</SheetTitle>
-
-      <FieldLabel>Name</FieldLabel>
-      <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
-
-      <FieldLabel>Species</FieldLabel>
-      <SpeciesField
-        species={species}
-        onChangeSpecies={(s) => {
-          setSpecies(s);
-          setBreed(BREEDS_BY_SPECIES[s][0]);
-          setCustomBreed("");
-          prefillFor(s);
-        }}
-      />
-
-      <FieldLabel>Breed</FieldLabel>
-      <BreedField species={species} breed={breed} customBreed={customBreed} onChangeBreed={setBreed} onChangeCustomBreed={setCustomBreed} />
-      <Text style={styles.breedHint}>
-        {isOtherBreed
-          ? "Not on the list — you'll set custom feeding/water/care targets on the Care tab."
-          : "This breed has a vet-built care plan."}
-      </Text>
-
-      <FieldLabel>Sex</FieldLabel>
-      <Segmented
-        options={[
-          { value: "female", label: "Female" },
-          { value: "male", label: "Male" },
-        ]}
-        value={sex}
-        onChange={setSex}
-      />
-
-      <View style={{ flexDirection: "row", gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <FieldLabel>Age (years)</FieldLabel>
-          <TextField value={ageInput} onChangeText={setAgeInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="1" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
-          <TextField value={weightInput} onChangeText={setWeightInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="0" />
-        </View>
-      </View>
-
-      <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
-      <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
-
-      <SheetFooter>
-        <AccentButton
-          disabled={!addPetValid}
-          onPress={() => {
-            addPet({
-              name: petName.trim(),
-              species,
-              breed: resolvedBreed,
-              sex,
-              ageYears: parsedAge,
-              weightKg: unitToKg(parsedWeightUnit, state.units),
-              cupGrams: Math.round(parsedCup),
-            });
-            setAddPetOpen(false);
-            resetAddPetForm();
-          }}
-        >
-          Add to family
-        </AccentButton>
-      </SheetFooter>
-    </Sheet>
-  );
+  const openAddPet = () => setAddPetOpen(true);
+  // The form itself lives in components/AddPetSheet.tsx (shared with the
+  // onboarding first-pet step).
+  const addPetSheet = <AddPetSheet open={addPetOpen} onClose={() => setAddPetOpen(false)} />;
 
   if (!pet) {
     return (

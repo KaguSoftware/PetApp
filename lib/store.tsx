@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { AppState as RNAppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, ADMIN_ROLE, Activity, AppState, CareSchedule, CosmeticSlot, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -95,7 +95,6 @@ interface Store {
   logAction: (petId: string, type: ActionType, grams?: number, ts?: number, medId?: string, durationMinutes?: number) => boolean;
   /** Compensating undo for a just-logged action: removes the activity, takes back the coins, recomputes the streak. */
   undoLogAction: (activityId: string) => void;
-  switchMember: (id: string) => void;
   setPremium: (on: boolean) => void;
   buyCosmetic: (petId: string, cosmeticId: string) => void;
   toggleEquip: (petId: string, cosmeticId: string) => void;
@@ -175,6 +174,25 @@ interface Store {
   joinHousehold: (familyId: string) => Promise<boolean>;
   /** Switch which household is shown on-screen (for users in more than one). */
   setActiveHousehold: (householdId: string) => Promise<void>;
+  /** Create a new empty household, make it active, and reload. */
+  createHousehold: (name: string) => Promise<boolean>;
+  /** Rename the active household (owner/admin — enforced server-side from 0026). */
+  renameHousehold: (name: string) => void;
+  /** Leave a household you're a member (not owner) of. Reloads on success. */
+  leaveHousehold: (householdId: string) => Promise<boolean>;
+  /** Remove another account from the active household (admin+; owner for admins). */
+  removeHouseholdMember: (targetUserId: string) => Promise<boolean>;
+  /** Owner-only: promote/demote another account between admin and member. */
+  setMemberRole: (targetUserId: string, role: "admin" | "member") => Promise<boolean>;
+  /** Owner-only: hand the active household to another member (you become admin). */
+  transferOwnership: (targetUserId: string) => Promise<boolean>;
+  /** Redeem an invite code (XXXX-XXXX). Joins + switches on success. */
+  redeemInvite: (code: string) => Promise<{ ok: boolean; reason?: "notFound" | "expired" | "unavailable" | "error" }>;
+  /** Create an invite code for the active household (admin+; admin-role invites owner-only). */
+  createInvite: (input: { role: "member" | "admin"; targetMemberId?: string; ttlHours?: number; maxUses?: number }) => Promise<HouseholdInvite | null>;
+  /** The active household's live (unrevoked, unexpired) invites. */
+  fetchInvites: () => Promise<HouseholdInvite[]>;
+  revokeInvite: (inviteId: string) => Promise<boolean>;
   setNotificationPref: (key: "notifyCareReminders" | "notifyFamilyActivity" | "notifyVetSuggestions", on: boolean) => void;
   signOut: () => Promise<void>;
   /** Re-fetch the active household from Supabase (pull-to-refresh). Resolves once the reload settles. */
@@ -202,6 +220,9 @@ const EMPTY_STATE: AppState = {
   familyPasswordSet: false,
   households: [],
   activeHouseholdId: "",
+  myRole: null,
+  accounts: [],
+  membershipsKnown: false,
 };
 
 /** SHA-256 hex digest — used to avoid storing the family password in plaintext. */
@@ -226,160 +247,55 @@ const MEMBER_GRADIENTS: [string, string][] = [
   ["#40a35c", "#007a5f"],
 ];
 
-/**
- * Fallback for when the on-signup DB trigger didn't create a household (seen
- * in practice — the trigger firing under GoTrue's auth.users insert isn't
- * fully reliable). Mirrors supabase/migrations/0001_init.sql's seed so a
- * user never lands on a permanently empty app.
- */
 function describeErr(e: { code?: string; message?: string; details?: string; hint?: string } | null | undefined) {
   if (!e) return null;
   const parts = [e.code, e.message, e.details, e.hint].filter((x) => x && x.length > 0);
   return parts.length ? parts.join(" | ") : null;
 }
 
-async function bootstrapHousehold(
+/** PostgREST "no such function" — the RPC's migration hasn't been applied yet. */
+function isMissingFunction(e: { code?: string; message?: string } | null | undefined) {
+  return e?.code === "PGRST202" || /could not find the function/i.test(e?.message ?? "");
+}
+
+/**
+ * Client-side fallback for create_household (migration 0028 not applied yet):
+ * a bare EMPTY household — just the row, the creator's card, and the links.
+ * No demo data (owner decision 2026-07-25: fresh households start clean; the
+ * old Mom/Dad/Sara seeding lives only in the web demo's signup path now).
+ * Pre-0026 DBs still carry the UNIQUE owner_id, so creating a SECOND
+ * household surfaces 23505 — callers turn that into an honest toast.
+ */
+async function createHouseholdFallback(
   supabase: SupabaseClient,
   userId: string,
-  name: string,
+  accountName: string,
+  householdName: string,
   errRef: { current: string | null }
 ) {
   const { data: household, error: hErr } = await supabase
     .from("households")
-    .insert({ owner_id: userId, name: `${name}'s household`, coins: 340, xp: 260, streak: 4, units: "kg" })
+    .insert({ owner_id: userId, name: householdName, coins: 0, xp: 0, streak: 0, units: "kg" })
     .select()
     .single();
   if (hErr || !household) {
-    if (hErr?.code === "23505") {
-      // Unique owner_id race: the on-signup DB trigger already created this
-      // user's household between our select and this insert. Fetch it.
-      const { data: existing, error: reselectErr } = await supabase
-        .from("households")
-        .select("*")
-        .eq("owner_id", userId)
-        .maybeSingle();
-      if (existing) return existing;
-      console.error("[petpal] bootstrap household reselect after race failed:", describeErr(reselectErr) ?? reselectErr);
-      errRef.current = describeErr(reselectErr) ?? "reselect after race returned no row";
-      return null;
-    }
-    console.error("[petpal] bootstrap household insert failed:", describeErr(hErr) ?? hErr);
-    errRef.current = describeErr(hErr) ?? "insert returned no row (no error object)";
+    console.error("[petpal] create household fallback failed:", describeErr(hErr) ?? hErr);
+    errRef.current = hErr?.code === "23505" ? "23505" : (describeErr(hErr) ?? "insert returned no row");
     return null;
   }
 
-  const { data: members } = await supabase
+  const { data: card } = await supabase
     .from("members")
-    .insert([
-      { household_id: household.id, name, emoji: "🧑‍💻", role: ADMIN_ROLE, gradient_from: "#4385e4", gradient_to: "#544ec5" },
-      { household_id: household.id, name: "Mom", emoji: "👩‍🦰", role: "Admin", gradient_from: "#db6ea5", gradient_to: "#c43e49" },
-      { household_id: household.id, name: "Dad", emoji: "👨‍🦳", role: "Member", gradient_from: "#24ab7e", gradient_to: "#00848c" },
-      { household_id: household.id, name: "Sara", emoji: "👧", role: "Member", gradient_from: "#cd9c1f", gradient_to: "#cf630d" },
-    ])
-    .select();
-  const [you, mom, dad, sara] = members ?? [];
-  if (you) {
-    await supabase.from("households").update({ current_member_id: you.id }).eq("id", household.id);
-    // Link the owner's auth user to their "You" card and mark this the active
-    // household. The on_household_created trigger already created the owner
-    // household_members row; here we just fill in member_id + user_profiles.
-    await supabase.from("household_members").update({ member_id: you.id }).eq("household_id", household.id).eq("user_id", userId);
-    await supabase.from("user_profiles").upsert({ user_id: userId, active_household_id: household.id });
+    .insert({ household_id: household.id, name: accountName, emoji: "🧑‍💻", role: "Owner", gradient_from: "#4385e4", gradient_to: "#544ec5" })
+    .select()
+    .single();
+  if (card) {
+    await supabase.from("households").update({ current_member_id: card.id }).eq("id", household.id);
+    // The on_household_created trigger already inserted the owner membership;
+    // fill in the claim link + make it the active household.
+    await supabase.from("household_members").update({ member_id: card.id }).eq("household_id", household.id).eq("user_id", userId);
   }
-
-  const now = Date.now();
-  const H = 3_600_000;
-  const D = 24 * H;
-  const W = 7 * D;
-
-  const { data: pets } = await supabase
-    .from("pets")
-    .insert([
-      {
-        household_id: household.id,
-        name: "Mozart",
-        species: "cat",
-        breed: "British Shorthair",
-        sex: "male",
-        emoji: "🐱",
-        age_years: 10 / 12,
-        weight_kg: 5.1,
-        owned: ["bowtie", "glasses"],
-        equipped: { neck: "bowtie" },
-        gradient_from: "#a2a5aa",
-        gradient_to: "#606369",
-      },
-      {
-        household_id: household.id,
-        name: "Biscuit",
-        species: "dog",
-        breed: "Golden Retriever",
-        emoji: "🐶",
-        age_years: 2,
-        weight_kg: 29.5,
-        owned: ["cap"],
-        equipped: { head: "cap" },
-        gradient_from: "#da9e3f",
-        gradient_to: "#c65d26",
-      },
-    ])
-    .select();
-  const [cat, dog] = pets ?? [];
-
-  if (cat && dog) {
-    await supabase.from("weights").insert([
-      { pet_id: cat.id, ts: now - 24 * W, kg: 2.8 },
-      { pet_id: cat.id, ts: now - 20 * W, kg: 3.4 },
-      { pet_id: cat.id, ts: now - 16 * W, kg: 3.9 },
-      { pet_id: cat.id, ts: now - 12 * W, kg: 4.3 },
-      { pet_id: cat.id, ts: now - 8 * W, kg: 4.6 },
-      { pet_id: cat.id, ts: now - 4 * W, kg: 4.9 },
-      { pet_id: cat.id, ts: now, kg: 5.1 },
-      { pet_id: dog.id, ts: now - 24 * W, kg: 24.0 },
-      { pet_id: dog.id, ts: now - 20 * W, kg: 25.8 },
-      { pet_id: dog.id, ts: now - 16 * W, kg: 27.0 },
-      { pet_id: dog.id, ts: now - 12 * W, kg: 28.1 },
-      { pet_id: dog.id, ts: now - 8 * W, kg: 28.9 },
-      { pet_id: dog.id, ts: now - 4 * W, kg: 29.2 },
-      { pet_id: dog.id, ts: now, kg: 29.5 },
-    ]);
-
-    await supabase.from("supplies").insert([
-      { pet_id: cat.id, supply_key: "food", name: "Dry food", icon: "bowl", level: 62 },
-      { pet_id: cat.id, supply_key: "litter", name: "Litter", icon: "broom", level: 18 },
-      { pet_id: cat.id, supply_key: "treats", name: "Dental treats", icon: "star", level: 80 },
-      { pet_id: dog.id, supply_key: "food", name: "Kibble", icon: "bowl", level: 45 },
-      { pet_id: dog.id, supply_key: "poopbags", name: "Poop bags", icon: "broom", level: 12 },
-      { pet_id: dog.id, supply_key: "treats", name: "Training treats", icon: "star", level: 70 },
-    ]);
-
-    await supabase.from("meds").insert([
-      { pet_id: cat.id, name: "Flea treatment", dosage: "1 pipette", frequency: "Monthly" },
-    ]);
-
-    if (you && mom && dad && sara) {
-      await supabase.from("activities").insert([
-        { household_id: household.id, pet_id: cat.id, member_id: mom.id, type: "fed", ts: now - 3 * H },
-        { household_id: household.id, pet_id: dog.id, member_id: dad.id, type: "walk", ts: now - 4 * H },
-        { household_id: household.id, pet_id: cat.id, member_id: sara.id, type: "water", ts: now - 6 * H },
-        { household_id: household.id, pet_id: dog.id, member_id: you.id, type: "fed", ts: now - 7 * H },
-        { household_id: household.id, pet_id: cat.id, member_id: you.id, type: "litter", ts: now - 26 * H },
-        { household_id: household.id, pet_id: dog.id, member_id: mom.id, type: "groomed", ts: now - 30 * H },
-        { household_id: household.id, pet_id: cat.id, member_id: dad.id, type: "fed", ts: now - 28 * H },
-        { household_id: household.id, pet_id: dog.id, member_id: sara.id, type: "walk", ts: now - 32 * H },
-        { household_id: household.id, pet_id: cat.id, member_id: mom.id, type: "meds", ts: now - 2 * D - 5 * H },
-        { household_id: household.id, pet_id: cat.id, member_id: you.id, type: "vet", ts: now - 12 * D, note: "Regular checkup — all healthy!" },
-      ]);
-    }
-
-    await supabase.from("reminders").insert([
-      { household_id: household.id, pet_id: cat.id, title: "Flea treatment", emoji: "💊", due: now + 1 * D, done: false, source: "manual" },
-      { household_id: household.id, pet_id: dog.id, title: "Buy more kibble", emoji: "🛒", due: now + 2 * D, done: false, source: "manual" },
-      { household_id: household.id, pet_id: cat.id, title: "Full litter change", emoji: "🧹", due: now + 3 * D, done: false, source: "manual" },
-      { household_id: household.id, pet_id: dog.id, title: "Bath day", emoji: "🛁", due: now + 5 * D, done: false, source: "manual" },
-    ]);
-  }
-
+  await supabase.from("user_profiles").upsert({ user_id: userId, active_household_id: household.id });
   return household;
 }
 
@@ -622,6 +538,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // then persists to an on-device AsyncStorage cache instead of the shared
   // table, so Home shortcuts still survive restarts (just not shared yet).
   const shortcutSchemaRef = useRef(false);
+  // True when household_invites (migration 0027) is missing — the invite UI
+  // then falls back to the legacy share-the-Family-ID / join_household path.
+  const invitesSchemaRef = useRef(false);
+  // True when user_profiles.seen_welcome (migration 0030) is missing — the
+  // welcome flag then stays household-scoped like it always was.
+  const welcomeProfileSchemaRef = useRef(false);
+  // True when activities.user_id (migration 0030) is missing — logs then omit
+  // the account attribution. Like duration_minutes, learned from the first
+  // insert that bounces (hydration's `select *` succeeds either way).
+  const attributionSchemaRef = useRef(false);
   const notifiedActivityIdsRef = useRef<Set<string>>(new Set());
   // setTimeout ids for the staggered "what everyone else did" toast batch
   // (see notifyRecentActivity below) — lets stopNotifications cancel any
@@ -748,12 +674,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // single write of the latest values: rapid taps collapse to one correct write.
   // No RPC/migration needed, and correct for this single-owner-per-household app.
   const countersTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncCounters = useCallback(() => {
-    const h = hid();
-    if (!h) return;
-    if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
-    countersTimerRef.current = setTimeout(() => {
-      countersTimerRef.current = null;
+  const writeCounters = useCallback(
+    (h: string) => {
       supabase
         .from("households")
         .update({
@@ -770,8 +692,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             toast("alert", "Progress didn't save", "Coins may reset on reload — try again");
           }
         });
+    },
+    [supabase, toast]
+  );
+  const syncCounters = useCallback(() => {
+    const h = hid();
+    if (!h) return;
+    if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
+    countersTimerRef.current = setTimeout(() => {
+      countersTimerRef.current = null;
+      writeCounters(h);
     }, 250);
-  }, [supabase, toast]);
+  }, [writeCounters]);
+  // Fire any debounced counter write NOW, against the CURRENT household —
+  // called before every household switch/join/create/leave reload so the 250ms
+  // window can't land household A's coins after the refs point at B.
+  const flushCounters = useCallback(() => {
+    if (!countersTimerRef.current) return;
+    clearTimeout(countersTimerRef.current);
+    countersTimerRef.current = null;
+    const h = hid();
+    if (h) writeCounters(h);
+  }, [writeCounters]);
   useEffect(
     () => () => {
       if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
@@ -977,7 +919,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // without a full page reload.
   useEffect(() => {
     let cancelled = false;
-    let lastLoadedUserId: string | null = null;
+    // Completed-load dedupe, keyed by user AND household — a change to either
+    // (e.g. active_household_id updated from another device) reloads, while
+    // the hourly TOKEN_REFRESHED with nothing new stays cheap.
+    let lastLoadedKey: string | null = null;
+    // Collapses the SIGNED_IN/TOKEN_REFRESHED event burst during sign-in,
+    // where the household id isn't known yet.
+    let inFlightUserId: string | null = null;
 
     async function load() {
       // getSession() reads the already-verified local session instead of
@@ -988,7 +936,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       } = await supabase.auth.getSession();
       const user = session?.user ?? null;
       if (!user) {
-        lastLoadedUserId = null;
+        lastLoadedKey = null;
+        inFlightUserId = null;
         userIdRef.current = null;
         if (!cancelled) {
           setUserEmail(null);
@@ -1003,19 +952,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-      // Settle any in-flight refresh before bailing. onAuthStateChange calls
-      // load() on every TOKEN_REFRESHED (~hourly) and SIGNED_IN (each
-      // foreground); if one landed while a pull-to-refresh was pending, this
-      // early return left its promise unresolved and the spinner span forever.
-      if (user.id === lastLoadedUserId) {
-        resolvePendingRefreshes();
-        return;
-      }
-      lastLoadedUserId = user.id;
       if (cancelled) return;
+      // Identity state updates BEFORE any dedupe return: an email change
+      // arrives as USER_UPDATED with nothing else new, and must still land.
       userIdRef.current = user.id;
       setUserEmail(user.email ?? null);
       setUserId(user.id);
+      // Settle any in-flight refresh before bailing. onAuthStateChange calls
+      // load() on every TOKEN_REFRESHED (~hourly) and SIGNED_IN (each
+      // foreground); if one landed while a pull-to-refresh was pending, an
+      // early return that left its promise unresolved span the spinner forever.
+      if (user.id === inFlightUserId) {
+        resolvePendingRefreshes();
+        return;
+      }
+      inFlightUserId = user.id;
 
       // Appearance is per-account, not per-household: show the cached value
       // for THIS user immediately (instant, no flash of the wrong theme while
@@ -1031,39 +982,103 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Resolve which household is on-screen: the user's saved active household,
       // else any membership (prefer one they own). Membership-based RLS lets us
       // read any household the user belongs to, so a joined household loads too.
-      let profile: { active_household_id: string | null; theme_mode?: "light" | "dark" | null } | null = null;
-      if (themeModeSchemaRef.current) {
-        ({ data: profile } = await supabase.from("user_profiles").select("active_household_id").eq("user_id", user.id).maybeSingle());
-      } else {
+      // Per-user profile columns arrive in different migrations (theme_mode
+      // 0025, seen_welcome 0030) — probe by retrying without whichever column
+      // the error names, so any mix of applied migrations works.
+      let profile: { active_household_id: string | null; theme_mode?: "light" | "dark" | null; seen_welcome?: boolean | null } | null =
+        null;
+      for (;;) {
+        const cols = [
+          "active_household_id",
+          ...(themeModeSchemaRef.current ? [] : ["theme_mode"]),
+          ...(welcomeProfileSchemaRef.current ? [] : ["seen_welcome"]),
+        ];
         const res = await supabase
           .from("user_profiles")
-          .select("active_household_id, theme_mode")
+          .select(cols.join(", "))
           .eq("user_id", user.id)
-          .maybeSingle<{ active_household_id: string | null; theme_mode: "light" | "dark" | null }>();
-        if (res.error && /theme_mode/i.test(res.error.message ?? "")) {
+          .maybeSingle<{ active_household_id: string | null; theme_mode?: "light" | "dark" | null; seen_welcome?: boolean | null }>();
+        if (!res.error) {
+          profile = res.data;
+          break;
+        }
+        const msg = res.error.message ?? "";
+        if (!themeModeSchemaRef.current && /theme_mode/i.test(msg)) {
           console.warn("[petpal] user_profiles.theme_mode unavailable — apply migration 0025; syncing on-device only for now");
           themeModeSchemaRef.current = true;
-          ({ data: profile } = await supabase.from("user_profiles").select("active_household_id").eq("user_id", user.id).maybeSingle());
-        } else {
-          profile = res.data;
+          continue;
         }
+        if (!welcomeProfileSchemaRef.current && /seen_welcome/i.test(msg)) {
+          console.warn("[petpal] user_profiles.seen_welcome unavailable — apply migration 0030; welcome flag stays household-scoped");
+          welcomeProfileSchemaRef.current = true;
+          continue;
+        }
+        break; // unknown error — same as before, proceed with no profile row
       }
       if (!cancelled && profile?.theme_mode) {
         setThemeModeState(profile.theme_mode);
         AsyncStorage.setItem(themeModeLocalKey(user.id), profile.theme_mode).catch(() => {});
         AsyncStorage.setItem(THEME_MODE_LAST_KEY, profile.theme_mode).catch(() => {});
       }
-      const { data: memberships } = await supabase
+      const { data: memberships, error: membershipsErr } = await supabase
         .from("household_members")
-        .select("household_id, role, member_id, households(id, name)")
+        .select("household_id, role, member_id, joined_at, households(id, name)")
         .eq("user_id", user.id);
-      type MembershipRow = { household_id: string; role: string; member_id: string | null; households: { id: string; name: string } | null };
-      const membershipList: MembershipRow[] = (memberships as MembershipRow[] | null) ?? [];
+      if (membershipsErr) {
+        // Transient failure — do NOT treat as "no households" (that would dump
+        // an existing user into first-run onboarding). membershipsKnown stays
+        // false, so the onboarding redirect never fires off this state.
+        console.error("[petpal] memberships fetch failed:", describeErr(membershipsErr) ?? membershipsErr);
+        if (!cancelled) {
+          setHydrated(true);
+          resolvePendingRefreshes();
+          toast("alert", "Couldn't load your households", "Pull to refresh to try again");
+        }
+        lastLoadedKey = null; // retry on the next auth event
+        return;
+      }
+      type MembershipRow = {
+        household_id: string;
+        role: HouseholdRole;
+        member_id: string | null;
+        joined_at: string;
+        households: { id: string; name: string } | null;
+      };
+      // supabase-js types the `households(...)` embed as an array even though
+      // the FK makes it a single object at runtime — hence the unknown hop.
+      const membershipList: MembershipRow[] = (memberships as unknown as MembershipRow[] | null) ?? [];
+
+      // Zero memberships = a fresh account (post-0029 signups aren't demo-
+      // seeded). Land on the create-or-join onboarding instead of seeding
+      // anything client-side.
+      if (membershipList.length === 0) {
+        if (!cancelled) {
+          householdIdRef.current = null;
+          setState({ ...EMPTY_STATE, membershipsKnown: true });
+          setHydrated(true);
+          resolvePendingRefreshes();
+        }
+        return;
+      }
+
       let activeId = profile?.active_household_id ?? null;
       if (!activeId || !membershipList.some((m) => m.household_id === activeId)) {
         const owned = membershipList.find((m) => m.role === "owner");
         activeId = owned?.household_id ?? membershipList[0]?.household_id ?? null;
       }
+
+      // Same user + same household already on screen → nothing to do. Set the
+      // key immediately (not on success) so a failing load doesn't re-toast on
+      // every foreground; explicit retries come through reloadNonce, which
+      // rebuilds this whole closure.
+      const loadKey = `${user.id}|${activeId ?? "none"}`;
+      if (loadKey === lastLoadedKey) {
+        inFlightUserId = null;
+        resolvePendingRefreshes();
+        return;
+      }
+      lastLoadedKey = loadKey;
+      inFlightUserId = null;
 
       // Single nested query for household + members/pets/weights/supplies/
       // activities/reminders/booked_vets in one round trip.
@@ -1145,47 +1160,59 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return rows.sort((a, b) => a.sort - b.sort);
       };
 
+      // The signed-in accounts of this household (role, tenure, claimed card).
+      // "see co-members" RLS (0011) has always allowed this read — no probe.
+      const fetchAccounts = async (id: string): Promise<HouseholdAccount[]> => {
+        const res = await supabase
+          .from("household_members")
+          .select("user_id, role, joined_at, member_id")
+          .eq("household_id", id);
+        if (res.error || !res.data) {
+          console.error("[petpal] household accounts fetch failed:", describeErr(res.error) ?? res.error);
+          return [];
+        }
+        return res.data.map((r: { user_id: string; role: HouseholdRole; joined_at: string; member_id: string | null }) => ({
+          userId: r.user_id,
+          role: r.role,
+          joinedAt: Date.parse(r.joined_at),
+          memberId: r.member_id,
+        }));
+      };
+
       let household: HouseholdRow | null = null;
       let householdErr: { code?: string; message?: string; details?: string; hint?: string } | null = null;
       let schedules: CareSchedule[] = [];
       let shortcuts: Shortcut[] = [];
+      let accounts: HouseholdAccount[] = [];
       if (activeId) {
-        const [res, sched, cuts] = await Promise.all([fetchHousehold(activeId), fetchSchedules(activeId), fetchShortcuts(activeId)]);
+        const [res, sched, cuts, accs] = await Promise.all([
+          fetchHousehold(activeId),
+          fetchSchedules(activeId),
+          fetchShortcuts(activeId),
+          fetchAccounts(activeId),
+        ]);
         household = res.data;
         householdErr = res.error;
         schedules = sched;
         shortcuts = cuts;
+        accounts = accs;
       }
       if (householdErr) console.error("[petpal] household fetch failed:", describeErr(householdErr) ?? householdErr);
 
-      let finalHousehold = household;
-      const bootstrapErrRef = { current: describeErr(householdErr) };
-      if (!finalHousehold) {
-        const bootstrapped = await bootstrapHousehold(
-          supabase,
-          user.id,
-          (user.user_metadata as { name?: string } | null)?.name || "You",
-          bootstrapErrRef
-        );
-        // bootstrapHousehold only inserts the bare household row (plus its
-        // seed children separately) — refetch nested so the shape matches.
-        finalHousehold = bootstrapped ? (await fetchHousehold(bootstrapped.id)).data : null;
-      }
-      if (!finalHousehold || cancelled) {
-        setHydrated(true);
-        resolvePendingRefreshes();
-        if (!finalHousehold) {
-          toast("alert", "Couldn't set up your household", bootstrapErrRef.current ?? "unknown error — check console");
+      // Membership rows exist (checked above), so a missing household here is
+      // a transient fetch failure — surface it and retry on the next event
+      // instead of the old demo-seeding bootstrap (retired with 0029).
+      if (!household || cancelled) {
+        if (!cancelled) {
+          setHydrated(true);
+          resolvePendingRefreshes();
+          toast("alert", "Couldn't load your household", describeErr(householdErr) ?? "Pull to refresh to try again");
         }
+        lastLoadedKey = null;
         return;
       }
-      const h = finalHousehold;
+      const h = household;
       householdIdRef.current = h.id;
-      // Bootstrap (or a household-id change) skipped the parallel schedules/
-      // shortcuts fetches above — probe now so the schema refs reflect this DB.
-      if (h.id !== activeId) {
-        [schedules, shortcuts] = await Promise.all([fetchSchedules(h.id), fetchShortcuts(h.id)]);
-      }
 
       const members = [...(h.members ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
       const petRows = [...(h.pets ?? [])].sort((a: PetRow & { created_at: string }, b: PetRow & { created_at: string }) =>
@@ -1267,22 +1294,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         medId: a.med_id ?? undefined,
         durationMinutes: a.duration_minutes ?? undefined,
       }));
-      // Per-user "view as": prefer the current user's own linked member card,
-      // then the household's shared pointer, then the first member. This keeps
-      // one user's member switch from dictating what other members see.
+      // You are always your own claimed card (household_members.member_id).
+      // The shared current_member_id / first-member fallbacks only cover
+      // legacy rows where the claim link was never written.
       const myMembership = membershipList.find((m) => m.household_id === h.id);
+      const myRole: HouseholdRole | null = accounts.find((a) => a.userId === user.id)?.role ?? myMembership?.role ?? null;
       const currentMemberId =
         (myMembership?.member_id && members.some((m) => m.id === myMembership.member_id) ? myMembership.member_id : null) ??
         h.current_member_id ??
         members[0]?.id ??
         "";
-      // Households for the switcher — from memberships, or synthesize from the
-      // loaded household when the fallback bootstrap path ran (no membership rows
-      // were read before the household existed).
-      const householdsList =
-        membershipList.length > 0
-          ? membershipList.map((m) => ({ id: m.household_id, name: m.households?.name ?? "Household" }))
-          : [{ id: h.id, name: h.name }];
+      const householdsList = membershipList.map((m) => ({
+        id: m.household_id,
+        name: m.households?.name ?? "Household",
+        role: m.role,
+        joinedAt: Date.parse(m.joined_at),
+      }));
       const reminderList: Reminder[] = reminders
         .filter((r) => !pendingDeletedReminderIdsRef.current.has(r.id))
         .map((r) => ({
@@ -1323,12 +1350,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         shortcuts,
         bookedVet: bookedVets.length > 0,
         bookedVetIds: bookedVets.map((b) => b.vet_id),
-        seenWelcome: h.seen_welcome,
+        // Seen anywhere = seen: the per-user flag (0030) travels across
+        // households so switching never re-fires the intro; the household
+        // flag keeps veteran pre-0030 users (and the web demo) suppressed.
+        seenWelcome: (profile?.seen_welcome ?? false) || h.seen_welcome,
         units: h.units,
         familyId: h.id,
         familyPasswordSet: !!h.family_password_hash,
         households: householdsList,
         activeHouseholdId: h.id,
+        myRole,
+        accounts,
+        membershipsKnown: true,
       });
       setHydrated(true);
       resolvePendingRefreshes();
@@ -1616,13 +1649,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Persist the activity (+ any supply drain) per-row; on failure roll the
       // whole slice back. Coins/streak go through the debounced syncCounters
       // so rapid taps can't race at the DB.
-      // med_id only exists from migration 0017 — omit it entirely on older DBs
-      // so the insert still succeeds.
-      // med_id only exists from 0017, duration_minutes from 0022 — both are
-      // added only when their schema is known-present. There's no cheap probe
-      // for duration_minutes (hydration's `select *` succeeds either way), so
-      // the first insert that bounces on it marks the schema pre-0022 and
-      // retries without the duration — the log itself still lands, unmeasured.
+      // Optional columns arrive in different migrations — med_id 0017 (probed
+      // at hydration), duration_minutes 0022 and user_id 0030 (no cheap probe:
+      // hydration's `select *` succeeds either way, so each is learned from
+      // the first insert that bounces on it and retried without — the log
+      // itself still lands, just unmeasured/unattributed).
       type ActivityInsertRow = {
         id: string;
         household_id: string;
@@ -1633,26 +1664,33 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         grams: number | null;
         med_id?: string;
         duration_minutes?: number;
+        user_id?: string;
       };
       const activityRow: ActivityInsertRow = { id, household_id: h, pet_id: petId, member_id: memberId, type, ts, grams: grams ?? null };
       if (medId != null && !scheduleSchemaRef.current) activityRow.med_id = medId;
       if (durationMinutes != null && !durationSchemaRef.current) activityRow.duration_minutes = durationMinutes;
-      const insertActivity: PromiseLike<{ error: unknown }> =
-        activityRow.duration_minutes != null
-          ? supabase
-              .from("activities")
-              .insert(activityRow)
-              .then((res) => {
-                const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
-                if (res.error && msg.includes("duration_minutes")) {
-                  console.warn("[petpal] activities.duration_minutes unavailable — apply migration 0022; logging without duration");
-                  durationSchemaRef.current = true;
-                  const { duration_minutes: _omit, ...withoutDuration } = activityRow;
-                  return supabase.from("activities").insert(withoutDuration);
-                }
-                return res;
-              })
-          : supabase.from("activities").insert(activityRow);
+      if (!attributionSchemaRef.current && userIdRef.current) activityRow.user_id = userIdRef.current;
+      const insertWithFallback = (row: ActivityInsertRow): PromiseLike<{ error: unknown }> =>
+        supabase
+          .from("activities")
+          .insert(row)
+          .then((res) => {
+            const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
+            if (res.error && row.duration_minutes != null && msg.includes("duration_minutes")) {
+              console.warn("[petpal] activities.duration_minutes unavailable — apply migration 0022; logging without duration");
+              durationSchemaRef.current = true;
+              const { duration_minutes: _omit, ...rest } = row;
+              return insertWithFallback(rest);
+            }
+            if (res.error && row.user_id != null && msg.includes("user_id")) {
+              console.warn("[petpal] activities.user_id unavailable — apply migration 0030; logging without account attribution");
+              attributionSchemaRef.current = true;
+              const { user_id: _omit, ...rest } = row;
+              return insertWithFallback(rest);
+            }
+            return res;
+          });
+      const insertActivity: PromiseLike<{ error: unknown }> = insertWithFallback(activityRow);
       const ops: PromiseLike<{ error: unknown }>[] = [insertActivity];
       if (litterSupply && litterLevel != null) {
         ops.push(supabase.from("supplies").update({ level: litterLevel }).eq("pet_id", petId).eq("supply_key", litterSupply.id));
@@ -1721,25 +1759,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [supabase, toast, persist, syncCounters, raiseFeedingAlert, undoLogAction, bestEffort]
   );
 
-  const switchMember = useCallback(
-    (id: string) => {
-      const prevId = stateRef.current.currentMemberId;
-      setState((p) => ({ ...p, currentMemberId: id }));
-      notifyRecentActivity(id, stateRef.current.activities, stateRef.current.pets, stateRef.current.members);
-      notifyCareWarnings(id, stateRef.current.reminders);
-      const h = hid();
-      const uid = userIdRef.current;
-      // Persist "view as" on the current user's OWN membership row, not the
-      // shared households.current_member_id — so one member switching doesn't
-      // change what the other members of a shared household see.
-      if (h && uid)
-        persist(supabase.from("household_members").update({ member_id: id }).eq("household_id", h).eq("user_id", uid), {
-          rollback: () => setState((p) => ({ ...p, currentMemberId: prevId })),
-          message: "Couldn't switch member",
-        });
-    },
-    [supabase, persist, notifyRecentActivity, notifyCareWarnings]
-  );
+  // "View as" member switching was removed with per-person accounts (owner
+  // decision 2026-07-25): you are always your own claimed card. The web demo
+  // still writes household_members.member_id for its own switcher — harmless
+  // here, since hydration prefers the claim link it wrote for THIS user.
 
   const setPremium = useCallback(
     (on: boolean) => {
@@ -2258,6 +2281,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         toast("alert", "Can't remove the last member", "A household needs at least one member");
         return;
       }
+      // A claimed card is a signed-in account's identity (0026 also guards
+      // this server-side) — remove the ACCOUNT from the household instead.
+      if (stateRef.current.accounts.some((a) => a.memberId === memberId)) {
+        toast("alert", "This member has an account", "Remove them from the household instead of deleting their card");
+        return;
+      }
       const before = {
         members: stateRef.current.members,
         activities: stateRef.current.activities,
@@ -2695,6 +2724,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .then(({ error }) => {
             if (error) console.error("[petpal] seen_welcome update failed:", error);
           });
+      // Also per-account (0030) so the flag follows the person across
+      // households. Upsert touches only the provided columns (0025 precedent).
+      const uid = userIdRef.current;
+      if (uid && !welcomeProfileSchemaRef.current)
+        supabase
+          .from("user_profiles")
+          .upsert({ user_id: uid, seen_welcome: seen })
+          .then(({ error }) => {
+            if (error && /seen_welcome/i.test(error.message ?? "")) {
+              console.warn("[petpal] user_profiles.seen_welcome unavailable — apply migration 0030");
+              welcomeProfileSchemaRef.current = true;
+            } else if (error) {
+              console.error("[petpal] per-user seen_welcome update failed:", error);
+            }
+          });
     },
     [supabase]
   );
@@ -2780,10 +2824,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       toast("home", "Joined household", "Loading it now…");
       // Full re-hydration so the store loads the newly-active household.
+      flushCounters();
       setReloadNonce((n) => n + 1);
       return true;
     },
-    [supabase, toast]
+    [supabase, toast, flushCounters]
   );
 
   const setActiveHousehold = useCallback(
@@ -2795,9 +2840,261 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         toast("alert", "Couldn't switch household", "Please try again");
         return;
       }
+      flushCounters();
       setReloadNonce((n) => n + 1);
     },
+    [supabase, toast, flushCounters]
+  );
+
+  const createHousehold = useCallback(
+    async (name: string) => {
+      const uid = userIdRef.current;
+      if (!uid) return false;
+      const hname = name.trim() || "My household";
+      let newId: string | null = null;
+      const { data, error } = await supabase.rpc("create_household", { hname });
+      if (!error) {
+        newId = data as string;
+      } else if (isMissingFunction(error)) {
+        // Pre-0028 DB: slim client-side insert. Pre-0026 the UNIQUE owner_id
+        // still stands, so a SECOND household bounces with 23505.
+        const errRef = { current: null as string | null };
+        const accountName = stateRef.current.members.find((m) => m.id === stateRef.current.currentMemberId)?.name || "You";
+        const created = await createHouseholdFallback(supabase, uid, accountName, hname, errRef);
+        if (!created) {
+          toast(
+            "alert",
+            errRef.current === "23505" ? "Creating another household needs the next backend update" : "Couldn't create household",
+            errRef.current === "23505" ? "Apply migration 0026 to unlock multiple households" : "Please try again"
+          );
+          return false;
+        }
+        newId = created.id;
+      } else {
+        console.error("[petpal] create_household failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't create household", "Please try again");
+        return false;
+      }
+      // The RPC/fallback already set active_household_id; re-upsert is
+      // idempotent and covers any replication lag on the pointer read.
+      await supabase.from("user_profiles").upsert({ user_id: uid, active_household_id: newId });
+      flushCounters();
+      setReloadNonce((n) => n + 1);
+      return true;
+    },
+    [supabase, toast, flushCounters]
+  );
+
+  const renameHousehold = useCallback(
+    (name: string) => {
+      const h = hid();
+      const next = name.trim();
+      if (!h || !next) return;
+      const before = stateRef.current.households;
+      setState((p) => ({ ...p, households: p.households.map((hh) => (hh.id === h ? { ...hh, name: next } : hh)) }));
+      persist(supabase.from("households").update({ name: next }).eq("id", h), {
+        rollback: () => setState((p) => ({ ...p, households: before })),
+        // 0026's trigger rejects non-admin renames server-side.
+        message: "Couldn't rename the household",
+      });
+    },
+    [supabase, persist]
+  );
+
+  const leaveHousehold = useCallback(
+    async (householdId: string) => {
+      const { error } = await supabase.rpc("leave_household", { hid: householdId });
+      if (error) {
+        if (isMissingFunction(error)) {
+          toast("alert", "Leaving needs the next backend update", "Apply migration 0028 to unlock this");
+        } else if ((error as { code?: string }).code === "42501") {
+          toast("alert", "Owners can't leave", "Transfer ownership or delete the household first");
+        } else {
+          console.error("[petpal] leave_household failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't leave the household", "Please try again");
+        }
+        return false;
+      }
+      toast("home", "Left the household", "");
+      flushCounters();
+      setReloadNonce((n) => n + 1);
+      return true;
+    },
+    [supabase, toast, flushCounters]
+  );
+
+  const removeHouseholdMember = useCallback(
+    async (targetUserId: string) => {
+      const h = hid();
+      if (!h) return false;
+      const before = stateRef.current.accounts;
+      setState((p) => ({ ...p, accounts: p.accounts.filter((a) => a.userId !== targetUserId) }));
+      const { error } = await supabase.rpc("remove_household_member", { hid: h, target_user: targetUserId });
+      if (error) {
+        setState((p) => ({ ...p, accounts: before }));
+        if (isMissingFunction(error)) toast("alert", "Removing members needs the next backend update", "Apply migration 0028 to unlock this");
+        else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can remove an admin");
+        else {
+          console.error("[petpal] remove_household_member failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't remove that member", "Please try again");
+        }
+        return false;
+      }
+      toast("check", "Member removed", "Their card and history stay in the household");
+      return true;
+    },
     [supabase, toast]
+  );
+
+  const setMemberRole = useCallback(
+    async (targetUserId: string, role: "admin" | "member") => {
+      const h = hid();
+      if (!h) return false;
+      const before = stateRef.current.accounts;
+      setState((p) => ({ ...p, accounts: p.accounts.map((a) => (a.userId === targetUserId ? { ...a, role } : a)) }));
+      const { error } = await supabase.rpc("set_member_role", { hid: h, target_user: targetUserId, new_role: role });
+      if (error) {
+        setState((p) => ({ ...p, accounts: before }));
+        if (isMissingFunction(error)) toast("alert", "Role changes need the next backend update", "Apply migration 0028 to unlock this");
+        else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can change roles");
+        else {
+          console.error("[petpal] set_member_role failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't change that role", "Please try again");
+        }
+        return false;
+      }
+      toast("check", role === "admin" ? "Promoted to admin" : "Changed to member", "");
+      return true;
+    },
+    [supabase, toast]
+  );
+
+  const transferOwnership = useCallback(
+    async (targetUserId: string) => {
+      const h = hid();
+      if (!h) return false;
+      const { error } = await supabase.rpc("transfer_ownership", { hid: h, new_owner: targetUserId });
+      if (error) {
+        if (isMissingFunction(error)) toast("alert", "Transfers need the next backend update", "Apply migration 0028 to unlock this");
+        else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can transfer ownership");
+        else {
+          console.error("[petpal] transfer_ownership failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't transfer ownership", "Please try again");
+        }
+        return false;
+      }
+      toast("check", "Ownership transferred", "You're an admin here now");
+      // Roles changed for at least two rows — reload rather than patch.
+      setReloadNonce((n) => n + 1);
+      return true;
+    },
+    [supabase, toast]
+  );
+
+  const mapInviteRow = (r: {
+    id: string;
+    code: string;
+    role: "member" | "admin";
+    target_member_id: string | null;
+    created_at: string;
+    expires_at: string;
+    max_uses: number | null;
+    use_count: number;
+    revoked_at: string | null;
+  }): HouseholdInvite => ({
+    id: r.id,
+    code: r.code,
+    role: r.role,
+    targetMemberId: r.target_member_id,
+    createdAt: Date.parse(r.created_at),
+    expiresAt: Date.parse(r.expires_at),
+    maxUses: r.max_uses,
+    useCount: r.use_count,
+    revokedAt: r.revoked_at ? Date.parse(r.revoked_at) : null,
+  });
+
+  const createInvite = useCallback(
+    async (input: { role: "member" | "admin"; targetMemberId?: string; ttlHours?: number; maxUses?: number }) => {
+      const h = hid();
+      if (!h) return null;
+      const { data, error } = await supabase.rpc("create_invite", {
+        hid: h,
+        invite_role: input.role,
+        target: input.targetMemberId ?? null,
+        ttl_hours: input.ttlHours ?? 168,
+        uses: input.maxUses ?? null,
+      });
+      if (error || !data) {
+        if (isMissingFunction(error)) {
+          invitesSchemaRef.current = true;
+          toast("alert", "Invite codes need the next backend update", "Sharing the Family ID still works meanwhile");
+        } else if ((error as { code?: string } | null)?.code === "42501") {
+          toast("alert", "Not allowed", /admin invites/i.test(error?.message ?? "") ? "Only the owner can create admin invites" : "Only the owner or an admin can invite");
+        } else {
+          console.error("[petpal] create_invite failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't create the invite", "Please try again");
+        }
+        return null;
+      }
+      return mapInviteRow(data as Parameters<typeof mapInviteRow>[0]);
+    },
+    [supabase, toast]
+  );
+
+  const fetchInvites = useCallback(async () => {
+    const h = hid();
+    if (!h || invitesSchemaRef.current) return [];
+    const { data, error } = await supabase
+      .from("household_invites")
+      .select("id, code, role, target_member_id, created_at, expires_at, max_uses, use_count, revoked_at")
+      .eq("household_id", h)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false });
+    if (error) {
+      if (/household_invites/i.test(error.message ?? "")) invitesSchemaRef.current = true;
+      else console.error("[petpal] invites fetch failed:", describeErr(error) ?? error);
+      return [];
+    }
+    return (data ?? []).map(mapInviteRow);
+  }, [supabase]);
+
+  const revokeInvite = useCallback(
+    async (inviteId: string) => {
+      const { error } = await supabase.rpc("revoke_invite", { invite_id: inviteId });
+      if (error) {
+        console.error("[petpal] revoke_invite failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't revoke that invite", "Please try again");
+        return false;
+      }
+      toast("check", "Invite revoked", "The code no longer works");
+      return true;
+    },
+    [supabase, toast]
+  );
+
+  const redeemInvite = useCallback(
+    async (code: string): Promise<{ ok: boolean; reason?: "notFound" | "expired" | "unavailable" | "error" }> => {
+      const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (normalized.length !== 8) return { ok: false, reason: "notFound" };
+      const { error } = await supabase.rpc("redeem_invite", { invite_code: normalized });
+      if (error) {
+        const errCode = (error as { code?: string }).code;
+        if (isMissingFunction(error)) {
+          invitesSchemaRef.current = true;
+          return { ok: false, reason: "unavailable" };
+        }
+        if (errCode === "P0002") return { ok: false, reason: "notFound" };
+        if (errCode === "P0003") return { ok: false, reason: "expired" };
+        console.error("[petpal] redeem_invite failed:", describeErr(error) ?? error);
+        return { ok: false, reason: "error" };
+      }
+      toast("home", "Joined household", "Loading it now…");
+      flushCounters();
+      setReloadNonce((n) => n + 1);
+      return { ok: true };
+    },
+    [supabase, toast, flushCounters]
   );
 
   const setNotificationPref = useCallback(
@@ -2851,7 +3148,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         stopNotifications,
         logAction,
         undoLogAction,
-        switchMember,
         setPremium,
         buyCosmetic,
         toggleEquip,
@@ -2891,6 +3187,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         verifyFamilyPassword,
         joinHousehold,
         setActiveHousehold,
+        createHousehold,
+        renameHousehold,
+        leaveHousehold,
+        removeHouseholdMember,
+        setMemberRole,
+        transferOwnership,
+        redeemInvite,
+        createInvite,
+        fetchInvites,
+        revokeInvite,
         setNotificationPref,
         signOut,
         refresh,

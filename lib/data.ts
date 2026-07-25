@@ -324,6 +324,33 @@ export function nextAnniversary(startMs: number, now: number = Date.now()): numb
   return candidate.getTime();
 }
 
+/** The enforced role on a household membership (household_members.role) —
+ *  distinct from the cosmetic free-text `Member.role` card label. */
+export type HouseholdRole = "owner" | "admin" | "member";
+
+/** A real signed-in account that belongs to the active household. `memberId`
+ *  links to the member card that account has claimed (null = unclaimed yet). */
+export interface HouseholdAccount {
+  userId: string;
+  role: HouseholdRole;
+  joinedAt: number;
+  memberId: string | null;
+}
+
+/** An invite code for the active household (admins/owner only ever see these). */
+export interface HouseholdInvite {
+  id: string;
+  code: string;
+  role: "member" | "admin";
+  /** When set, redeeming CLAIMS this existing card instead of creating one. */
+  targetMemberId: string | null;
+  createdAt: number;
+  expiresAt: number;
+  maxUses: number | null;
+  useCount: number;
+  revokedAt: number | null;
+}
+
 export interface AppState {
   currentMemberId: string;
   premium: boolean;
@@ -346,9 +373,23 @@ export interface AppState {
   /** Whether the family admin has set a password — the hash itself never reaches client state. */
   familyPasswordSet: boolean;
   /** Every household this user belongs to (for the household switcher). */
-  households: { id: string; name: string }[];
+  households: { id: string; name: string; role: HouseholdRole; joinedAt: number }[];
   /** The household currently loaded on-screen (one of `households`). */
   activeHouseholdId: string;
+  /** The signed-in user's enforced role in the ACTIVE household (null while none). */
+  myRole: HouseholdRole | null;
+  /** The signed-in accounts that belong to the active household. */
+  accounts: HouseholdAccount[];
+  /** True once the membership list has actually been fetched for this user —
+   *  gates the "no households → onboarding" redirect so a transient fetch
+   *  failure never dumps an existing user into first-run onboarding. */
+  membershipsKnown: boolean;
+}
+
+/** A member card is "unclaimed" when no signed-in account owns it — these are
+ *  the cards kept for kids/relatives who don't use the app (yet). */
+export function isUnclaimedCard(memberId: string, accounts: HouseholdAccount[]): boolean {
+  return !accounts.some((a) => a.memberId === memberId);
 }
 
 export const ACTIONS: Record<ActionType, { label: string; emoji: string; verb: string }> = {

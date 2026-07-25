@@ -31,6 +31,11 @@ begin
     raise exception 'not authenticated' using errcode = '28000';
   end if;
 
+  -- Owning multiple households is allowed ONLY through this RPC: the flag
+  -- lets the insert pass 0026's households_single_owned_guard (which keeps
+  -- raising the web demo's expected 23505 on direct duplicate inserts).
+  perform set_config('petpal.allow_multi_household', 'on', true);
+
   insert into households (owner_id, name, coins, xp, streak, units)
   values (uid, coalesce(nullif(trim(hname), ''), 'My household'), 0, 0, 0, 'kg')
   returning id into h_id;
@@ -266,3 +271,25 @@ end;
 $$;
 revoke all on function public.prepare_account_deletion(uuid) from public, authenticated, anon;
 grant execute on function public.prepare_account_deletion(uuid) to service_role;
+
+-- Safety net for EVERY deletion path (the mobile Edge Function calls the RPC
+-- explicitly; the web demo's API route calls auth.admin.deleteUser directly):
+-- run succession automatically right before an auth user row goes away.
+-- prepare_account_deletion is idempotent, so the doubled call is harmless.
+
+create or replace function public.prepare_account_deletion_trigger()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.prepare_account_deletion(old.id);
+  return old;
+end;
+$$;
+
+drop trigger if exists on_auth_user_deleted on auth.users;
+create trigger on_auth_user_deleted
+  before delete on auth.users
+  for each row execute function public.prepare_account_deletion_trigger();

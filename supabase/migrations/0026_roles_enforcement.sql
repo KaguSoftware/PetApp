@@ -119,6 +119,10 @@ create trigger households_rename_guard
 -- Skips when the parent household row is already gone (i.e. we're inside a
 -- household-delete cascade, where household_members rows may not have been
 -- cascaded yet), and for service-role/admin paths (auth.uid() is null).
+--
+-- Only OTHER users' pointers count as claims: the web demo persists its
+-- per-user "view as" into household_members.member_id, so a card the deleter
+-- merely viewed as must stay deletable (their pointer FK sets itself null).
 
 create or replace function public.guard_claimed_card_delete()
 returns trigger
@@ -129,7 +133,8 @@ as $$
 begin
   if auth.uid() is not null
      and exists (select 1 from households where id = old.household_id)
-     and exists (select 1 from household_members where member_id = old.id) then
+     and exists (select 1 from household_members
+                 where member_id = old.id and user_id <> auth.uid()) then
     raise exception 'this member is linked to an account — remove the member from the household instead'
       using errcode = '42501';
   end if;
@@ -146,6 +151,37 @@ create trigger members_claimed_delete_guard
 -- owner_id stays NOT NULL (permanent creator/billing record; rc-webhook keys
 -- premium off it) and keeps ON DELETE CASCADE (prepare_account_deletion in
 -- 0028 reassigns or deletes every owned household before the auth user goes).
+--
+-- The web demo's bootstrapHousehold() DEPENDS on the unique violation: its
+-- recovery path is `insert → on 23505 → reselect by owner_id`, and without it
+-- a transient fetch failure would silently create a duplicate fully-seeded
+-- household. So the constraint is replaced by a trigger that raises the SAME
+-- errcode for a second owned household on DIRECT inserts — only the
+-- create_household() RPC (0028), which sets a transaction-local flag, may
+-- create additional owned households. Web behavior is bit-for-bit unchanged.
 
 alter table households drop constraint if exists households_owner_id_key;
 create index if not exists households_owner_id_idx on households (owner_id);
+
+create or replace function public.guard_single_owned_household()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(current_setting('petpal.allow_multi_household', true), '') <> 'on'
+     and auth.uid() is not null
+     and exists (select 1 from households where owner_id = new.owner_id) then
+    raise unique_violation using
+      message = 'duplicate key value violates unique constraint "households_owner_id_key"',
+      constraint = 'households_owner_id_key';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists households_single_owned_guard on households;
+create trigger households_single_owned_guard
+  before insert on households
+  for each row execute function public.guard_single_owned_household();
