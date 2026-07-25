@@ -77,17 +77,54 @@ export async function signInWithApple(): Promise<AuthResult> {
 
 // --------------------------------------------------------------- Google ----
 
+/** Pulls a query param out of a redirect URL. Uses expo-linking's parser, NOT
+ * `new URL()`: for a custom scheme like `petpal://auth-callback?code=…` the
+ * WHATWG parser treats "auth-callback" as the host and does not reliably
+ * expose the query, so `searchParams.get("code")` comes back null and a
+ * perfectly good sign-in looks like a failure. */
+function paramFromRedirect(url: string, key: string): string | null {
+  const value = Linking.parse(url).queryParams?.[key];
+  const first = Array.isArray(value) ? value[0] : value;
+  return first == null ? null : String(first);
+}
+
 /** Runs an already-built Supabase OAuth URL through the system browser and
  * exchanges the returned PKCE code for a session. Shared by sign-in and
  * identity linking (both hand back the same ?code= shape). */
 async function completeBrowserOAuth(url: string, redirectTo: string): Promise<AuthResult> {
-  const result = await WebBrowser.openAuthSessionAsync(url, redirectTo);
-  if (result.type !== "success") return { error: null, cancelled: true };
+  // On Android, Chrome Custom Tabs frequently reports `dismiss` even on a
+  // SUCCESSFUL redirect — the app is foregrounded by the deep link and the
+  // browser result races it. The redirect URL then arrives only through the
+  // Linking listener, so we race the two and take whichever produces a URL.
+  // Treating `type !== "success"` as a cancel silently swallowed every
+  // Android sign-in.
+  let resolveUrl: (u: string | null) => void = () => {};
+  const linkPromise = new Promise<string | null>((resolve) => {
+    resolveUrl = resolve;
+  });
+  const sub = Linking.addEventListener("url", (e) => resolveUrl(e.url));
 
-  const returned = new URL(result.url);
-  const code = returned.searchParams.get("code");
+  let redirectUrl: string | null = null;
+  try {
+    const result = await WebBrowser.openAuthSessionAsync(url, redirectTo);
+    if (result.type === "success") {
+      redirectUrl = result.url;
+    } else {
+      // Give the deep link a moment to land before believing the dismissal.
+      redirectUrl = await Promise.race([
+        linkPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200)),
+      ]);
+    }
+  } finally {
+    sub.remove();
+  }
+
+  if (!redirectUrl) return { error: null, cancelled: true };
+
+  const code = paramFromRedirect(redirectUrl, "code");
   if (!code) {
-    const description = returned.searchParams.get("error_description");
+    const description = paramFromRedirect(redirectUrl, "error_description");
     return {
       error: description
         ? friendlyAuthError(description)
