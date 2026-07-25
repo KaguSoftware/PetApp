@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -112,6 +112,28 @@ export default function Home() {
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
   const [petPickerOpen, setPetPickerOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
+
+  // Bumped every time Home regains focus, and used as part of the hero
+  // avatar's `key` below. A tap that pushes `/pet/[id]` can occasionally get
+  // its touch stolen mid-press by the hero's swipe GestureDetector (no
+  // onPressOut/onPress fires to resolve it), leaving PressableScale's dim
+  // stuck below full opacity. Remounting on focus guarantees a fresh shared
+  // value at 1 whenever the avatar becomes visible again, regardless of why
+  // a previous press was left unresolved.
+  const [avatarFocusKey, setAvatarFocusKey] = useState(0);
+  // Guards against spam-tapping the avatar: without it, every tap in a fast
+  // burst fires its own router.push before the first navigation's transition
+  // even starts, stacking several `/pet/[id]` screens and re-triggering the
+  // press-dim animation mid-flight on each one — which is what kept
+  // reproducing the transparent-avatar glitch under rapid taps. Unlocked
+  // again whenever Home regains focus.
+  const avatarNavLockRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      avatarNavLockRef.current = false;
+      setAvatarFocusKey((k) => k + 1);
+    }, [])
+  );
 
   // Hero carousel. The card itself is a fixed frame that never moves; inside it
   // a track holding every pet slides horizontally, so one pet pushes the next
@@ -316,7 +338,12 @@ export default function Home() {
                 <View key={p.id} style={[styles.heroSlide, heroW === 0 ? styles.heroSlideFull : { width: heroW }]}>
                   <View style={styles.heroTop}>
                     <PressableScale
-                      onPress={() => router.push(`/pet/${p.id}`)}
+                      key={`${p.id}-${avatarFocusKey}`}
+                      onPress={() => {
+                        if (avatarNavLockRef.current) return;
+                        avatarNavLockRef.current = true;
+                        router.push(`/pet/${p.id}`);
+                      }}
                       accessibilityLabel={`Open ${p.name}'s details`}
                       hitSlop={6}
                       overflowsBounds

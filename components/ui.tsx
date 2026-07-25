@@ -68,6 +68,11 @@ export function PressableScale({
         android_ripple={null}
         {...props}
         onPress={(e) => {
+          // Snap the dim back instantly instead of riding the 240ms release
+          // tween: for presses that navigate, that tween is still running
+          // when the push transition starts, so the source view visibly
+          // fades back to opaque mid-transition instead of before it.
+          dim.value = 1;
           if (haptic && Platform.OS === "ios" && hapticsEnabled()) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onPress?.(e);
         }}
