@@ -1,4 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
+import Constants from "expo-constants";
 import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -25,7 +26,22 @@ export interface AuthResult {
  * (add it to the Supabase redirect allowlist while developing); in real
  * builds it's petpal://auth-callback. */
 function authRedirectUrl(): string {
-  return Linking.createURL("auth-callback");
+  // In a real build this is `petpal://auth-callback` — stable, IP-free, and
+  // the one string that needs allowlisting forever.
+  //
+  // In EXPO GO it must stay the `exp://<lan-ip>:8081/--/auth-callback` form,
+  // because a `petpal://` link cannot reopen Expo Go (Expo Go owns `exp://`).
+  // That URL changes with the network, so it has to be re-allowlisted whenever
+  // the LAN IP or tunnel changes — when it doesn't match, Supabase silently
+  // falls back to Site URL and the user lands on `localhost:3000/?code=…`
+  // with auth already succeeded. The log line below prints the exact value to
+  // paste into Supabase → Authentication → URL Configuration → Redirect URLs.
+  const url =
+    Constants.appOwnership === "expo"
+      ? Linking.createURL("auth-callback")
+      : Linking.createURL("auth-callback", { scheme: "petpal" });
+  console.log("[petpal] OAuth redirectTo =", url, "— this EXACT string must be in Supabase's Redirect URLs");
+  return url;
 }
 
 // ---------------------------------------------------------------- Apple ----
