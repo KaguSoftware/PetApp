@@ -1,9 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
 // Aliased: this app's own state type is also named AppState (lib/data.ts).
 import { AppState as RNAppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "@/lib/supabase";
+import { hasSupabaseEnv, supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
@@ -69,6 +69,48 @@ function computeStreak(activities: { ts: number }[]): number {
   return count;
 }
 
+/**
+ * activities row → Activity. Module-level so the full hydrate and the realtime
+ * INSERT handler map identically — when this was inline in load(), the realtime
+ * path had no way to share it and the two would have drifted on the next column.
+ */
+function mapActivityRow(a: {
+  id: string;
+  pet_id: string;
+  member_id: string;
+  type: Activity["type"];
+  ts: string | number;
+  note?: string | null;
+  grams?: number | null;
+  med_id?: string | null;
+  duration_minutes?: number | null;
+}): Activity {
+  return {
+    id: a.id,
+    petId: a.pet_id,
+    memberId: a.member_id,
+    type: a.type,
+    ts: Number(a.ts),
+    note: a.note ?? undefined,
+    grams: a.grams ?? undefined,
+    medId: a.med_id ?? undefined,
+    durationMinutes: a.duration_minutes ?? undefined,
+  };
+}
+
+/** Trailing debounce on a realtime-triggered re-hydrate. */
+const SILENT_RELOAD_DEBOUNCE_MS = 600;
+/** Floor between two realtime-triggered re-hydrates, however many events land. */
+const SILENT_RELOAD_MIN_GAP_MS = 3000;
+
+/** How long a toast banner stays up before auto-dismissing. */
+const TOAST_MS = 3400;
+/** Gap between toasts in a staggered batch — slightly under TOAST_MS so each
+ * banner is fully readable before the next one replaces it. */
+const NOTIFY_STAGGER_MS = 2800;
+/** Most "what everyone else did" toasts fired per catch-up batch. */
+const NOTIFY_BATCH_MAX = 3;
+
 export interface Toast {
   id: number;
   /** Icon shown in the toast's tinted tile — the UI never renders emoji. */
@@ -110,7 +152,7 @@ interface Store {
     name: string;
     species: "cat" | "dog";
     breed: string;
-    sex?: "male" | "female";
+    gender?: "male" | "female";
     ageYears: number;
     weightKg: number;
     cupGrams: number;
@@ -126,7 +168,7 @@ interface Store {
       cupGrams: number;
       customPlan?: Pet["customPlan"];
       /** Optional identity fields — only keys PRESENT in the patch are written (pass null to clear). */
-      sex?: "male" | "female" | null;
+      gender?: "male" | "female" | null;
       birthDate?: number | null;
       microchip?: string | null;
       allergies?: string | null;
@@ -318,6 +360,10 @@ type PetRow = {
   name: string;
   species: "cat" | "dog";
   breed: string;
+  /** DB column is still `sex` — migrations 0001–0014 live in the shared
+   * web-demo repo, so renaming it there would break that app. The app-facing
+   * field is `gender`; this row type is the only place the old name survives,
+   * mapped at the three boundaries below (hydrate / insert / update). */
   sex: "male" | "female" | null;
   emoji: string;
   age_years: number;
@@ -582,6 +628,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // still true (pet still overdue for care) would regenerate it as a brand-new
   // row on the very next load — with a fresh id our delete-tracking can't catch.
   const alertCooldownRef = useRef<Map<string, number>>(new Map());
+
+  // --- Realtime (see the subscription effect below) --------------------------
+  // Debounce/throttle state for realtime-triggered re-hydrates.
+  const silentReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSilentReloadAtRef = useRef(0);
+  const silentReloadRearmsRef = useRef(0);
+  // Optimistic writes currently in flight. A silent reload while one is
+  // outstanding would paint server-stale data over a change the user just made,
+  // so the reload waits. Incremented/decremented in persist() and bestEffort(),
+  // which every write in this file funnels through.
+  const inFlightWritesRef = useRef(0);
+  // Why the current load() is running. "realtime" loads skip the write-generating
+  // catch-up work — otherwise every device in the household re-runs it on every
+  // event. Read and cleared at the top of load().
+  const loadReasonRef = useRef<"user" | "realtime">("user");
+  // Bumping this rebuilds the channels (used by the reconnect/backoff path).
+  const [realtimeEpoch, setRealtimeEpoch] = useState(0);
+  const realtimeWarnedRef = useRef(false);
+  const realtimeFailuresRef = useRef(0);
+  const realtimeRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const resolvePendingRefreshes = () => {
     pendingRefreshResolversRef.current.forEach((resolve) => resolve());
     pendingRefreshResolversRef.current.clear();
@@ -605,11 +672,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setToasts([]);
   }, []);
 
+  // ONE banner at a time (see components/Toasts.tsx). A new toast replaces
+  // whatever is on screen rather than stacking under it: stacked cards grew
+  // upward until they covered half the screen during a batch of activity
+  // notifications, and the "Clear all" affordance that used to manage that is
+  // gone with them.
   const toast = useCallback(
     (icon: IconName, title: string, body?: string, action?: Toast["action"]) => {
       const id = Date.now() + Math.floor(Math.random() * 1000);
-      setToasts((t) => [...t.slice(-2), { id, icon, title, body, action }]);
-      setTimeout(() => dismissToast(id), 4200);
+      setToasts([{ id, icon, title, body, action }]);
+      setTimeout(() => dismissToast(id), TOAST_MS);
     },
     [dismissToast]
   );
@@ -622,8 +694,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // (counters, last-seen stamps, deferred deletes). It can't recover, but it
   // must never swallow the failure — a bare `.then()` attaches no handler at
   // all, so a PostgREST error resolved normally and vanished without a trace.
+  //
+  // Both also carry the in-flight write count that gates realtime's silent
+  // reload — every optimistic write in this file goes through one of them, so
+  // this pair is the whole accounting.
   const bestEffort = useCallback((op: PromiseLike<{ error: unknown }>, what: string) => {
+    inFlightWritesRef.current += 1;
     op.then(({ error }) => {
+      inFlightWritesRef.current -= 1;
       if (error) console.error(`[petpal] ${what} failed:`, error);
     });
   }, []);
@@ -634,7 +712,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       o: { rollback: () => void; message: string }
     ) => {
       const all = Array.isArray(ops) ? ops : [ops];
+      inFlightWritesRef.current += 1;
       Promise.all(all).then((results) => {
+        inFlightWritesRef.current -= 1;
         const failed = results.find((r) => r && r.error);
         if (!failed) return;
         console.error("[petpal] write failed:", failed.error);
@@ -659,8 +739,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         o.commit();
       }, grace);
       const id = Date.now() + Math.floor(Math.random() * 1000);
-      setToasts((t) => [
-        ...t.slice(-2),
+      setToasts([
         {
           id,
           icon: "trash",
@@ -731,9 +810,54 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(
     () => () => {
       if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
+      if (silentReloadTimerRef.current) clearTimeout(silentReloadTimerRef.current);
+      if (realtimeRetryTimerRef.current) clearTimeout(realtimeRetryTimerRef.current);
     },
     []
   );
+
+  /**
+   * Re-hydrate the household quietly, because something changed server-side
+   * (another family member logged care) or because we just came back to the
+   * foreground and may have missed events.
+   *
+   * It reuses `reloadNonce` deliberately rather than growing a second
+   * fetch-and-merge path: load()'s mapping carries ~160 lines of behaviour
+   * (streak recompute, the pendingDeletedReminderIds filter, role/membership
+   * resolution, currentMemberId fallbacks) that a parallel implementation would
+   * silently drift from. `hydrated` is only ever set to true, so a nonce bump
+   * never flashes PageLoading.
+   */
+  const scheduleSilentReload = useCallback((reason: string) => {
+    if (silentReloadTimerRef.current) clearTimeout(silentReloadTimerRef.current);
+    const sinceLast = Date.now() - lastSilentReloadAtRef.current;
+    // Collapse a burst (a family bulk-logging) into one reload, and never run
+    // them closer together than the floor.
+    const delay = Math.max(SILENT_RELOAD_DEBOUNCE_MS, SILENT_RELOAD_MIN_GAP_MS - sinceLast);
+    silentReloadTimerRef.current = setTimeout(() => {
+      silentReloadTimerRef.current = null;
+      // Never read the server over the top of a local change that hasn't
+      // committed, or mid-way through the debounced counter write — either
+      // would briefly show stale values and could reset rewardsRef under a
+      // burst of taps. Wait it out, but not forever: a wedged promise must not
+      // starve the reload permanently.
+      const busy = inFlightWritesRef.current > 0 || countersTimerRef.current !== null;
+      if (busy && silentReloadRearmsRef.current < 5) {
+        silentReloadRearmsRef.current += 1;
+        scheduleSilentReloadRef.current?.(reason);
+        return;
+      }
+      silentReloadRearmsRef.current = 0;
+      lastSilentReloadAtRef.current = Date.now();
+      loadReasonRef.current = "realtime";
+      if (__DEV__) console.log(`[petpal] silent reload (${reason})`);
+      setReloadNonce((n) => n + 1);
+    }, delay);
+  }, []);
+  // Self-reference for the re-arm above without making the callback depend on
+  // itself (which would recreate it every render and churn the realtime effect).
+  const scheduleSilentReloadRef = useRef<typeof scheduleSilentReload | null>(null);
+  scheduleSilentReloadRef.current = scheduleSilentReload;
 
   // Age auto-update: ages derive from birthDate at hydration only, so a
   // session kept alive (or backgrounded) across midnight — or a birthday —
@@ -773,8 +897,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const recent = activitiesList
         .filter((a) => a.ts >= cutoff && a.memberId !== forMemberId && !notifiedActivityIdsRef.current.has(`${forMemberId}:${a.id}`))
         .sort((a, b) => a.ts - b.ts);
-      recent.forEach((a, i) => {
-        notifiedActivityIdsRef.current.add(`${forMemberId}:${a.id}`);
+      // Mark EVERY unseen one as notified, but only toast the newest few. Toasts
+      // are a single replacing banner now, so an unbounded batch would be a
+      // minutes-long parade; the rest are still visible in Logs/Activity.
+      recent.forEach((a) => notifiedActivityIdsRef.current.add(`${forMemberId}:${a.id}`));
+      recent.slice(-NOTIFY_BATCH_MAX).forEach((a, i) => {
         const pet = petsList.find((p) => p.id === a.petId);
         const member = membersList.find((m) => m.id === a.memberId);
         if (!pet || !member) return;
@@ -786,7 +913,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           if (recipient?.notifyFamilyActivity ?? true) {
             toast(ACTION_ICON[a.type].icon, `${member.name} ${action.verb} ${pet.name}`, `${time} · ${timeAgo(a.ts)}`);
           }
-        }, i * 1400);
+        }, i * NOTIFY_STAGGER_MS);
         pendingNotificationTimeoutsRef.current.add(timeoutId);
       });
     },
@@ -942,6 +1069,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     let inFlightUserId: string | null = null;
 
     async function load() {
+      // A realtime-triggered reload only refreshes what's on screen — it must
+      // NOT re-run the write-generating catch-up work at the end of this
+      // function (last_seen_at, vaccine-reminder inserts, yesterday's
+      // under-feeding checks, care alerts). Otherwise every device in the
+      // household re-runs all four every time anyone logs anything.
+      const isRealtimeLoad = loadReasonRef.current === "realtime";
+      loadReasonRef.current = "user";
       // getSession() reads the already-verified local session instead of
       // making a network round trip like getUser() does — proxy.ts already
       // verified this session server-side before this page was allowed to render.
@@ -1249,7 +1383,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         name: p.name,
         species: p.species,
         breed: p.breed,
-        sex: p.sex ?? undefined,
+        gender: p.sex ?? undefined,
         emoji: p.emoji,
         ageYears: p.birth_date != null ? ageYearsFromBirthDate(Number(p.birth_date)) : p.age_years,
         weightKg: p.weight_kg,
@@ -1305,17 +1439,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         notifyFamilyActivity: m.notify_family_activity,
         notifyVetSuggestions: m.notify_vet_suggestions,
       }));
-      const activityList: Activity[] = activities.map((a) => ({
-        id: a.id,
-        petId: a.pet_id,
-        memberId: a.member_id,
-        type: a.type,
-        ts: Number(a.ts),
-        note: a.note ?? undefined,
-        grams: a.grams ?? undefined,
-        medId: a.med_id ?? undefined,
-        durationMinutes: a.duration_minutes ?? undefined,
-      }));
+      const activityList: Activity[] = activities.map(mapActivityRow);
       // You are always your own claimed card (household_members.member_id).
       // The shared current_member_id / first-member fallbacks only cover
       // legacy rows where the claim link was never written.
@@ -1419,7 +1543,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // catch-up above. Covers both species — whatever /plan (or its
       // species default) defines a target for.
       const yesterday = Date.now() - 24 * 60 * 60 * 1000;
-      pets.forEach((p) => {
+      if (!isRealtimeLoad) pets.forEach((p) => {
         // Feeding is judged on grams (from the portion picker), not tap count.
         // Only activities logged through the picker carry `grams` — skip the
         // check entirely if yesterday has no gram data to judge against.
@@ -1445,7 +1569,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
       // Basic-needs check: any pet overdue against its species' feeding or
       // water window (see CARE_ALERT_CONFIG) gets a warning right away on load.
-      checkCareAlerts(pets, activityList, reminderList);
+      if (!isRealtimeLoad) checkCareAlerts(pets, activityList, reminderList);
 
       // Signing in surfaces any already-outstanding warnings too, not just
       // ones raised by the checks above.
@@ -1456,7 +1580,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // optimistic-insert-with-self-rollback shape as the care alerts above.
       const vaccSoon = Date.now() + 30 * 86_400_000;
       const vaccGrace = Date.now() - 7 * 86_400_000;
-      pets.forEach((p) => {
+      if (!isRealtimeLoad) pets.forEach((p) => {
         p.vaccinations.forEach((v) => {
           if (v.nextDue == null || v.nextDue > vaccSoon || v.nextDue < vaccGrace) return;
           if (reminderList.some((r) => r.vaccinationId === v.id)) return;
@@ -1487,7 +1611,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         });
       });
 
-      bestEffort(supabase.from("households").update({ last_seen_at: Date.now() }).eq("id", h.id), "last_seen_at update");
+      // NOT on a realtime load. This write is on `households`, which every
+      // device in the household subscribes to — stamping it here would have A's
+      // reload wake B, whose reload wakes A, forever. (The households handler
+      // merges directly and never schedules a reload for the same reason.)
+      if (!isRealtimeLoad) {
+        bestEffort(supabase.from("households").update({ last_seen_at: Date.now() }).eq("id", h.id), "last_seen_at update");
+      }
     }
 
     load();
@@ -1508,6 +1638,238 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       clearInterval(careAlertTimer);
     };
   }, [toast, notifyRecentActivity, raiseFeedingAlert, checkCareAlerts, notifyCareWarnings, reloadNonce, bestEffort]);
+
+  // ==========================================================================
+  // Realtime
+  //
+  // A latency optimisation layered on a working app — NOTHING may become
+  // load-bearing on it. If the socket never connects, if migration 0032 hasn't
+  // been applied (the channel then subscribes happily and just never delivers),
+  // or if RLS filters everything out, the app behaves exactly as it did before:
+  // pull-to-refresh and the foreground reload below still work.
+  // ==========================================================================
+
+  /**
+   * Someone else's activity landed. Merged straight into state so a co-parent's
+   * log shows up immediately, then a debounced reload brings the consequences
+   * (drained supply, resolved care alert, authoritative coins).
+   */
+  const mergeRemoteActivity = useCallback(
+    (event: "INSERT" | "UPDATE" | "DELETE", row: Record<string, unknown>) => {
+      const id = typeof row.id === "string" ? row.id : null;
+      if (!id) return;
+      if (row.household_id && row.household_id !== householdIdRef.current) return;
+
+      if (event === "DELETE") {
+        setState((prev) => {
+          if (!prev.activities.some((a) => a.id === id)) return prev;
+          const activities = prev.activities.filter((a) => a.id !== id);
+          return { ...prev, activities, streak: computeStreak(activities) };
+        });
+        return;
+      }
+
+      const mapped = mapActivityRow(row as unknown as Parameters<typeof mapActivityRow>[0]);
+      // Dedupe by id. logAction generates the id client-side (Crypto.randomUUID)
+      // and inserts optimistically, so our OWN echo lands here with an id we
+      // already hold — this one check covers both self-echo and any duplicate
+      // delivery after a resubscribe.
+      if (event === "INSERT" && stateRef.current.activities.some((a) => a.id === id)) return;
+
+      setState((prev) => {
+        const rest = prev.activities.filter((a) => a.id !== id);
+        // Insert by timestamp, not a blind prepend — retro logs exist and the
+        // list is kept newest-first.
+        const at = rest.findIndex((a) => a.ts <= mapped.ts);
+        const activities = at === -1 ? [...rest, mapped] : [...rest.slice(0, at), mapped, ...rest.slice(at)];
+        return { ...prev, activities, streak: computeStreak(activities) };
+      });
+
+      // Deliberately does NOT touch coins/rewardsRef or call syncCounters: the
+      // device that logged it already earned and wrote those. Crediting here
+      // would have every device write absolute coins on every log — precisely
+      // the race the debounce above exists to prevent. The real value arrives
+      // on the households UPDATE or the reload.
+      if (event === "INSERT") {
+        const s = stateRef.current;
+        // Reuses the normal catch-up toast: it already skips your own memberId
+        // and dedupes on notifiedActivityIdsRef, so the reload can't re-toast.
+        notifyRecentActivity(s.currentMemberId, [mapped], s.pets, s.members);
+      }
+      scheduleSilentReload("activity");
+    },
+    [notifyRecentActivity, scheduleSilentReload]
+  );
+
+  /**
+   * The household row changed. Merged in place and NEVER routed to a reload:
+   * load() stamps last_seen_at on every completed non-realtime load, so a
+   * reload here would ping-pong between devices indefinitely.
+   */
+  const mergeRemoteHousehold = useCallback((row: Record<string, unknown>) => {
+    const num = (v: unknown) => (typeof v === "number" ? v : typeof v === "string" ? Number(v) : null);
+    setState((prev) => {
+      const next = { ...prev };
+      if (typeof row.premium === "boolean") next.premium = row.premium;
+      if (row.units === "kg" || row.units === "lb") next.units = row.units;
+      if (typeof row.seen_welcome === "boolean") next.seenWelcome = row.seen_welcome;
+      next.familyPasswordSet = row.family_password_hash != null;
+      if (typeof row.name === "string" && row.id === prev.activeHouseholdId) {
+        next.households = prev.households.map((h) => (h.id === row.id ? { ...h, name: row.name as string } : h));
+      }
+      // Counters are absolute values written on a 250ms debounce. If ours is
+      // armed, the local total is newer than anything the server can tell us —
+      // adopting the server's would drop taps the user just made.
+      if (countersTimerRef.current === null) {
+        const coins = num(row.coins);
+        const streak = num(row.streak);
+        if (coins != null) {
+          next.coins = coins;
+          rewardsRef.current = { ...rewardsRef.current, coins };
+        }
+        if (streak != null) next.streak = streak;
+        const marker = num(row.last_streak_bonus);
+        if (marker != null) rewardsRef.current = { ...rewardsRef.current, lastStreakBonus: marker };
+      }
+      return next;
+    });
+  }, []);
+
+  // Rebuilding the pet-scoped channel on every pets change would thrash the
+  // socket; only the SET of ids matters.
+  const petIdsKey = useMemo(() => state.pets.map((p) => p.id).sort().join(","), [state.pets]);
+
+  useEffect(() => {
+    const householdId = state.activeHouseholdId;
+    if (!hasSupabaseEnv || !userId || !householdId) return;
+    let cancelled = false;
+
+    const seenTables = new Set<string>();
+    const onOther = (table: string) => (payload: { eventType?: string }) => {
+      if (__DEV__ && !seenTables.has(table)) {
+        seenTables.add(table);
+        console.log(`[petpal] realtime: first ${table} event (${payload.eventType ?? "?"}) — 0032 is live`);
+      }
+      scheduleSilentReload(table);
+    };
+
+    // Household-scoped tables. Filtering server-side rather than relying on RLS
+    // alone: this Supabase project is shared with the web demo, so an
+    // unfiltered binding would make the server RLS-check every write in the
+    // whole project for each of our subscribers just to discard almost all.
+    const householdTables = [
+      "reminders",
+      "members",
+      "pets",
+      "care_schedules",
+      "shortcuts",
+      "household_members",
+      "booked_vets",
+    ];
+
+    let chHousehold = supabase.channel(`petpal:household:${householdId}`);
+    chHousehold = chHousehold.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "activities", filter: `household_id=eq.${householdId}` },
+      (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+        const event = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
+        mergeRemoteActivity(event, event === "DELETE" ? payload.old : payload.new);
+      }
+    );
+    chHousehold = chHousehold.on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "households", filter: `id=eq.${householdId}` },
+      (payload: { new: Record<string, unknown> }) => mergeRemoteHousehold(payload.new)
+    );
+    for (const table of householdTables) {
+      chHousehold = chHousehold.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `household_id=eq.${householdId}` },
+        onOther(table)
+      );
+    }
+
+    // supplies/weights/meds/vaccinations/vet_visits have no household_id — they
+    // hang off pets. The filter grammar allows `in`, so one binding per table
+    // still covers a whole household.
+    const petIds = petIdsKey ? petIdsKey.split(",") : [];
+    let chPets: ReturnType<typeof supabase.channel> | null = null;
+    if (petIds.length > 0) {
+      chPets = supabase.channel(`petpal:pets:${householdId}`);
+      for (const table of ["supplies", "weights", "meds", "vaccinations", "vet_visits"]) {
+        chPets = chPets.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table, filter: `pet_id=in.(${petIds.join(",")})` },
+          onOther(table)
+        );
+      }
+    }
+
+    const onStatus = (status: string, err?: Error) => {
+      if (cancelled) return;
+      if (status === "SUBSCRIBED") {
+        realtimeFailuresRef.current = 0;
+        return;
+      }
+      if (status !== "CHANNEL_ERROR" && status !== "TIMED_OUT") return;
+      // Warn once per session, matching the *SchemaRef degradation pattern used
+      // elsewhere in this file — a reconnect loop must not spam the console.
+      if (!realtimeWarnedRef.current) {
+        realtimeWarnedRef.current = true;
+        console.warn("[petpal] realtime unavailable — falling back to refresh-on-foreground:", err ?? status);
+      }
+      realtimeFailuresRef.current += 1;
+      const backoff = Math.min(60_000, 5_000 * 2 ** (realtimeFailuresRef.current - 1));
+      if (realtimeRetryTimerRef.current) clearTimeout(realtimeRetryTimerRef.current);
+      realtimeRetryTimerRef.current = setTimeout(() => setRealtimeEpoch((n) => n + 1), backoff);
+    };
+
+    (async () => {
+      // A channel joined while the client still holds the anon key is
+      // RLS-evaluated as anon and silently receives nothing. supabase-js pushes
+      // refreshed tokens to joined channels itself (_handleTokenChanged), so
+      // this is only about the very first join.
+      try {
+        await supabase.realtime.setAuth();
+      } catch (e) {
+        console.warn("[petpal] realtime setAuth failed:", e);
+      }
+      if (cancelled) return;
+      chHousehold.subscribe(onStatus);
+      chPets?.subscribe(onStatus);
+    })();
+
+    return () => {
+      cancelled = true;
+      // removeChannel, not unsubscribe: it drops the topic from the client's
+      // channel list so switching households can recreate a same-named channel
+      // without a duplicate-topic error.
+      supabase.removeChannel(chHousehold);
+      if (chPets) supabase.removeChannel(chPets);
+      if (silentReloadTimerRef.current) {
+        clearTimeout(silentReloadTimerRef.current);
+        silentReloadTimerRef.current = null;
+      }
+    };
+  }, [userId, state.activeHouseholdId, petIdsKey, realtimeEpoch, mergeRemoteActivity, mergeRemoteHousehold, scheduleSilentReload]);
+
+  // Realtime delivers nothing while the socket is down and never replays, so
+  // every return to foreground reconciles unconditionally. This also fixes a
+  // pre-existing gap: the TOKEN_REFRESHED load on foreground was always
+  // swallowed by the lastLoadedKey dedupe, so backgrounded sessions showed
+  // stale data until a manual pull-to-refresh.
+  useEffect(() => {
+    const sub = RNAppState.addEventListener("change", (status) => {
+      if (status !== "active") return;
+      if (!hasSupabaseEnv || !stateRef.current.activeHouseholdId) return;
+      if (!supabase.realtime.isConnected()) {
+        supabase.realtime.connect();
+        setRealtimeEpoch((n) => n + 1);
+      }
+      scheduleSilentReload("foreground");
+    });
+    return () => sub.remove();
+  }, [scheduleSilentReload]);
 
   // Compensating undo for a just-logged action. The activity insert already
   // fired, so this deletes it back out; coins go through rewardsRef (the sole
@@ -2020,13 +2382,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: string;
       species: "cat" | "dog";
       breed: string;
-      sex?: "male" | "female";
+      gender?: "male" | "female";
       ageYears: number;
       weightKg: number;
       cupGrams: number;
       customPlan?: Pet["customPlan"];
     }) => {
-      const { name, species, breed, sex, ageYears, weightKg, cupGrams, customPlan } = input;
+      const { name, species, breed, gender, ageYears, weightKg, cupGrams, customPlan } = input;
       const h = hid();
       if (!h) {
         console.error("[petpal] addPet called before household loaded");
@@ -2052,7 +2414,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         pets: [
           ...prev.pets,
-          { id, name, species, breed, sex, emoji: species === "cat" ? "🐱" : "🐶", ageYears, weightKg, owned: [], equipped: {}, gradient, weights, supplies, meds: [], vaccinations: [], vetVisits: [], createdAt: Date.now(), cupGrams, customPlan },
+          { id, name, species, breed, gender, emoji: species === "cat" ? "🐱" : "🐶", ageYears, weightKg, owned: [], equipped: {}, gradient, weights, supplies, meds: [], vaccinations: [], vetVisits: [], createdAt: Date.now(), cupGrams, customPlan },
         ],
       }));
       const rollback = () => setState((prev) => ({ ...prev, pets: prev.pets.filter((p) => p.id !== id) }));
@@ -2066,7 +2428,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           name,
           species,
           breed,
-          sex: sex ?? null,
+          sex: gender ?? null, // DB column name — see PetRow
           emoji: species === "cat" ? "🐱" : "🐶",
           age_years: ageYears,
           weight_kg: weightKg,
@@ -2111,7 +2473,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         weightKg: number;
         cupGrams: number;
         customPlan?: Pet["customPlan"];
-        sex?: "male" | "female" | null;
+        gender?: "male" | "female" | null;
         birthDate?: number | null;
         microchip?: string | null;
         allergies?: string | null;
@@ -2128,9 +2490,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // A set birth date wins over a hand-typed age — the two must never disagree.
       const ageYears = patch.birthDate != null ? ageYearsFromBirthDate(patch.birthDate) : patch.ageYears;
       // Identity fields are presence-guarded so narrow callers (e.g. the age
-      // chip editor) can never wipe sex/microchip/etc. they didn't touch.
+      // chip editor) can never wipe gender/microchip/etc. they didn't touch.
       const identity: Partial<Pet> = {};
-      if ("sex" in patch) identity.sex = patch.sex ?? undefined;
+      if ("gender" in patch) identity.gender = patch.gender ?? undefined;
       if ("birthDate" in patch) identity.birthDate = patch.birthDate ?? undefined;
       if ("microchip" in patch) identity.microchip = patch.microchip ?? undefined;
       if ("allergies" in patch) identity.allergies = patch.allergies ?? undefined;
@@ -2161,7 +2523,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         cup_grams: patch.cupGrams,
       };
       if ("customPlan" in patch) updateRow.custom_plan = patch.customPlan ?? null;
-      if ("sex" in patch) updateRow.sex = patch.sex ?? null;
+      if ("gender" in patch) updateRow.sex = patch.gender ?? null; // DB column name — see PetRow
       if ("birthDate" in patch) updateRow.birth_date = patch.birthDate ?? null;
       if ("microchip" in patch) updateRow.microchip = patch.microchip ?? null;
       if ("allergies" in patch) updateRow.allergies = patch.allergies ?? null;

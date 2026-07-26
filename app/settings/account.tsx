@@ -45,21 +45,30 @@ export default function AccountSettingsPage() {
   const [linkBusy, setLinkBusy] = useState(false);
 
   const loadIdentities = useCallback(() => {
-    getConnectedIdentities().then((ids) => {
-      setIdentities(ids);
-      setIdentitiesLoaded(true);
-    });
+    getConnectedIdentities()
+      .then(setIdentities)
+      // Never leave the screen stuck behind the loading gate below — an account
+      // with no readable identities still renders, just with everything
+      // disconnected.
+      .catch(() => setIdentities([]))
+      .finally(() => setIdentitiesLoaded(true));
   }, []);
   useEffect(loadIdentities, [loadIdentities]);
 
   const emailIdentity = identities.find((i) => i.provider === "email");
   const appleIdentity = identities.find((i) => i.provider === "apple");
   const googleIdentity = identities.find((i) => i.provider === "google");
-  // Until identities load, assume password sign-in exists (the pre-OAuth default).
-  const hasPassword = !identitiesLoaded || !!emailIdentity;
+  const hasPassword = !!emailIdentity;
   const canUnlink = identities.length >= 2;
 
-  if (!hydrated) {
+  // Wait for identities before painting ANYTHING. This screen's rows are
+  // identity-derived — "Change password" only exists with an email identity,
+  // "Email & password" reads Connected vs. Not set up, and Disconnect needs two
+  // methods. Rendering optimistically first made all three flip a beat later:
+  // on a Google-only account "Change password" appeared and then vanished.
+  // getUserIdentities() reads the locally cached session, so this costs a
+  // microtask, not a round trip.
+  if (!hydrated || !identitiesLoaded) {
     return (
       <PushedScreen title="Account">
         <PageLoading />

@@ -6,6 +6,7 @@ import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
 import { TimeWheelPicker } from "@/components/WheelPicker";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import { Icon } from "@/components/Icons";
 import {
   AccentButton,
@@ -48,6 +49,7 @@ export default function RemindersScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, addReminder, toggleReminder, deleteReminder, toast } = useStore();
   const [addOpen, setAddOpen] = useState(false);
+  const refreshControl = usePullToRefresh();
   const [title, setTitle] = useState("");
   const [petId, setPetId] = useState("");
   const [days, setDays] = useState(1);
@@ -89,7 +91,7 @@ export default function RemindersScreen() {
 
   if (!hydrated) {
     return (
-      <PushedScreen title="Reminders" trailing={addButton}>
+      <PushedScreen title="Reminders" trailing={addButton} refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -205,7 +207,7 @@ export default function RemindersScreen() {
   };
 
   return (
-    <PushedScreen title="Reminders" trailing={addButton}>
+    <PushedScreen title="Reminders" trailing={addButton} refreshControl={refreshControl}>
       {upcoming.length > 0 ? (
         agenda.map((g) => (
           <View key={g.day}>

@@ -1,22 +1,19 @@
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import { Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
+import { COIN_PACKS, type CoinPackMeta } from "@/providers/purchases/products";
+import { usePurchases } from "@/providers/purchases";
 import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
-type Pack = { id: string; coins: number; price: string; bonus?: string; best?: boolean };
-
-const PACKS: Pack[] = [
-  { id: "s", coins: 500, price: "$0.99" },
-  { id: "m", coins: 1500, price: "$1.99", bonus: "+10%" },
-  { id: "l", coins: 4000, price: "$4.99", bonus: "+25%", best: true },
-  { id: "xl", coins: 10000, price: "$9.99", bonus: "+40%" },
-];
+/** A coin pack ready to render: catalogue metadata + the store's own price. */
+type Pack = CoinPackMeta & { priceLabel: string };
 
 const EARN: { icon: IconName; title: string; sub: string }[] = [
   { icon: "check", title: "Log any care", sub: "+5 coins each time you feed, walk, groom…" },
@@ -29,16 +26,62 @@ export default function CoinsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { state, toast } = useStore();
+  const purchases = usePurchases();
+  const refreshControl = usePullToRefresh();
+  const [packs, setPacks] = useState<Pack[] | null>(null);
+  const [buying, setBuying] = useState<string | null>(null);
+  // The balance the webhook has to beat. Set on a successful purchase and
+  // cleared once the credit lands (realtime delivers the households UPDATE
+  // within a second or so).
+  const [awaiting, setAwaiting] = useState<number | null>(null);
 
-  const buy = (p: Pack) => {
-    // Real coin-package IAP is wired at the EAS cutover (same gateway as
-    // PetPal+). Until then this is an honest "coming soon" rather than a fake
-    // balance bump that wouldn't survive a reload.
-    toast("coin", "Coin packs are coming soon", `${p.coins.toLocaleString()} coins will be available in the next update`);
+  const loadPacks = useCallback(async () => {
+    // Prices come from the store, never from the app — they're localised and
+    // change with tax and region. Catalogue order comes from COIN_PACKS.
+    const offerings = await purchases.getOfferings().catch(() => []);
+    const byId = new Map(offerings.map((o) => [o.id, o]));
+    setPacks(
+      COIN_PACKS.map((meta) => ({ ...meta, priceLabel: byId.get(meta.id)?.priceLabel ?? "—" })).filter(
+        // Before the RevenueCat dashboard is configured there are no offerings;
+        // keep showing the catalogue so the screen isn't empty, just unpriced.
+        (p) => !purchases.live || byId.has(p.id)
+      )
+    );
+  }, [purchases]);
+
+  useEffect(() => {
+    loadPacks();
+  }, [loadPacks]);
+
+  // Coins are credited SERVER-side by the RevenueCat webhook (a client that
+  // granted its own coins could mint currency), so the screen waits for the
+  // balance to move rather than bumping it locally.
+  useEffect(() => {
+    if (awaiting !== null && state.coins > awaiting) {
+      setAwaiting(null);
+      toast("coin", "Coins added", `You now have ${state.coins.toLocaleString()} coins`);
+    }
+  }, [state.coins, awaiting, toast]);
+
+  const buy = async (p: Pack) => {
+    if (buying) return;
+    if (!purchases.live) {
+      toast("coin", "Coin packs are coming soon", `${p.coins.toLocaleString()} coins will be available in the next update`);
+      return;
+    }
+    setBuying(p.id);
+    const result = await purchases.purchase(p.id);
+    setBuying(null);
+    if (result.cancelled) return;
+    if (result.error) {
+      toast("alert", "Purchase didn't complete", result.error);
+      return;
+    }
+    setAwaiting(state.coins);
   };
 
   return (
-    <PushedScreen title="Coins">
+    <PushedScreen title="Coins" refreshControl={refreshControl}>
       <View style={styles.balanceCard}>
         <PixelSprite sprite={COIN_SPRITE} size={28} />
         <Text style={styles.balanceValue}>{state.coins.toLocaleString()}</Text>
@@ -47,7 +90,7 @@ export default function CoinsScreen() {
 
       <SectionHeader>Buy coins</SectionHeader>
       <Group>
-        {PACKS.map((p) => (
+        {(packs ?? COIN_PACKS.map((m) => ({ ...m, priceLabel: "—" }))).map((p) => (
           <PressableScale key={p.id} haptic onPress={() => buy(p)} accessibilityRole="button">
             <Row
               leading={
@@ -58,14 +101,21 @@ export default function CoinsScreen() {
               title={`${p.coins.toLocaleString()} coins`}
               subtitle={p.bonus ? `${p.bonus} bonus${p.best ? " · Best value" : ""}` : undefined}
               trailing={
-                <View style={[styles.priceTag, p.best && styles.priceTagBest]}>
-                  <Text style={[styles.priceText, p.best && { color: colors.white }]}>{p.price}</Text>
-                </View>
+                buying === p.id ? (
+                  <ActivityIndicator color={colors.label3} />
+                ) : (
+                  <View style={[styles.priceTag, p.best && styles.priceTagBest]}>
+                    <Text style={[styles.priceText, p.best && { color: colors.white }]}>{p.priceLabel}</Text>
+                  </View>
+                )
               }
             />
           </PressableScale>
         ))}
       </Group>
+      {awaiting !== null ? (
+        <Text style={styles.footnote}>Confirming your purchase — your coins will appear here in a moment.</Text>
+      ) : null}
 
       <SectionHeader>Earn coins free</SectionHeader>
       <Group>

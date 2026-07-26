@@ -1,11 +1,12 @@
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Alert, Share, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
+import { Alert, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import BreedField from "@/components/BreedField";
 import RoleField from "@/components/RoleField";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import DateField from "@/components/DateField";
 import Sheet from "@/components/Sheet";
 import { Icon } from "@/components/Icons";
@@ -31,7 +32,6 @@ import {
   formatMemberRoles,
   formatWeight,
   FUN_ROLE_EXAMPLES,
-  isUnclaimedCard,
   kgToUnit,
   NO_FUN_ROLE,
   OTHER_BREED,
@@ -44,6 +44,7 @@ import {
   type Member,
   type Pet,
 } from "@/lib/data";
+import { copyInviteCode, inviteExpiryLabel, shareFamilyIdLink, shareInvite } from "@/lib/inviteShare";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
 
@@ -136,6 +137,48 @@ function RoleBadge({ role }: { role: HouseholdAccount["role"] }) {
   );
 }
 
+/**
+ * An active invite, code-first. The code is the thing being handed over — it
+ * gets the largest type on the sheet and is `selectable` so it can also be
+ * long-pressed out of the app, next to explicit Copy and Share buttons. The
+ * old row put it in a 15pt title with only a Share button, which forced every
+ * hand-off through the share sheet.
+ */
+function InviteCard({
+  invite,
+  onCopy,
+  onShare,
+  onRevoke,
+}: {
+  invite: HouseholdInvite;
+  onCopy: () => void;
+  onShare: () => void;
+  onRevoke: () => void;
+}) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const meta = [
+    invite.role === "admin" ? "Admin invite" : null,
+    `Expires in ${inviteExpiryLabel(invite)}`,
+    invite.maxUses ? `${invite.useCount}/${invite.maxUses} used` : "Whole family",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <View style={styles.inviteCard}>
+      <Text style={styles.inviteCode} selectable accessibilityLabel={`Invite code ${invite.code.split("").join(" ")}`}>
+        {invite.code}
+      </Text>
+      <Text style={styles.inviteMeta}>{meta}</Text>
+      <View style={styles.inviteActions}>
+        <SmallButton label="Copy code" onPress={onCopy} />
+        <SmallButton label="Share" tone="gray" onPress={onShare} />
+        <SmallButton label="Revoke" tone="gray" onPress={onRevoke} />
+      </View>
+    </View>
+  );
+}
+
 /* -- Local date helper -- birth-date entry now uses the shared <DateField>. -- */
 
 function atNoon(d: Date) {
@@ -154,9 +197,7 @@ export default function FamilySettingsPage() {
     userId,
     editPet,
     deletePet,
-    addMember,
     editMember,
-    removeMember,
     setFamilyPassword,
     verifyFamilyPassword,
     setActiveHousehold,
@@ -182,6 +223,7 @@ export default function FamilySettingsPage() {
   // The ENFORCED role (household_members.role, RLS-backed from 0026) — the
   // free-text card chips are cosmetic and grant nothing.
   const myRole = state.myRole;
+  const refreshControl = usePullToRefresh();
   const canManage = myRole === "owner" || myRole === "admin";
 
   const [familyPwOpen, setFamilyPwOpen] = useState(false);
@@ -205,7 +247,7 @@ export default function FamilySettingsPage() {
   const [editPetAge, setEditPetAge] = useState("");
   const [editPetWeight, setEditPetWeight] = useState("");
   const [editPetCup, setEditPetCup] = useState("");
-  const [editPetSex, setEditPetSex] = useState<"male" | "female" | "unset">("unset");
+  const [editPetGender, setEditPetGender] = useState<"male" | "female" | "unset">("unset");
   const [editPetBirth, setEditPetBirth] = useState<number | null>(null);
   const [editPetChip, setEditPetChip] = useState("");
   const [editPetAllergies, setEditPetAllergies] = useState("");
@@ -223,24 +265,14 @@ export default function FamilySettingsPage() {
     setEditPetAge(String(Math.round(p.ageYears * 10) / 10));
     setEditPetWeight(String(kgToUnit(p.weightKg, state.units)));
     setEditPetCup(String(p.cupGrams));
-    setEditPetSex(p.sex ?? "unset");
+    setEditPetGender(p.gender ?? "unset");
     setEditPetBirth(p.birthDate != null ? atNoon(new Date(p.birthDate)) : null);
     setEditPetChip(p.microchip ?? "");
     setEditPetAllergies(p.allergies ?? "");
   };
 
-  const [addMemberOpen, setAddMemberOpen] = useState(false);
-  const [newMemberName, setNewMemberName] = useState("");
-  const [newMemberIsAdmin, setNewMemberIsAdmin] = useState(false);
-  const [newMemberIsCaregiver, setNewMemberIsCaregiver] = useState(false);
-  const [newMemberFunRole, setNewMemberFunRole] = useState(NO_FUN_ROLE);
-  const [newMemberCustomFunRole, setNewMemberCustomFunRole] = useState("");
-  const [newMemberTermsAccepted, setNewMemberTermsAccepted] = useState(false);
-  const [newMemberShowTerms, setNewMemberShowTerms] = useState(false);
-
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editMemberName, setEditMemberName] = useState("");
-  const [editMemberIsAdmin, setEditMemberIsAdmin] = useState(false);
   const [editMemberIsCaregiver, setEditMemberIsCaregiver] = useState(false);
   const [editMemberFunRole, setEditMemberFunRole] = useState(NO_FUN_ROLE);
   const [editMemberCustomFunRole, setEditMemberCustomFunRole] = useState("");
@@ -250,8 +282,9 @@ export default function FamilySettingsPage() {
   const openEditMember = (m: Member) => {
     setEditingMember(m);
     setEditMemberName(m.name);
+    // parsed.isAdmin is read and DISCARDED on purpose: legacy cards may still
+    // carry the old cosmetic "Admin" label, and saving now drops it.
     const parsed = parseMemberRoles(m.role);
-    setEditMemberIsAdmin(parsed.isAdmin);
     setEditMemberIsCaregiver(parsed.isCaregiver);
     // Already a caregiver from before this gate existed — grandfathered in, no re-prompt.
     setEditMemberTermsAccepted(parsed.isCaregiver);
@@ -275,15 +308,13 @@ export default function FamilySettingsPage() {
   // Invite sheet.
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
-  const [inviteTarget, setInviteTarget] = useState<string | null>(null);
   const [inviteExpiry, setInviteExpiry] = useState<24 | 168>(168);
   const [inviteUses, setInviteUses] = useState<"multi" | "single">("multi");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [activeInvites, setActiveInvites] = useState<HouseholdInvite[]>([]);
 
-  const openInvite = (targetMemberId?: string) => {
+  const openInvite = () => {
     setInviteRole("member");
-    setInviteTarget(targetMemberId ?? null);
     setInviteExpiry(168);
     setInviteUses("multi");
     setInviteOpen(true);
@@ -299,22 +330,20 @@ export default function FamilySettingsPage() {
 
   // Assigning "Pet caregiver" requires accepting the liability disclaimer first —
   // the Save button itself turns into the "Terms and conditions" prompt until then.
-  const newMemberCaregiverGateActive = newMemberIsCaregiver && !newMemberTermsAccepted;
   const editMemberCaregiverGateActive = editMemberIsCaregiver && !editMemberTermsAccepted;
 
   const resolveFunRole = (funRole: string, customFunRole: string) =>
     funRole === NO_FUN_ROLE ? "" : funRole === OTHER_ROLE ? customFunRole.trim() : funRole;
 
-  const resolvedNewMemberRole = formatMemberRoles({
-    isAdmin: newMemberIsAdmin,
-    isCaregiver: newMemberIsCaregiver,
-    customRole: resolveFunRole(newMemberFunRole, newMemberCustomFunRole),
-  });
   const resolvedEditMemberRole = formatMemberRoles({
-    isAdmin: editMemberIsAdmin,
     isCaregiver: editMemberIsCaregiver,
     customRole: resolveFunRole(editMemberFunRole, editMemberCustomFunRole),
   });
+  // The ACCOUNT behind the card being edited, if any — drives the read-only
+  // household-role badge in that sheet.
+  const editingMemberAccount = editingMember
+    ? state.accounts.find((a) => a.memberId === editingMember.id)
+    : undefined;
 
   const resolvedEditBreed =
     editPetBreed === OTHER_BREED
@@ -323,7 +352,7 @@ export default function FamilySettingsPage() {
 
   if (!hydrated) {
     return (
-      <PushedScreen title="Family">
+      <PushedScreen title="Family" refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -345,7 +374,7 @@ export default function FamilySettingsPage() {
       }
     };
     return (
-      <PushedScreen title="Family">
+      <PushedScreen title="Family" refreshControl={refreshControl}>
         <View style={styles.lockCard}>
           <View style={styles.lockIcon}>
             <Icon name="lock" size={26} color={colors.accent} />
@@ -374,22 +403,14 @@ export default function FamilySettingsPage() {
 
   const shareFamilyId = async () => {
     if (!state.familyId) return;
-    try {
-      await Share.share({ message: state.familyId });
-    } catch {
-      // cancelled
-    }
+    await shareFamilyIdLink(state.familyId);
   };
 
-  const shareInviteCode = async (invite: HouseholdInvite) => {
-    const expiry = invite.expiresAt - Date.now() > 26 * 3_600_000 ? "7 days" : "24 hours";
-    try {
-      await Share.share({
-        message: `Join our PetPal household — invite code ${invite.code} (valid ${expiry}). In the app: petpal://join?code=${invite.code}`,
-      });
-    } catch {
-      // cancelled
-    }
+  const shareInviteCode = (invite: HouseholdInvite) => shareInvite(invite);
+
+  const copyInvite = async (invite: HouseholdInvite) => {
+    await copyInviteCode(invite.code);
+    toast("check", "Code copied", invite.code);
   };
 
   async function handleCreateInvite() {
@@ -397,15 +418,15 @@ export default function FamilySettingsPage() {
     setInviteBusy(true);
     const invite = await createInvite({
       role: inviteRole,
-      targetMemberId: inviteTarget ?? undefined,
       ttlHours: inviteExpiry,
-      // Claim-a-card invites are single-use by definition (server enforces too).
-      maxUses: inviteTarget || inviteUses === "single" ? 1 : undefined,
+      maxUses: inviteUses === "single" ? 1 : undefined,
     });
     setInviteBusy(false);
     if (!invite) return;
+    // Land the new code in the list rather than firing the share sheet
+    // immediately — the card below shows it big, with Copy and Share side by
+    // side, so reading it out or pasting it are equally easy.
     setActiveInvites((prev) => [invite, ...prev]);
-    await shareInviteCode(invite);
   }
 
   // Sorted: owner first, then admins, then members; ties by tenure.
@@ -413,7 +434,6 @@ export default function FamilySettingsPage() {
     const rank = (r: HouseholdAccount["role"]) => (r === "owner" ? 0 : r === "admin" ? 1 : 2);
     return rank(a.role) - rank(b.role) || a.joinedAt - b.joinedAt;
   });
-  const unclaimedCards = state.members.filter((m) => isUnclaimedCard(m.id, state.accounts));
   const cardFor = (a: HouseholdAccount) => (a.memberId ? state.members.find((m) => m.id === a.memberId) : undefined);
   const managingCard = managing ? cardFor(managing) : undefined;
   const managingIsSelf = managing?.userId === userId;
@@ -427,11 +447,9 @@ export default function FamilySettingsPage() {
   };
 
   return (
-    <PushedScreen title="Family">
+    <PushedScreen title="Family" refreshControl={refreshControl}>
       {/* Signed-in family accounts */}
-      <SectionHeader trailing={canManage ? <SmallButton label="Invite" onPress={() => openInvite()} /> : undefined}>
-        Family
-      </SectionHeader>
+      <SectionHeader>Family</SectionHeader>
       <Group>
         {sortedAccounts.map((a) => {
           const card = cardFor(a);
@@ -458,40 +476,20 @@ export default function FamilySettingsPage() {
             />
           );
         })}
+        {/* THE growth affordance of the whole app — a full-width accent row, not
+            a grey pill tucked in the section header where nobody found it. */}
+        {canManage ? (
+          <Row
+            onPress={openInvite}
+            leading={<IconCircle icon="plus" tint={colors.white} bg={colors.accent} size={38} />}
+            title="Invite someone"
+            subtitle="Share a code so they can join this household"
+            trailing={<Chevron />}
+          />
+        ) : null}
       </Group>
       <Text style={styles.footnote}>
         Everyone here has their own PetPal account. Roles are enforced — only the owner and admins can invite or manage.
-      </Text>
-
-      {/* Cards without an account (kids, grandparents, …) */}
-      <SectionHeader trailing={<SmallButton label="Add" tone="gray" onPress={() => setAddMemberOpen(true)} />}>
-        Family without the app
-      </SectionHeader>
-      <Group>
-        {unclaimedCards.length === 0 ? (
-          <Row title="No cards yet" subtitle="Add family who don't use the app — they still show up in care logs" />
-        ) : (
-          unclaimedCards.map((m) => (
-            <Row
-              key={m.id}
-              onPress={() => openEditMember(m)}
-              leading={<InitialAvatar name={m.name} gradient={m.gradient} size={38} />}
-              title={m.name}
-              subtitle={m.role}
-              interactiveTrailing
-              trailing={
-                canManage ? (
-                  <SmallButton label="Invite to claim" tone="gray" onPress={() => openInvite(m.id)} />
-                ) : (
-                  <Chevron />
-                )
-              }
-            />
-          ))
-        )}
-      </Group>
-      <Text style={styles.footnote}>
-        When they get the app, send a claim invite — they sign in and become this card, keeping its history.
       </Text>
 
       {/* Households the user belongs to + create/join */}
@@ -708,11 +706,7 @@ export default function FamilySettingsPage() {
       {/* Invite sheet */}
       <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)}>
         <SheetTitle>Invite family</SheetTitle>
-        <SheetSubtitle>
-          {inviteTarget
-            ? `This code lets one person claim ${state.members.find((m) => m.id === inviteTarget)?.name ?? "the card"} — history included.`
-            : "Share one code with the whole family, or lock it to a single use."}
-        </SheetSubtitle>
+        <SheetSubtitle>Share one code with the whole family, or lock it to a single use.</SheetSubtitle>
 
         {myRole === "owner" ? (
           <>
@@ -724,76 +718,39 @@ export default function FamilySettingsPage() {
           </>
         ) : null}
 
-        {/* Stays mounted once a target is picked — hiding the row made the
-            choice irreversible without closing the whole sheet. */}
-        {unclaimedCards.length > 0 ? (
-          <>
-            <FieldLabel>For a specific card (optional)</FieldLabel>
-            <View style={styles.chipRow}>
-              {unclaimedCards.map((m) => (
-                <SelectableChip
-                  key={m.id}
-                  label={m.name}
-                  selected={inviteTarget === m.id}
-                  onPress={() => setInviteTarget((prev) => (prev === m.id ? null : m.id))}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
-
         <FieldLabel>Expires</FieldLabel>
         <View style={styles.chipRow}>
           <SelectableChip label="7 days" selected={inviteExpiry === 168} onPress={() => setInviteExpiry(168)} />
           <SelectableChip label="24 hours" selected={inviteExpiry === 24} onPress={() => setInviteExpiry(24)} />
         </View>
 
-        {!inviteTarget ? (
-          <>
-            <FieldLabel>Uses</FieldLabel>
-            <View style={styles.chipRow}>
-              <SelectableChip label="Whole family" selected={inviteUses === "multi"} onPress={() => setInviteUses("multi")} />
-              <SelectableChip label="One person" selected={inviteUses === "single"} onPress={() => setInviteUses("single")} />
-            </View>
-          </>
-        ) : null}
+        <FieldLabel>Uses</FieldLabel>
+        <View style={styles.chipRow}>
+          <SelectableChip label="Whole family" selected={inviteUses === "multi"} onPress={() => setInviteUses("multi")} />
+          <SelectableChip label="One person" selected={inviteUses === "single"} onPress={() => setInviteUses("single")} />
+        </View>
 
         {activeInvites.length > 0 ? (
           <>
             <FieldLabel>Active invites</FieldLabel>
-            <Group>
-              {activeInvites.map((inv) => (
-                <Row
-                  key={inv.id}
-                  title={inv.code}
-                  subtitle={`${inv.role === "admin" ? "Admin · " : ""}${
-                    inv.targetMemberId ? "Claim invite · " : ""
-                  }expires ${new Date(inv.expiresAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}${
-                    inv.maxUses ? ` · ${inv.useCount}/${inv.maxUses} used` : ""
-                  }`}
-                  interactiveTrailing
-                  trailing={
-                    <View style={styles.rowActions}>
-                      <SmallButton label="Share" tone="gray" onPress={() => shareInviteCode(inv)} />
-                      <SmallButton
-                        label="Revoke"
-                        tone="gray"
-                        onPress={async () => {
-                          const ok = await revokeInvite(inv.id);
-                          if (ok) setActiveInvites((prev) => prev.filter((i) => i.id !== inv.id));
-                        }}
-                      />
-                    </View>
-                  }
-                />
-              ))}
-            </Group>
+            {activeInvites.map((inv) => (
+              <InviteCard
+                key={inv.id}
+                invite={inv}
+                onShare={() => shareInviteCode(inv)}
+                onCopy={() => copyInvite(inv)}
+                onRevoke={async () => {
+                  const ok = await revokeInvite(inv.id);
+                  if (ok) setActiveInvites((prev) => prev.filter((i) => i.id !== inv.id));
+                }}
+              />
+            ))}
           </>
         ) : null}
 
         <View style={{ marginTop: 28 }}>
           <AccentButton loading={inviteBusy} onPress={handleCreateInvite}>
-            Create & share code
+            Create invite code
           </AccentButton>
         </View>
       </Sheet>
@@ -864,17 +821,17 @@ export default function FamilySettingsPage() {
               />
             </View>
 
-            <FieldLabel>Sex</FieldLabel>
+            <FieldLabel>Gender</FieldLabel>
             <Segmented
               options={[
                 { value: "male", label: "Male" },
                 { value: "female", label: "Female" },
                 { value: "unset", label: "Not set" },
               ]}
-              value={editPetSex}
-              onChange={setEditPetSex}
+              value={editPetGender}
+              onChange={setEditPetGender}
             />
-            <Text style={styles.fieldHint}>Used for the age-and-sex-specific weight & feeding guide.</Text>
+            <Text style={styles.fieldHint}>Used for the age-and-gender-specific weight & feeding guide.</Text>
 
             <FieldLabel>Birth date (optional)</FieldLabel>
             <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear />
@@ -920,7 +877,7 @@ export default function FamilySettingsPage() {
                     ageYears: Number(editPetAge) || editingPet.ageYears,
                     weightKg: unitToKg(Number(editPetWeight) || kgToUnit(editingPet.weightKg, state.units), state.units),
                     cupGrams: Math.round(Number(editPetCup)) || editingPet.cupGrams,
-                    sex: editPetSex === "unset" ? null : editPetSex,
+                    gender: editPetGender === "unset" ? null : editPetGender,
                     birthDate: editPetBirth,
                     microchip: editPetChip.trim() || null,
                     allergies: editPetAllergies.trim() || null,
@@ -992,73 +949,8 @@ export default function FamilySettingsPage() {
         )}
       </Sheet>
 
-      {/* Add card (family without the app) */}
-      <Sheet
-        open={addMemberOpen}
-        onClose={() => {
-          setAddMemberOpen(false);
-          setNewMemberShowTerms(false);
-        }}
-      >
-        {newMemberShowTerms ? (
-          <CaregiverTermsView
-            onAccept={() => {
-              setNewMemberTermsAccepted(true);
-              setNewMemberShowTerms(false);
-            }}
-            onBack={() => setNewMemberShowTerms(false)}
-          />
-        ) : (
-          <>
-            <SheetTitle>Add a family card</SheetTitle>
-            <SheetSubtitle>For family who don{"'"}t use the app — they appear in care logs and can claim the card later.</SheetSubtitle>
-
-            <Field label="Name" value={newMemberName} onChangeText={setNewMemberName} placeholder="e.g. Alex" />
-
-            <FieldLabel>Card labels</FieldLabel>
-            <RoleField
-              isAdmin={newMemberIsAdmin}
-              isCaregiver={newMemberIsCaregiver}
-              onToggleAdmin={() => setNewMemberIsAdmin((v) => !v)}
-              onToggleCaregiver={() =>
-                setNewMemberIsCaregiver((prev) => {
-                  const next = !prev;
-                  if (!next) setNewMemberTermsAccepted(false);
-                  return next;
-                })
-              }
-              funRole={newMemberFunRole}
-              customFunRole={newMemberCustomFunRole}
-              onChangeFunRole={setNewMemberFunRole}
-              onChangeCustomFunRole={setNewMemberCustomFunRole}
-            />
-
-            <View style={{ marginTop: 28 }}>
-              {newMemberCaregiverGateActive ? (
-                <AccentButton onPress={() => setNewMemberShowTerms(true)}>Terms and conditions</AccentButton>
-              ) : (
-                <AccentButton
-                  disabled={!newMemberName.trim() || !hydrated}
-                  onPress={() => {
-                    addMember(newMemberName.trim(), resolvedNewMemberRole);
-                    setAddMemberOpen(false);
-                    setNewMemberName("");
-                    setNewMemberIsAdmin(false);
-                    setNewMemberIsCaregiver(false);
-                    setNewMemberFunRole(NO_FUN_ROLE);
-                    setNewMemberCustomFunRole("");
-                    setNewMemberTermsAccepted(false);
-                  }}
-                >
-                  Add to family
-                </AccentButton>
-              )}
-            </View>
-          </>
-        )}
-      </Sheet>
-
-      {/* Edit card */}
+      {/* Edit card — reachable only from the manage-account sheet, and only for
+          your own card or (as owner/admin) someone else's. */}
       <Sheet
         open={editingMember !== null}
         onClose={() => {
@@ -1081,11 +973,27 @@ export default function FamilySettingsPage() {
 
               <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
 
+              {/* The REAL household role, read-only. Only the owner changes
+                  roles, from the manage-account sheet. */}
+              {editingMemberAccount ? (
+                <>
+                  <FieldLabel>Household role</FieldLabel>
+                  <View style={styles.roleReadOnlyRow}>
+                    <RoleBadge role={editingMemberAccount.role} />
+                    <Text style={styles.fieldHint}>
+                      {editingMemberAccount.role === "owner"
+                        ? "Owners can do everything, including transferring the household."
+                        : editingMemberAccount.role === "admin"
+                          ? "Admins can invite and manage members."
+                          : "Members can log care and see everything."}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
+
               <FieldLabel>Card labels</FieldLabel>
               <RoleField
-                isAdmin={editMemberIsAdmin}
                 isCaregiver={editMemberIsCaregiver}
-                onToggleAdmin={() => setEditMemberIsAdmin((v) => !v)}
                 onToggleCaregiver={() =>
                   setEditMemberIsCaregiver((prev) => {
                     const next = !prev;
@@ -1115,21 +1023,6 @@ export default function FamilySettingsPage() {
                   </AccentButton>
                 )}
               </View>
-
-              {state.members.length > 1 && isUnclaimedCard(editingMember.id, state.accounts) && (
-                <Group style={{ marginTop: 12 }}>
-                  <ConfirmRow
-                    label="Remove card"
-                    confirmLabel="Tap again — also deletes their activity history"
-                    onConfirm={() => {
-                      const name = editingMember.name;
-                      removeMember(editingMember.id);
-                      setEditingMember(null);
-                      toast("person", `${name} was removed`, "");
-                    }}
-                  />
-                </Group>
-              )}
             </>
           ))}
       </Sheet>
@@ -1143,6 +1036,13 @@ const makeStyles = (colors: Colors) =>
     chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     roleBadge: { borderRadius: radius.full, backgroundColor: colors.fill, paddingHorizontal: 10, paddingVertical: 4 },
     roleBadgeLabel: { fontSize: 12, fontFamily: font.semibold, color: colors.label2 },
+    roleReadOnlyRow: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+    inviteCard: { marginTop: 8, backgroundColor: colors.card, borderRadius: radius.md, padding: 14, gap: 4 },
+    // Wide letter-spacing so the ambiguity-free alphabet stays readable when
+    // someone is reading it aloud or copying it by hand.
+    inviteCode: { fontSize: 26, fontFamily: font.bold, color: colors.label, letterSpacing: 3, textAlign: "center" },
+    inviteMeta: { fontSize: 12, fontFamily: font.regular, color: colors.label3, textAlign: "center" },
+    inviteActions: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 8, marginTop: 8 },
     termsScroll: { marginTop: 12, backgroundColor: colors.card, borderRadius: radius.md, padding: 14 },
     termsBody: { fontSize: 14, lineHeight: 21, fontFamily: font.regular, color: colors.label2 },
     footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },

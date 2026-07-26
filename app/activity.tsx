@@ -6,6 +6,7 @@ import { FadeInItem } from "@/components/Motion";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import { ACTION_ICON } from "@/components/Icons";
 import { AccentButton, Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { ACTIONS, Activity } from "@/lib/data";
@@ -37,11 +38,12 @@ export default function ActivityScreen() {
   const { state, hydrated, dismissAllAlerts } = useStore();
   const router = useRouter();
   const [visible, setVisible] = useState(40);
+  const refreshControl = usePullToRefresh();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (!hydrated) {
     return (
-      <PushedScreen title="Notifications">
+      <PushedScreen title="Notifications" refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -79,7 +81,7 @@ export default function ActivityScreen() {
   }
 
   return (
-    <PushedScreen title="Notifications">
+    <PushedScreen title="Notifications" refreshControl={refreshControl}>
       {/* Needs attention — one group per pet, standard rows */}
       {alertGroups.length > 0 ? (
         <>

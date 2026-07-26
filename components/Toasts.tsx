@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeOutDown, SlideInDown } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { FadeOutUp, SlideInUp, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
 import { useStore } from "@/lib/store";
@@ -17,133 +18,121 @@ function tone(colors: Colors, icon: string): { tint: string; bg: string } {
   return { tint: colors.accent, bg: colors.accentSoft };
 }
 
+/**
+ * A single top banner — the standard mobile in-app notification: slides down
+ * from under the status bar, auto-dismisses, tap or swipe up to clear.
+ *
+ * ONE at a time. The store's toast() replaces rather than appends (see
+ * lib/store.tsx), so this renders `toasts[toasts.length - 1]` and nothing else.
+ * The previous bottom-anchored stack grew upward past the middle of the screen
+ * during an activity catch-up batch, which is what this replaces.
+ *
+ * The reason toasts were moved OFF the top once before: a full-width card sat
+ * over the header island and made coins/bell/gear untappable for its whole
+ * lifetime. That's addressed here rather than reverted into — the wrap is
+ * `pointerEvents="box-none"` so only the banner itself takes touches, the
+ * banner is one compact row, and both tap and swipe-up dismiss it immediately.
+ */
 export default function Toasts() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { toasts, dismissToast, stopNotifications } = useStore();
+  // A user-initiated dismissal uses stopNotifications, not dismissToast: it
+  // also cancels the rest of a queued activity catch-up batch. Swiping one
+  // away means "stop showing me these", not "show me the next one".
+  const { toasts, stopNotifications } = useStore();
   const insets = useSafeAreaInsets();
-  if (toasts.length === 0) return null;
+
+  const t = toasts[toasts.length - 1];
+  // Hooks must run unconditionally — build the gesture before the early return.
+  const swipeUp = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(-8)
+        .failOffsetY(12)
+        .onEnd((e) => {
+          if (e.translationY < -24 || e.velocityY < -500) runOnJS(stopNotifications)();
+        }),
+    [stopNotifications]
+  );
+  if (!t) return null;
+
+  const { tint, bg } = tone(colors, t.icon);
   return (
-    // Anchored to the BOTTOM, above the home indicator and tab bar. Toasts used
-    // to sit at `insets.top + 8` — inside the navigation bar's own band — where
-    // each full-width toast card physically covered the header island, making
-    // coins/bell/gear untappable for as long as a toast was on screen.
-    <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + TAB_BAR_CLEARANCE }]}>
-      {/* When several stack up, a small button clears them all at once (and
-          cancels any still queued) so overlays don't pile on the screen. */}
-      {toasts.length > 1 ? (
-        <Animated.View entering={SlideInDown.duration(200)} exiting={FadeOutDown.duration(160)} style={styles.clearRow}>
-          <Pressable
-            onPress={stopNotifications}
-            accessibilityRole="button"
-            accessibilityLabel="Clear all notifications"
-            hitSlop={8}
-            android_ripple={null}
-            style={({ pressed }) => [styles.clearBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Icon name="xmark" size={13} color={colors.white} />
-            <Text style={styles.clearLabel}>Clear all</Text>
+    <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + 8 }]}>
+      <GestureDetector gesture={swipeUp}>
+        <Animated.View key={t.id} entering={SlideInUp.duration(260)} exiting={FadeOutUp.duration(180)}>
+          <Pressable style={styles.toast} onPress={stopNotifications} accessibilityRole="alert" android_ripple={null}>
+            <View style={[styles.tile, { backgroundColor: bg }]}>
+              <Icon name={t.icon} size={18} color={tint} />
+            </View>
+            <View style={styles.textCol}>
+              <Text style={styles.title} numberOfLines={1}>
+                {t.title}
+              </Text>
+              {t.body ? (
+                <Text style={styles.body} numberOfLines={2}>
+                  {t.body}
+                </Text>
+              ) : null}
+            </View>
+            {t.action ? (
+              <Pressable
+                style={styles.action}
+                hitSlop={8}
+                android_ripple={null}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  t.action!.onClick();
+                }}
+              >
+                <Text style={styles.actionLabel}>{t.action.label}</Text>
+              </Pressable>
+            ) : null}
           </Pressable>
         </Animated.View>
-      ) : null}
-      {/* Cap the visible stack: the wrap is absolutely positioned and doesn't
-          scroll, so an unbounded list would push the oldest toasts off-screen
-          where they can't be read or dismissed. "Clear all" handles the rest. */}
-      {toasts.slice(-MAX_VISIBLE).map((t) => {
-        const { tint, bg } = tone(colors, t.icon);
-        return (
-          <Animated.View key={t.id} entering={SlideInDown.duration(240)} exiting={FadeOutDown.duration(180)}>
-            <Pressable style={styles.toast} onPress={() => dismissToast(t.id)} accessibilityRole="alert" android_ripple={null}>
-              <View style={[styles.tile, { backgroundColor: bg }]}>
-                <Icon name={t.icon} size={18} color={tint} />
-              </View>
-              <View style={styles.textCol}>
-                <Text style={styles.title} numberOfLines={2}>
-                  {t.title}
-                </Text>
-                {t.body ? (
-                  <Text style={styles.body} numberOfLines={2}>
-                    {t.body}
-                  </Text>
-                ) : null}
-              </View>
-              {t.action ? (
-                <Pressable
-                  style={styles.action}
-                  hitSlop={8}
-                  android_ripple={null}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    t.action!.onClick();
-                  }}
-                >
-                  <Text style={styles.actionLabel}>{t.action.label}</Text>
-                </Pressable>
-              ) : null}
-            </Pressable>
-          </Animated.View>
-        );
-      })}
+      </GestureDetector>
+      {/* Grabber hint: reads as "this can be flicked away", the same affordance
+          iOS puts on its own banners. */}
+      <View pointerEvents="none" style={styles.grabber} />
     </View>
   );
 }
 
-/**
- * Toasts float above the tab bar. `insets.bottom` covers the home indicator /
- * system nav, but not the tab bar itself, so clear it explicitly — 56 is the
- * standard bar height (matching ANDROID_TAB_BAR_HEIGHT in Screen.tsx) plus a
- * little breathing room.
- */
-const TAB_BAR_CLEARANCE = 64;
-
-/** Most toasts shown at once; older ones stay in the store for "Clear all". */
-const MAX_VISIBLE = 3;
-
 const makeStyles = (colors: Colors) => StyleSheet.create({
-  wrap: { position: "absolute", left: 12, right: 12, gap: 8, zIndex: 100 },
-  clearRow: { alignItems: "center" },
-  clearBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    height: 30,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "rgba(28, 28, 35, 0.82)",
-    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
-  },
-  clearLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.white },
+  wrap: { position: "absolute", left: 12, right: 12, zIndex: 100 },
   toast: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     backgroundColor: colors.card,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     paddingVertical: 10,
     paddingHorizontal: 12,
     // iOS: a real soft shadow. Android: a hairline border instead of
-    // `elevation` — this view used to be wrapped with
-    // `renderToHardwareTextureAndroid` (to stop the exit-animation shadow
-    // flash), but that rasterizes into a bitmap sized to the view's own
-    // layout box, which hard-clips an `elevation` shadow's blur wherever it
-    // reaches past that box, leaving a sharp rectangular smudge poking out
-    // past the rounded corners. A hairline border has no blur to clip, so it
-    // stays clean and the texture-compositing workaround is no longer
-    // needed. Matches the same Android-only hairline pattern used for
-    // rounded pills in NotificationBell/SettingsButton.
+    // `elevation` — an elevation shadow rasterizes to the view's own layout
+    // box and leaves a sharp rectangular smudge poking past the rounded
+    // corners during the exit animation. Matches NotificationBell /
+    // SettingsButton.
     ...(Platform.OS === "android"
       ? { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.sep }
       : {
           shadowColor: "#000",
-          shadowOpacity: 0.12,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.14,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
         }),
-    // On web, Pressable renders as a focusable div[role=button] — the
-    // browser's default focus outline is a sharp, unrounded rectangle that
-    // pokes out past this card's borderRadius. Suppress it since the
-    // pressed-opacity feedback already communicates focus/press state.
+    // On web, Pressable renders as a focusable div[role=button] — the browser's
+    // default focus outline is a sharp, unrounded rectangle that pokes out past
+    // this card's borderRadius.
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
+  },
+  grabber: {
+    alignSelf: "center",
+    marginTop: 5,
+    width: 34,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.sep,
   },
   tile: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   textCol: { flex: 1 },

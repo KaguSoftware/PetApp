@@ -305,7 +305,7 @@ export default function PetsScreen() {
             <View key={s.slot}>
               <SectionHeader>{s.hint}</SectionHeader>
               <View style={styles.shopGrid}>
-                {COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictSex || c.restrictSex === pet.sex)).map((c) => (
+                {COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictGender || c.restrictGender === pet.gender)).map((c) => (
                   <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
                 ))}
               </View>
@@ -315,7 +315,7 @@ export default function PetsScreen() {
           <>
             <SectionHeader>{mainMeta.hint}</SectionHeader>
             <View style={styles.shopGrid}>
-              {COSMETICS.filter((c) => c.slot === accessoryTab && (!c.restrictSex || c.restrictSex === pet.sex)).map((c) => (
+              {COSMETICS.filter((c) => c.slot === accessoryTab && (!c.restrictGender || c.restrictGender === pet.gender)).map((c) => (
                 <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
               ))}
             </View>

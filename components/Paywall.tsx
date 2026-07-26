@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
 import Sheet from "@/components/Sheet";
@@ -7,6 +7,7 @@ import { AccentButton, Footnote, IconCircle } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
 import { usePurchases } from "@/providers/purchases";
+import { PLUS_MONTHLY_ID } from "@/providers/purchases/products";
 
 const PERKS: { icon: IconName; title: string; body: string }[] = [
   { icon: "heart-text", title: "Vet-built care plans", body: "Breed-specific feeding, grooming and health schedules." },
@@ -21,12 +22,34 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
   const { setPremium, toast } = useStore();
   const purchases = usePurchases();
   const [busy, setBusy] = useState(false);
+  const [priceLabel, setPriceLabel] = useState<string | null>(null);
+
+  // Localised price straight from the store — a hardcoded "$4.99/month" is
+  // wrong in every other currency and goes stale the moment pricing changes.
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    purchases
+      .getOfferings()
+      .then((pkgs) => {
+        if (live) setPriceLabel(pkgs.find((p) => p.id === PLUS_MONTHLY_ID)?.priceLabel ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, purchases]);
 
   async function handleBuy() {
     if (busy) return;
     setBusy(true);
     try {
-      const result = await purchases.purchase("petpal_plus_monthly");
+      const result = await purchases.purchase(PLUS_MONTHLY_ID);
+      if (result.cancelled) return;
+      if (result.error) {
+        toast("alert", "Purchase didn't complete", result.error);
+        return;
+      }
       if (result.plusActive) {
         setPremium(true);
         onClose();
@@ -63,7 +86,10 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
         <AccentButton onPress={handleBuy} loading={busy}>
           Try free for 1 month
         </AccentButton>
-        <Footnote>Then $4.99/month. Cancel anytime.{"\n"}Demo — unlocks instantly, no payment.</Footnote>
+        <Footnote>
+          {priceLabel ? `Then ${priceLabel}. Cancel anytime.` : "Cancel anytime."}
+          {purchases.live ? "" : `\nDemo — unlocks instantly, no payment.`}
+        </Footnote>
       </View>
     </Sheet>
   );

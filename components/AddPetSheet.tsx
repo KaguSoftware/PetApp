@@ -35,7 +35,9 @@ export default function AddPetSheet({
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
   const [breed, setBreed] = useState(BREEDS_BY_SPECIES.cat[0]);
   const [customBreed, setCustomBreed] = useState("");
-  const [sex, setSex] = useState<"female" | "male">("female");
+  // Tri-state to match the pet-profile and family editors — "unset" is a real
+  // answer (it just costs the gender-specific weight/feeding guide).
+  const [gender, setGender] = useState<"female" | "male" | "unset">("unset");
   const [ageInput, setAgeInput] = useState("1");
   const [weightInput, setWeightInput] = useState("");
   const [cupInput, setCupInput] = useState("");
@@ -53,7 +55,7 @@ export default function AddPetSheet({
     setSpecies("cat");
     setBreed(BREEDS_BY_SPECIES.cat[0]);
     setCustomBreed("");
-    setSex("female");
+    setGender("unset");
     setAgeInput("1");
     setPetName("");
     const d = SPECIES_DEFAULTS.cat;
@@ -107,14 +109,15 @@ export default function AddPetSheet({
           : "This breed has a vet-built care plan."}
       </Text>
 
-      <FieldLabel>Sex</FieldLabel>
+      <FieldLabel>Gender</FieldLabel>
       <Segmented
         options={[
-          { value: "female", label: "Female" },
           { value: "male", label: "Male" },
+          { value: "female", label: "Female" },
+          { value: "unset", label: "Not set" },
         ]}
-        value={sex}
-        onChange={setSex}
+        value={gender}
+        onChange={setGender}
       />
 
       <View style={{ flexDirection: "row", gap: 12 }}>
@@ -139,7 +142,7 @@ export default function AddPetSheet({
               name: petName.trim(),
               species,
               breed: resolvedBreed,
-              sex,
+              gender: gender === "unset" ? undefined : gender,
               ageYears: parsedAge,
               weightKg: unitToKg(parsedWeightUnit, state.units),
               cupGrams: Math.round(parsedCup),

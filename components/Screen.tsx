@@ -161,6 +161,7 @@ export function TabScreen({
   subtitle,
   trailing,
   children,
+  overlay,
   contentBottomPad = 16,
   ...scrollProps
 }: {
@@ -168,6 +169,9 @@ export function TabScreen({
   subtitle?: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
+  /** Pinned above the scroll content (floating action buttons). Rendered
+   * outside the ScrollView so it stays put while content moves under it. */
+  overlay?: React.ReactNode;
   /** Extra bottom breathing room, on top of the tab-bar + safe-area allowance. */
   contentBottomPad?: number;
 } & ScrollViewProps) {
@@ -233,6 +237,7 @@ export function TabScreen({
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         {children}
       </Animated.ScrollView>
+      {overlay}
       {/* Android stand-in for the native header. Pinned outside the ScrollView so
           it stays put while content scrolls under it, carrying the same
           scroll-driven collapsing title iOS gets from its nav bar.
@@ -271,12 +276,13 @@ export function PushedScreen({
   trailing,
   children,
   scroll = true,
+  ...scrollProps
 }: {
   title?: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
   scroll?: boolean;
-}) {
+} & ScrollViewProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
@@ -304,6 +310,9 @@ export function PushedScreen({
         paddingBottom: insets.bottom + 32,
         paddingHorizontal: 16,
       }}
+      // Spread last so callers can pass `refreshControl` (usePullToRefresh) and
+      // override the defaults above, matching TabScreen.
+      {...scrollProps}
     >
       {children}
     </ScrollView>

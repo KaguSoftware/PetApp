@@ -32,6 +32,14 @@ export const supabase = createClient(url ?? "https://missing.supabase.co", anonK
     // signInWithIdToken (Apple) and OTP verification are unaffected.
     flowType: "pkce",
   },
+  // Realtime (lib/store.tsx subscribes per household). The 10/s ceiling is the
+  // client default, stated explicitly so it's tunable in one place.
+  //
+  // NOTE: supabase-js pushes each refreshed JWT to every joined channel itself
+  // (_handleTokenChanged on SIGNED_IN / TOKEN_REFRESHED / SIGNED_OUT). Do NOT
+  // add a second auth listener that calls realtime.setAuth — it races the
+  // built-in one.
+  realtime: { params: { eventsPerSecond: 10 } },
 });
 
 // Supabase recommends pausing token auto-refresh while the app is backgrounded.

@@ -8,8 +8,8 @@ export interface Cosmetic {
   emoji: string;
   price: number;
   slot: CosmeticSlot;
-  /** When set, only shows up in — and can be bought/worn by — a pet whose sex matches. */
-  restrictSex?: "male" | "female";
+  /** When set, only shows up in — and can be bought/worn by — a pet whose gender matches. */
+  restrictGender?: "male" | "female";
 }
 
 export interface WeightPoint {
@@ -58,7 +58,7 @@ export interface Pet {
   name: string;
   species: "cat" | "dog";
   breed: string;
-  sex?: "male" | "female";
+  gender?: "male" | "female";
   emoji: string;
   ageYears: number;
   weightKg: number;
@@ -144,25 +144,21 @@ export function parseMemberRoles(role: string): { isAdmin: boolean; isCaregiver:
   return { isAdmin, isCaregiver, customRole: rest.join(", ") };
 }
 
-export function formatMemberRoles({
-  isAdmin,
-  isCaregiver,
-  customRole,
-}: {
-  isAdmin: boolean;
-  isCaregiver: boolean;
-  customRole: string;
-}): string {
+/**
+ * Writes the cosmetic label back out. Deliberately takes NO isAdmin: the card
+ * label used to include "Admin", which collided with the real household role in
+ * `household_members.role` — a plain member could toggle a chip labelled Admin
+ * on their own card and appear as an admin everywhere, while granting nothing.
+ * Real roles are owner/admin/member on the account, shown as a read-only badge.
+ * `parseMemberRoles` still recognises the legacy value so old cards simply drop
+ * it the next time they're saved.
+ */
+export function formatMemberRoles({ isCaregiver, customRole }: { isCaregiver: boolean; customRole: string }): string {
   const parts: string[] = [];
-  if (isAdmin) parts.push(ADMIN_ROLE);
   if (isCaregiver) parts.push(CAREGIVER_ROLE);
   const custom = customRole.trim();
   if (custom) parts.push(custom);
   return parts.join(", ") || "Member";
-}
-
-export function isAdminRole(role: string): boolean {
-  return parseMemberRoles(role).isAdmin;
 }
 
 export function isCaregiverRole(role: string): boolean {
@@ -430,14 +426,14 @@ export const COSMETICS: Cosmetic[] = [
   { id: "cap", name: "Baseball Cap", emoji: "🧢", price: 60, slot: "head" },
   { id: "party", name: "Party Hat", emoji: "🥳", price: 80, slot: "head" },
   { id: "santa", name: "Cozy Beanie", emoji: "🎅", price: 90, slot: "head" },
-  { id: "pinkBowtie", name: "Pink Bow Tie", emoji: "🎀", price: 45, slot: "head", restrictSex: "female" },
+  { id: "pinkBowtie", name: "Pink Bow Tie", emoji: "🎀", price: 45, slot: "head", restrictGender: "female" },
   { id: "sunglasses", name: "Cool Shades", emoji: "🕶️", price: 70, slot: "face" },
   { id: "glasses", name: "Smart Glasses", emoji: "👓", price: 50, slot: "face" },
   { id: "monocle", name: "Monocle", emoji: "🧐", price: 110, slot: "face" },
   { id: "bowtie", name: "Bow Tie", emoji: "🎀", price: 45, slot: "neck" },
   { id: "scarf", name: "Winter Scarf", emoji: "🧣", price: 65, slot: "neck" },
   { id: "medal", name: "Good Pet Medal", emoji: "🏅", price: 150, slot: "neck" },
-  { id: "tux", name: "Tiny Tuxedo", emoji: "🤵", price: 300, slot: "body", restrictSex: "male" },
+  { id: "tux", name: "Tiny Tuxedo", emoji: "🤵", price: 300, slot: "body", restrictGender: "male" },
   { id: "shirt", name: "Hawaiian Shirt", emoji: "👕", price: 85, slot: "body" },
   { id: "cape", name: "Hero Cape", emoji: "🦸", price: 200, slot: "body" },
 ];
@@ -867,7 +863,7 @@ export function cosmetic(id: string): Cosmetic | undefined {
 /** One age-stage/gender row of a breed's vet weight & feeding guide. */
 export interface WeightFeedingEntry {
   ageLabel: "3 Months" | "6 Months" | "Adult";
-  sex: "male" | "female" | "both";
+  gender: "male" | "female" | "both";
   weightKgRange: [number, number];
   calorieRange: [number, number];
   kibbleGramsRange: [number, number];
@@ -896,100 +892,100 @@ export const ADULT_THRESHOLD_YEARS: Record<string, number> = {
 /** Vet-built weight/calorie/kibble guide per breed, broken out by age stage and gender. */
 export const WEIGHT_FEEDING_GUIDES: Record<string, WeightFeedingEntry[]> = {
   "Stray Cat": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [4.5, 5.5], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [3.5, 4.5], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [4.5, 5.5], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [3.5, 4.5], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
   ],
   "Persian": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [4, 5.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [3, 4.5], calorieRange: [180, 230], kibbleGramsRange: [45, 60] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [4, 5.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [3, 4.5], calorieRange: [180, 230], kibbleGramsRange: [45, 60] },
   ],
   "Maine Coon": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [2, 2.7], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [3.6, 4.5], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [6.8, 11.3], calorieRange: [350, 500], kibbleGramsRange: [90, 130] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [4.5, 6.8], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [2, 2.7], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [3.6, 4.5], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [6.8, 11.3], calorieRange: [350, 500], kibbleGramsRange: [90, 130] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [4.5, 6.8], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
   ],
   "Siamese": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2, 3], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [4, 5.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [3.6, 4.5], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2, 3], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [4, 5.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [3.6, 4.5], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
   ],
   "British Shorthair": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.5, 2], calorieRange: [220, 280], kibbleGramsRange: [60, 75] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2.5, 3.5], calorieRange: [280, 350], kibbleGramsRange: [75, 90] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [5.5, 8], calorieRange: [300, 400], kibbleGramsRange: [80, 105] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [4, 5.5], calorieRange: [230, 300], kibbleGramsRange: [60, 80] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.5, 2], calorieRange: [220, 280], kibbleGramsRange: [60, 75] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2.5, 3.5], calorieRange: [280, 350], kibbleGramsRange: [75, 90] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [5.5, 8], calorieRange: [300, 400], kibbleGramsRange: [80, 105] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [4, 5.5], calorieRange: [230, 300], kibbleGramsRange: [60, 80] },
   ],
   "Ragdoll": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.8, 2.5], calorieRange: [230, 300], kibbleGramsRange: [60, 80] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [3.2, 4.5], calorieRange: [330, 400], kibbleGramsRange: [85, 105] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [6.8, 9], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [4.5, 6.8], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.8, 2.5], calorieRange: [230, 300], kibbleGramsRange: [60, 80] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [3.2, 4.5], calorieRange: [330, 400], kibbleGramsRange: [85, 105] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [6.8, 9], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [4.5, 6.8], calorieRange: [250, 350], kibbleGramsRange: [65, 90] },
   ],
   "Bengal": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.4, 2], calorieRange: [220, 280], kibbleGramsRange: [60, 75] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2.5, 3.6], calorieRange: [280, 350], kibbleGramsRange: [75, 90] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [4.5, 6.8], calorieRange: [300, 350], kibbleGramsRange: [80, 90] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [3.6, 4.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.4, 2], calorieRange: [220, 280], kibbleGramsRange: [60, 75] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2.5, 3.6], calorieRange: [280, 350], kibbleGramsRange: [75, 90] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [4.5, 6.8], calorieRange: [300, 350], kibbleGramsRange: [80, 90] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [3.6, 4.5], calorieRange: [230, 280], kibbleGramsRange: [60, 75] },
   ],
   "Scottish Fold": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [4, 6], calorieRange: [250, 320], kibbleGramsRange: [65, 85] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [2.7, 4], calorieRange: [180, 250], kibbleGramsRange: [45, 65] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [1.4, 1.8], calorieRange: [200, 250], kibbleGramsRange: [55, 65] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [2.3, 3.2], calorieRange: [250, 300], kibbleGramsRange: [65, 80] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [4, 6], calorieRange: [250, 320], kibbleGramsRange: [65, 85] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [2.7, 4], calorieRange: [180, 250], kibbleGramsRange: [45, 65] },
   ],
   "Labrador Retriever": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [11, 14], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [20, 25], calorieRange: [1200, 1500], kibbleGramsRange: [315, 395] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [29, 36], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [25, 32], calorieRange: [1100, 1400], kibbleGramsRange: [290, 370] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [11, 14], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [20, 25], calorieRange: [1200, 1500], kibbleGramsRange: [315, 395] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [29, 36], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [25, 32], calorieRange: [1100, 1400], kibbleGramsRange: [290, 370] },
   ],
   "French Bulldog": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [3, 5], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [7, 9], calorieRange: [500, 600], kibbleGramsRange: [130, 160] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [9, 13], calorieRange: [600, 750], kibbleGramsRange: [160, 200] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [7, 11], calorieRange: [500, 650], kibbleGramsRange: [130, 170] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [3, 5], calorieRange: [350, 450], kibbleGramsRange: [90, 120] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [7, 9], calorieRange: [500, 600], kibbleGramsRange: [130, 160] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [9, 13], calorieRange: [600, 750], kibbleGramsRange: [160, 200] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [7, 11], calorieRange: [500, 650], kibbleGramsRange: [130, 170] },
   ],
   "German Shepherd": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [11, 16], calorieRange: [900, 1200], kibbleGramsRange: [235, 315] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [22, 27], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [30, 40], calorieRange: [1500, 2000], kibbleGramsRange: [395, 525] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [22, 32], calorieRange: [1200, 1600], kibbleGramsRange: [315, 420] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [11, 16], calorieRange: [900, 1200], kibbleGramsRange: [235, 315] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [22, 27], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [30, 40], calorieRange: [1500, 2000], kibbleGramsRange: [395, 525] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [22, 32], calorieRange: [1200, 1600], kibbleGramsRange: [315, 420] },
   ],
   "Golden Retriever": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [10, 13], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [18, 23], calorieRange: [1200, 1450], kibbleGramsRange: [315, 380] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [29, 34], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [25, 29], calorieRange: [1100, 1350], kibbleGramsRange: [290, 355] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [10, 13], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [18, 23], calorieRange: [1200, 1450], kibbleGramsRange: [315, 380] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [29, 34], calorieRange: [1300, 1600], kibbleGramsRange: [340, 420] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [25, 29], calorieRange: [1100, 1350], kibbleGramsRange: [290, 355] },
   ],
   "Poodle": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [7, 10], calorieRange: [600, 800], kibbleGramsRange: [160, 210] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [14, 18], calorieRange: [900, 1200], kibbleGramsRange: [235, 315] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [27, 32], calorieRange: [1200, 1400], kibbleGramsRange: [315, 370] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [18, 23], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [7, 10], calorieRange: [600, 800], kibbleGramsRange: [160, 210] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [14, 18], calorieRange: [900, 1200], kibbleGramsRange: [235, 315] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [27, 32], calorieRange: [1200, 1400], kibbleGramsRange: [315, 370] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [18, 23], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
   ],
   "Bulldog": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [6, 9], calorieRange: [500, 650], kibbleGramsRange: [130, 170] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [14, 18], calorieRange: [800, 1000], kibbleGramsRange: [210, 265] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [23, 25], calorieRange: [1100, 1300], kibbleGramsRange: [290, 340] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [18, 23], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [6, 9], calorieRange: [500, 650], kibbleGramsRange: [130, 170] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [14, 18], calorieRange: [800, 1000], kibbleGramsRange: [210, 265] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [23, 25], calorieRange: [1100, 1300], kibbleGramsRange: [290, 340] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [18, 23], calorieRange: [900, 1100], kibbleGramsRange: [235, 290] },
   ],
   "Beagle": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [3.5, 5], calorieRange: [400, 500], kibbleGramsRange: [105, 130] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [7, 9], calorieRange: [600, 750], kibbleGramsRange: [160, 200] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [10, 14], calorieRange: [700, 900], kibbleGramsRange: [185, 235] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [9, 11], calorieRange: [600, 800], kibbleGramsRange: [160, 210] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [3.5, 5], calorieRange: [400, 500], kibbleGramsRange: [105, 130] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [7, 9], calorieRange: [600, 750], kibbleGramsRange: [160, 200] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [10, 14], calorieRange: [700, 900], kibbleGramsRange: [185, 235] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [9, 11], calorieRange: [600, 800], kibbleGramsRange: [160, 210] },
   ],
   "Rottweiler": [
-    { ageLabel: "3 Months", sex: "both", weightKgRange: [15, 19], calorieRange: [1100, 1400], kibbleGramsRange: [290, 370] },
-    { ageLabel: "6 Months", sex: "both", weightKgRange: [29, 34], calorieRange: [1600, 1900], kibbleGramsRange: [420, 500] },
-    { ageLabel: "Adult", sex: "male", weightKgRange: [43, 61], calorieRange: [2100, 2800], kibbleGramsRange: [550, 735] },
-    { ageLabel: "Adult", sex: "female", weightKgRange: [36, 45], calorieRange: [1800, 2200], kibbleGramsRange: [475, 580] },
+    { ageLabel: "3 Months", gender: "both", weightKgRange: [15, 19], calorieRange: [1100, 1400], kibbleGramsRange: [290, 370] },
+    { ageLabel: "6 Months", gender: "both", weightKgRange: [29, 34], calorieRange: [1600, 1900], kibbleGramsRange: [420, 500] },
+    { ageLabel: "Adult", gender: "male", weightKgRange: [43, 61], calorieRange: [2100, 2800], kibbleGramsRange: [550, 735] },
+    { ageLabel: "Adult", gender: "female", weightKgRange: [36, 45], calorieRange: [1800, 2200], kibbleGramsRange: [475, 580] },
   ],
 };
 
@@ -1002,16 +998,16 @@ export function weightFeedingStage(ageYears: number, breed: string): "3 Months" 
 }
 
 /** The matching weight/calorie/kibble row for a pet's current age stage and gender
- *  (falls back to the stage's combined "both" row when sex is unset). */
-export function weightFeedingEntry(pet: Pick<Pet, "ageYears" | "breed" | "sex">): WeightFeedingEntry | undefined {
+ *  (falls back to the stage's combined "both" row when gender is unset). */
+export function weightFeedingEntry(pet: Pick<Pet, "ageYears" | "breed" | "gender">): WeightFeedingEntry | undefined {
   const stage = weightFeedingStage(pet.ageYears, pet.breed);
   const rows = WEIGHT_FEEDING_GUIDES[pet.breed]?.filter((r) => r.ageLabel === stage);
   if (!rows?.length) return undefined;
-  return rows.find((r) => r.sex === pet.sex) ?? rows.find((r) => r.sex === "both") ?? rows[0];
+  return rows.find((r) => r.gender === pet.gender) ?? rows.find((r) => r.gender === "both") ?? rows[0];
 }
 
 /** Healthy weight range (kg) for a pet's current age/gender — used for the weight-chart band. */
-export function weightTargetRange(pet: Pick<Pet, "ageYears" | "breed" | "sex">): [number, number] | undefined {
+export function weightTargetRange(pet: Pick<Pet, "ageYears" | "breed" | "gender">): [number, number] | undefined {
   return weightFeedingEntry(pet)?.weightKgRange;
 }
 

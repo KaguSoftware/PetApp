@@ -7,7 +7,7 @@ import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Footnote, PRESS_SCALE_SMALL, PressableScale, Segmented } from "@/components/ui";
-import { VET, VETS, formatAge, formatWeight, isAdminRole, nextAnniversary, nextBirthday } from "@/lib/data";
+import { VET, VETS, formatAge, formatWeight, nextAnniversary, nextBirthday } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { floatShadow, font, radius, withAlpha, useColors, type Colors } from "@/lib/theme";
 
@@ -76,9 +76,15 @@ export default function PetCardPage() {
     );
   }
 
-  const contact = state.members.find((m) => isAdminRole(m.role)) ?? state.members[0];
+  // Emergency contact: prefer whoever actually runs the household (real
+  // owner/admin role on the account), not the cosmetic card label — that label
+  // no longer carries "Admin" at all.
+  const managerCardIds = new Set(
+    state.accounts.filter((a) => a.role === "owner" || a.role === "admin").map((a) => a.memberId)
+  );
+  const contact = state.members.find((m) => managerCardIds.has(m.id)) ?? state.members[0];
   const vet = VETS.find((v) => state.bookedVetIds.includes(v.id)) ?? VET;
-  const sexLabel = pet.sex === "male" ? "Male" : pet.sex === "female" ? "Female" : null;
+  const genderLabel = pet.gender === "male" ? "Male" : pet.gender === "female" ? "Female" : null;
   const speciesLabel = pet.species === "cat" ? "Cat" : "Dog";
 
   // The two variants serve two different readers, so their fields are two
@@ -115,7 +121,7 @@ export default function PetCardPage() {
 
   const shareText = [
     variant === "profile" ? `Meet ${pet.name}!` : `${pet.name} — emergency & ID card`,
-    `${speciesLabel} · ${pet.breed}${sexLabel ? ` · ${sexLabel}` : ""}`,
+    `${speciesLabel} · ${pet.breed}${genderLabel ? ` · ${genderLabel}` : ""}`,
     ...(variant === "emergency" && pet.allergies ? [`⚠ Allergies/alerts: ${pet.allergies}`] : []),
     ...fields.map((f) => `${f.label}: ${f.value}`),
     "— shared from PetPal",
@@ -172,7 +178,7 @@ export default function PetCardPage() {
           <Text style={styles.heroName}>{pet.name}</Text>
           <Text style={styles.heroMeta}>
             {speciesLabel} · {pet.breed}
-            {sexLabel ? ` · ${sexLabel}` : ""}
+            {genderLabel ? ` · ${genderLabel}` : ""}
           </Text>
           <View style={[styles.badge, variant === "emergency" ? styles.badgeEmergency : styles.badgeProfile]}>
             <Text style={[styles.badgeLabel, variant === "emergency" ? styles.badgeLabelEmergency : styles.badgeLabelProfile]}>

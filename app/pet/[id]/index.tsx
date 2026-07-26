@@ -9,6 +9,7 @@ import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
 import PixelChart from "@/components/pixel/PixelChart";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import Sheet from "@/components/Sheet";
 import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
@@ -91,9 +92,10 @@ export default function PetDetailPage() {
   const [visitReason, setVisitReason] = useState("");
   const [birthdayOpen, setBirthdayOpen] = useState(false);
   const [birthdayTs, setBirthdayTs] = useState<number | null>(null);
-  const [sexOpen, setSexOpen] = useState(false);
-  const [sexVal, setSexVal] = useState<"male" | "female" | "unset">("unset");
+  const [genderOpen, setGenderOpen] = useState(false);
+  const [genderVal, setGenderVal] = useState<"male" | "female" | "unset">("unset");
   const [identityEditing, setIdentityEditing] = useState<"microchip" | "allergies" | "notes" | null>(null);
+  const refreshControl = usePullToRefresh();
 
   if (!hydrated) {
     return (
@@ -136,7 +138,7 @@ export default function PetDetailPage() {
   };
 
   return (
-    <PushedScreen title={pet.name}>
+    <PushedScreen title={pet.name} refreshControl={refreshControl}>
       {/* Hero */}
       <View style={styles.hero}>
         <PetAvatar pet={pet} size="xl" idle />
@@ -173,7 +175,7 @@ export default function PetDetailPage() {
               <Icon name="chevron-right" size={9} color={colors.label3} />
             </Chip>
           </PressableScale>
-          {pet.sex ? <Chip>{pet.sex === "male" ? "Male" : "Female"}</Chip> : null}
+          {pet.gender ? <Chip>{pet.gender === "male" ? "Male" : "Female"}</Chip> : null}
           <Chip>{`${pet.owned.length} items`}</Chip>
         </View>
         <View style={styles.heroButtons}>
@@ -273,16 +275,16 @@ export default function PetDetailPage() {
       <Group>
         <Row
           leading={<IconCircle icon="person" tint={colors.label2} bg={colors.fill} />}
-          title="Sex"
-          subtitle="Used for the age-and-sex-specific weight & feeding guide"
+          title="Gender"
+          subtitle="Used for the age-and-gender-specific weight & feeding guide"
           trailing={
-            <Text style={pet.sex ? styles.identityValue : styles.identityUnset}>
-              {pet.sex === "male" ? "Male" : pet.sex === "female" ? "Female" : "Set"}
+            <Text style={pet.gender ? styles.identityValue : styles.identityUnset}>
+              {pet.gender === "male" ? "Male" : pet.gender === "female" ? "Female" : "Set"}
             </Text>
           }
           onPress={() => {
-            setSexVal(pet.sex ?? "unset");
-            setSexOpen(true);
+            setGenderVal(pet.gender ?? "unset");
+            setGenderOpen(true);
           }}
         />
         <Row
@@ -683,9 +685,9 @@ export default function PetDetailPage() {
         }}
       />
 
-      <Sheet open={sexOpen} onClose={() => setSexOpen(false)}>
-        <SheetTitle>{pet.name}&apos;s sex</SheetTitle>
-        <SheetSubtitle>Used for the age-and-sex-specific weight &amp; feeding guide</SheetSubtitle>
+      <Sheet open={genderOpen} onClose={() => setGenderOpen(false)}>
+        <SheetTitle>{pet.name}&apos;s gender</SheetTitle>
+        <SheetSubtitle>Used for the age-and-gender-specific weight &amp; feeding guide</SheetSubtitle>
         <View style={{ marginTop: 20 }}>
           <Segmented
             options={[
@@ -693,15 +695,15 @@ export default function PetDetailPage() {
               { value: "female", label: "Female" },
               { value: "unset", label: "Not set" },
             ]}
-            value={sexVal}
-            onChange={setSexVal}
+            value={genderVal}
+            onChange={setGenderVal}
           />
         </View>
         <SheetFooter>
           <AccentButton
             onPress={() => {
-              editPet(pet.id, { ...basePatch, sex: sexVal === "unset" ? null : sexVal });
-              setSexOpen(false);
+              editPet(pet.id, { ...basePatch, gender: genderVal === "unset" ? null : genderVal });
+              setGenderOpen(false);
               toast("paw", `${pet.name} updated`, "");
             }}
           >

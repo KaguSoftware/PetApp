@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icons";
 import EmptyState from "@/components/EmptyState";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
+import { usePullToRefresh } from "@/lib/useRefresh";
 import Sheet from "@/components/Sheet";
 import VoteControl from "@/components/VoteControl";
 import {
@@ -103,6 +104,10 @@ export default function PostDetail() {
     }, [load])
   );
 
+  // Answers arrive from other households, so this page has no realtime feed —
+  // a pull refetches the post and its answers alongside the household data.
+  const refreshControl = usePullToRefresh(load);
+
   const openAnswer = () => {
     // Default to "no pet" — answering is optional-pet, unlike posting.
     setPetId(null);
@@ -116,8 +121,6 @@ export default function PostDetail() {
   const submit = async () => {
     if (!id || !state.familyId || body.trim().length === 0) return;
     setSubmitting(true);
-    // TEMP DEBUG — remove once we've root-caused the null author_member_id issue.
-    console.log("[petpal][debug] answer submit — currentMemberId:", state.currentMemberId, "currentMember:", currentMember);
     try {
       await createAnswer({
         postId: id,
@@ -194,7 +197,7 @@ export default function PostDetail() {
 
   if (data === undefined) {
     return (
-      <PushedScreen title="Question">
+      <PushedScreen title="Question" refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -202,7 +205,7 @@ export default function PostDetail() {
 
   if (data === null) {
     return (
-      <PushedScreen title="Question">
+      <PushedScreen title="Question" refreshControl={refreshControl}>
         <View style={{ marginTop: 24 }}>
           <EmptyState icon="alert" title="Question not found" body="It may have been removed." />
           <View style={{ marginTop: 16 }}>
@@ -253,7 +256,7 @@ export default function PostDetail() {
   );
 
   return (
-    <PushedScreen title="Question">
+    <PushedScreen title="Question" refreshControl={refreshControl}>
       {/* Question header */}
       <View style={styles.postCard}>
         <View style={styles.postHeader}>

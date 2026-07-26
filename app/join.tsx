@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { AccentButton, FieldLabel, TextField } from "@/components/ui";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { font, radius, floatShadow, useColors, type Colors } from "@/lib/theme";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,6 +15,37 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function formatCode(raw: string): string {
   const n = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
   return n.length > 4 ? `${n.slice(0, 4)}-${n.slice(4)}` : n;
+}
+
+/** Display name for the card this person gets in the household they're joining. */
+function NameField({
+  value,
+  onChange,
+  touched,
+  onSubmit,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  touched: React.MutableRefObject<boolean>;
+  onSubmit?: () => void;
+}) {
+  return (
+    <View>
+      <FieldLabel>Your name</FieldLabel>
+      <TextField
+        value={value}
+        onChangeText={(t) => {
+          touched.current = true;
+          onChange(t);
+        }}
+        placeholder="e.g. Alex"
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+        onSubmitEditing={onSubmit}
+      />
+    </View>
+  );
 }
 
 /**
@@ -36,6 +68,30 @@ export default function JoinPage() {
   // then falls back to pasting a Family ID.
   const [legacyMode, setLegacyMode] = useState(false);
   const [familyIdInput, setFamilyIdInput] = useState("");
+
+  // The name that will label this person's card in the household they're about
+  // to join. Both join RPCs read it from auth metadata AT REDEEM TIME, falling
+  // back to "New member" — which is what Google sign-ins got, since (unlike
+  // Apple) that flow never backfills a name. Asking here, before redeeming, is
+  // the only place the write is guaranteed to land first.
+  const [name, setName] = useState("");
+  // Prefill without ever clobbering what the user has typed (same guard as the
+  // create-household step).
+  const nameTouched = useRef(false);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (nameTouched.current) return;
+      const accountName = (data.session?.user?.user_metadata as { name?: string } | null)?.name;
+      if (accountName && accountName !== "New member") setName(accountName);
+    });
+  }, []);
+
+  /** Persists the display name so redeem_invite / join_household pick it up. */
+  async function saveName() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await supabase.auth.updateUser({ data: { name: trimmed } });
+  }
 
   if (!hydrated) {
     return (
@@ -80,11 +136,16 @@ export default function JoinPage() {
               <View style={styles.idPill}>
                 <Text style={styles.idPillLabel}>{legacyFamilyId.slice(0, 8)}…</Text>
               </View>
+              <View style={styles.form}>
+                <NameField value={name} onChange={setName} touched={nameTouched} onSubmit={undefined} />
+              </View>
               <View style={styles.cta}>
                 <AccentButton
                   loading={joining}
+                  disabled={!name.trim()}
                   onPress={async () => {
                     setJoining(true);
+                    await saveName();
                     const ok = await joinHousehold(legacyFamilyId);
                     if (!ok) {
                       setJoining(false);
@@ -108,6 +169,9 @@ export default function JoinPage() {
     if (joining) return;
     setError(null);
     setJoining(true);
+    // Name first — redeem_invite reads auth metadata to name the new card, so
+    // a later write would leave them as "New member" until they edited it.
+    await saveName();
     const result = await redeemInvite(code);
     setJoining(false);
     if (result.ok) {
@@ -137,6 +201,7 @@ export default function JoinPage() {
       return;
     }
     setJoining(true);
+    await saveName();
     const ok = await joinHousehold(target);
     setJoining(false);
     if (ok) router.replace("/home");
@@ -151,8 +216,10 @@ export default function JoinPage() {
         <Text style={styles.title}>Enter your invite code</Text>
         <Text style={styles.body}>
           Ask a family member for a code — they can create one from Settings ▸ Family ▸ Invite. Codes look like ABCD-EFGH.
+          Your name is what the household will see on your care logs.
         </Text>
         <View style={styles.form}>
+          <NameField value={name} onChange={setName} touched={nameTouched} onSubmit={undefined} />
           {legacyMode ? (
             <>
               <FieldLabel>Family ID</FieldLabel>
@@ -183,7 +250,9 @@ export default function JoinPage() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <AccentButton
             loading={joining}
-            disabled={legacyMode ? !familyIdInput.trim() : code.replace(/[^A-Z0-9]/g, "").length !== 8}
+            disabled={
+              !name.trim() || (legacyMode ? !familyIdInput.trim() : code.replace(/[^A-Z0-9]/g, "").length !== 8)
+            }
             onPress={legacyMode ? handleLegacyJoin : handleRedeem}
           >
             Join household

@@ -7,21 +7,31 @@
  * in Supabase — the same flag the web demo reads.
  */
 export interface PurchasePackage {
+  /** The STORE product identifier (see providers/purchases/products.ts). */
   id: string;
   title: string;
+  /** Localised price straight from the store — never hardcoded. */
   priceLabel: string;
-  period: "monthly" | "annual";
+  /** Subscriptions carry a period; one-off coin packs don't. */
+  period?: "monthly" | "annual";
+  kind: "subscription" | "consumable";
 }
 
 export interface EntitlementState {
   plusActive: boolean;
   /** Where the entitlement came from (mock now, revenuecat later). */
   source: "mock" | "revenuecat" | "none";
+  /** User backed out of the store sheet — not an error, show no message. */
+  cancelled?: boolean;
+  /** Something went wrong; already human-readable. */
+  error?: string;
 }
 
 export interface PurchasesGateway {
+  /** True when purchases can actually charge. False for the Expo Go mock. */
+  readonly live: boolean;
   configure(userId: string): Promise<void>;
   getOfferings(): Promise<PurchasePackage[]>;
-  purchase(pkgId: string): Promise<EntitlementState>;
+  purchase(productId: string): Promise<EntitlementState>;
   restore(): Promise<EntitlementState>;
 }

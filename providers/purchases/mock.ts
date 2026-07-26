@@ -1,25 +1,39 @@
+import { COIN_PACKS, PLUS_MONTHLY_ID } from "./products";
 import type { EntitlementState, PurchasePackage, PurchasesGateway } from "./types";
 
+/**
+ * Expo Go stand-in for RevenueCat — the native module can't load there.
+ *
+ * Prices are placeholders and clearly labelled as such by the UI (`live` is
+ * false, so the coin screen keeps its honest "coming soon" behaviour rather
+ * than faking a balance bump that wouldn't survive a reload). PetPal+ still
+ * unlocks instantly, mirroring the web demo: the caller persists it through the
+ * store (households.premium), which IS real.
+ */
 const OFFERINGS: PurchasePackage[] = [
-  { id: "petpal_plus_monthly", title: "PetPal+ Monthly", priceLabel: "$4.99/month", period: "monthly" },
+  { id: PLUS_MONTHLY_ID, title: "PetPal+ Monthly", priceLabel: "$4.99/month", period: "monthly", kind: "subscription" },
+  ...COIN_PACKS.map((p) => ({
+    id: p.id,
+    title: `${p.coins.toLocaleString()} coins`,
+    priceLabel: "—",
+    kind: "consumable" as const,
+  })),
 ];
 
-/**
- * Expo Go stand-in for RevenueCat: resolves after a short delay so the UI's
- * loading states are exercised, then reports the entitlement as active. The
- * caller persists it via the store (households.premium), exactly like the
- * web demo's instant unlock.
- */
 export class MockPurchases implements PurchasesGateway {
+  readonly live = false;
+
   async configure(_userId: string): Promise<void> {}
 
   async getOfferings(): Promise<PurchasePackage[]> {
     return OFFERINGS;
   }
 
-  async purchase(_pkgId: string): Promise<EntitlementState> {
+  async purchase(productId: string): Promise<EntitlementState> {
     await new Promise((r) => setTimeout(r, 800));
-    return { plusActive: true, source: "mock" };
+    // Only the subscription unlocks. Coins are granted server-side by the
+    // RevenueCat webhook, which has nothing to react to here.
+    return { plusActive: productId === PLUS_MONTHLY_ID, source: "mock" };
   }
 
   async restore(): Promise<EntitlementState> {

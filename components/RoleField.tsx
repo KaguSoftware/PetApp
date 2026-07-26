@@ -7,25 +7,27 @@ import { funRoleWheelOptions, OTHER_ROLE } from "@/lib/data";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
- * A member can hold up to 3 roles at once: Admin and/or Pet caregiver
- * (independent toggle chips, no functionality tied to caregiver yet) plus one
- * optional free-text "fun" role with no functionality at all. The fun role
- * reuses the collapsible wheel pattern from BreedField — pick a curated
- * example or "Other" to hand off to a free-text field.
+ * Purely COSMETIC card labels: an optional "Pet caregiver" toggle (which gates
+ * advertising a caregiving service in Community) plus one optional free-text
+ * "fun" role with no functionality at all. The fun role reuses the collapsible
+ * wheel pattern from BreedField — pick a curated example or "Other" to hand off
+ * to a free-text field.
+ *
+ * There is deliberately NO "Admin" chip here any more. It wrote free text into
+ * members.role with no permission check on either side, so a plain member could
+ * tick it on their own card and read as an admin everywhere while being granted
+ * nothing. The real role (owner/admin/member) lives on the ACCOUNT in
+ * household_members and is shown read-only next to this field.
  */
 export default function RoleField({
-  isAdmin,
   isCaregiver,
-  onToggleAdmin,
   onToggleCaregiver,
   funRole,
   customFunRole,
   onChangeFunRole,
   onChangeCustomFunRole,
 }: {
-  isAdmin: boolean;
   isCaregiver: boolean;
-  onToggleAdmin: () => void;
   onToggleCaregiver: () => void;
   funRole: string;
   customFunRole: string;
@@ -47,7 +49,6 @@ export default function RoleField({
   return (
     <View>
       <View style={styles.chipRow}>
-        <SelectableChip label="Admin" selected={isAdmin} onPress={onToggleAdmin} />
         <SelectableChip label="Pet caregiver" selected={isCaregiver} onPress={onToggleCaregiver} />
       </View>
 
