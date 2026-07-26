@@ -1,12 +1,11 @@
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import BrandMark from "@/components/BrandMark";
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthProviderButtons from "@/components/AuthProviderButtons";
 import { AccentButton, TextField } from "@/components/ui";
-import { friendlyAuthError } from "@/lib/authErrors";
-import { supabase } from "@/lib/supabase";
+import { resendCode, signInWithEmail } from "@/lib/auth";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function LoginScreen() {
@@ -25,9 +24,19 @@ export default function LoginScreen() {
     if (loading) return;
     setError(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error, needsVerification } = await signInWithEmail(email, password);
+    // The account exists and the password is right — it was just never
+    // confirmed. Send a fresh code and hand the user to the code screen instead
+    // of an error they can't act on. (A resend failure, e.g. the hourly SMTP
+    // rate limit, is not fatal: /verify has its own Resend button.)
+    if (needsVerification) {
+      await resendCode(email, "signup");
+      setLoading(false);
+      router.push({ pathname: "/verify", params: { email: email.trim(), purpose: "signup" } });
+      return;
+    }
     setLoading(false);
-    if (error) setError(friendlyAuthError(error.message));
+    if (error) setError(error);
     // On success the session listener redirects to (tabs).
   }
 

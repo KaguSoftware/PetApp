@@ -73,7 +73,6 @@ function RootStack() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-          <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
           <Stack.Screen name="activity" />
           <Stack.Screen name="coins" />
           <Stack.Screen name="instructions" />
@@ -90,12 +89,15 @@ function RootStack() {
           <Stack.Screen name="vets/index" />
           <Stack.Screen name="vets/[id]" />
         </Stack.Protected>
-        {/* Deliberately unguarded: the OTP flow crosses the signed-out →
-            signed-in boundary mid-screen (verifying a signup/recovery code
-            CREATES the session). Guarded either way, the flip would yank the
-            user off the screen before it can route them. */}
+        {/* Deliberately unguarded: these three cross the signed-out →
+            signed-in boundary mid-screen (verifying a signup/recovery code — or
+            an emailed confirmation LINK landing on auth-callback — CREATES the
+            session). Guarded either way, the flip would yank the user off the
+            screen before it can route them; guarded as signed-in, a cold-start
+            confirmation link would bounce to (auth) before it could verify. */}
         <Stack.Screen name="verify" />
         <Stack.Screen name="reset-password" />
+        <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

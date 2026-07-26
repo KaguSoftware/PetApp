@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { AccentButton } from "@/components/ui";
+import { AccentButton, TextField } from "@/components/ui";
 import { resendCode, verifyEmailOtp, type OtpPurpose } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
@@ -31,8 +31,13 @@ const RESEND_COOLDOWN_S = 60;
 export default function VerifyScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const params = useLocalSearchParams<{ email?: string; purpose?: string; secondary?: string }>();
-  const email = (params.email ?? "").trim();
+  const params = useLocalSearchParams<{ email?: string; purpose?: string; secondary?: string; error?: string }>();
+  // Normally handed in by signup/login/forgot. A failed email LINK bounces here
+  // from auth-callback WITHOUT one (the link carries no address), so the field
+  // below lets the user supply it rather than stranding them.
+  const [emailInput, setEmailInput] = useState((params.email ?? "").trim());
+  const email = emailInput.trim();
+  const needsEmail = !(params.email ?? "").trim();
   const purpose = (["signup", "recovery", "email_change"].includes(params.purpose ?? "")
     ? params.purpose
     : "signup") as OtpPurpose;
@@ -40,7 +45,9 @@ export default function VerifyScreen() {
 
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // auth-callback forwards a failed email LINK here (expired token, mostly) so
+  // the user lands on the code entry with an explanation instead of a dead end.
+  const [error, setError] = useState<string | null>((params.error ?? "").trim() || null);
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   // Secure email change: the first code landed, the sibling one is still due.
@@ -54,6 +61,10 @@ export default function VerifyScreen() {
 
   async function submit(value: string) {
     if (busy || value.length !== CODE_LENGTH) return;
+    if (!email) {
+      setError("Enter the email address you signed up with.");
+      return;
+    }
     setBusy(true);
     setError(null);
 
@@ -96,6 +107,10 @@ export default function VerifyScreen() {
 
   async function handleResend() {
     if (cooldown > 0 || busy) return;
+    if (!email) {
+      setError("Enter the email address you signed up with.");
+      return;
+    }
     setError(null);
     const { error } = await resendCode(email, purpose);
     if (error) {
@@ -113,8 +128,9 @@ export default function VerifyScreen() {
   }
 
   const title = purpose === "recovery" ? "Reset your password" : awaitingSecond ? "One more code" : "Enter the code";
-  const subtitle =
-    purpose === "email_change"
+  const subtitle = needsEmail
+    ? `Enter your email address and the ${CODE_LENGTH}-digit code we sent you.`
+    : purpose === "email_change"
       ? awaitingSecond
         ? `Almost there — enter the code we sent to your other address to confirm the change.`
         : `We sent codes to ${email}${secondary ? ` and ${secondary}` : ""}. Enter either one to start.`
@@ -125,6 +141,21 @@ export default function VerifyScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
+
+        {needsEmail ? (
+          <TextField
+            placeholder="Email"
+            value={emailInput}
+            onChangeText={(t) => {
+              setEmailInput(t);
+              setError(null);
+            }}
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+          />
+        ) : null}
 
         <Pressable
           style={styles.cellsRow}
@@ -150,14 +181,15 @@ export default function VerifyScreen() {
           keyboardType="number-pad"
           textContentType="oneTimeCode"
           autoComplete="one-time-code"
-          autoFocus
+          // When the address still has to be typed, that field goes first.
+          autoFocus={!needsEmail}
           caretHidden
           maxLength={CODE_LENGTH}
         />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <AccentButton onPress={() => submit(code)} loading={busy} disabled={code.length !== CODE_LENGTH}>
+        <AccentButton onPress={() => submit(code)} loading={busy} disabled={code.length !== CODE_LENGTH || !email}>
           Verify
         </AccentButton>
 

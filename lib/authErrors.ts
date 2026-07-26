@@ -5,7 +5,7 @@
 export function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("invalid login credentials")) return "That email or password doesn't match. Give it another try.";
-  if (m.includes("email not confirmed")) return "Please confirm your email first — check your inbox for the link.";
+  if (m.includes("email not confirmed")) return "Please confirm your email first — check your inbox for the code we sent.";
   if (m.includes("already registered") || m.includes("already been registered") || m.includes("user already exists"))
     return "An account with this email already exists. Try logging in instead.";
   if (m.includes("password should be at least") || m.includes("password is too short"))

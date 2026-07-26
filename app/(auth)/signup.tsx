@@ -8,6 +8,11 @@ import { AccentButton, TextField } from "@/components/ui";
 import { signUpWithEmail } from "@/lib/auth";
 import { font, useColors, type Colors } from "@/lib/theme";
 
+// Deliberately loose — the confirmation email is the real validator; this only
+// catches missing @ / domain typos before the network round-trip.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD = 6; // Supabase's default minimum.
+
 export default function SignupScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -23,6 +28,17 @@ export default function SignupScreen() {
     // a duplicate signUp surfaces a spurious "already registered" error over a
     // successful signup.
     if (loading) return;
+    // Catch the obvious typos locally — a network round-trip just to be told
+    // "invalid email" wastes the user's time, and (with confirmations on) a
+    // mistyped address silently sends the code somewhere they can't read.
+    if (!EMAIL_RE.test(email.trim())) {
+      setError("That doesn't look like a valid email address.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD) {
+      setError(`Please use a longer password (at least ${MIN_PASSWORD} characters).`);
+      return;
+    }
     setError(null);
     setLoading(true);
     const { error, needsVerification } = await signUpWithEmail(name, email, password);

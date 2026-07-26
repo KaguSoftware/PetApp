@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-import type { UserIdentity } from "@supabase/supabase-js";
+import type { EmailOtpType, UserIdentity } from "@supabase/supabase-js";
 import { friendlyAuthError } from "@/lib/authErrors";
 import { supabase } from "@/lib/supabase";
 
@@ -200,6 +200,24 @@ export async function signInWithGoogle(): Promise<AuthResult> {
 
 // ---------------------------------------------------------------- Email ----
 
+/** Password sign-in. Wrapped here (rather than called inline from the login
+ * screen) so "Email not confirmed" can be surfaced as a routable state instead
+ * of a dead-end error string. */
+export async function signInWithEmail(
+  email: string,
+  password: string,
+): Promise<AuthResult & { needsVerification: boolean }> {
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (!error) return { error: null, needsVerification: false };
+  // GoTrue: "Email not confirmed" — the account exists and the password is
+  // right, the address was just never verified. The login screen sends these
+  // users to /verify with a fresh code rather than showing an error.
+  if (/email not confirmed/i.test(error.message)) {
+    return { error: friendlyAuthError(error.message), needsVerification: true };
+  }
+  return { error: friendlyAuthError(error.message), needsVerification: false };
+}
+
 export async function signUpWithEmail(
   name: string,
   email: string,
@@ -210,7 +228,11 @@ export async function signUpWithEmail(
     password,
     // seed_demo:false tells handle_new_user (migration 0029) to skip the
     // demo-household seeding — mobile users get the create-or-join onboarding.
-    options: { data: { name: name || "You", seed_demo: false } },
+    // emailRedirectTo points the confirmation LINK back into the app
+    // (app/auth-callback.tsx finishes the verification). The 6-digit code from
+    // the same email stays the primary path; the link is the backstop for users
+    // who tap it out of habit — or when the email template has no {{ .Token }}.
+    options: { data: { name: name || "You", seed_demo: false }, emailRedirectTo: authRedirectUrl() },
   });
   if (error) return { error: friendlyAuthError(error.message), needsVerification: false };
   // With email confirmation on, signing up with an ALREADY-REGISTERED address
@@ -235,10 +257,13 @@ export async function verifyEmailOtp(email: string, token: string, purpose: OtpP
   return { error: error ? friendlyAuthError(error.message) : null };
 }
 
-/** Sends the recovery email (code + link). No redirectTo on purpose — the
- * code is the mobile path; the link keeps working for the web demo. */
+/** Sends the recovery email (code + link). The 6-digit code stays the primary
+ * mobile path; redirectTo just makes the link in the SAME email open the app
+ * (auth-callback → reset-password) instead of the web demo's Site URL. */
 export async function requestPasswordReset(email: string): Promise<AuthResult> {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: authRedirectUrl(),
+  });
   return { error: error ? friendlyAuthError(error.message) : null };
 }
 
@@ -247,8 +272,62 @@ export async function resendCode(email: string, purpose: OtpPurpose): Promise<Au
   const { error } = await supabase.auth.resend({
     type: purpose === "signup" ? "signup" : "email_change",
     email: email.trim(),
+    options: { emailRedirectTo: authRedirectUrl() },
   });
   return { error: error ? friendlyAuthError(error.message) : null };
+}
+
+// -------------------------------------------------- Email link completion ----
+
+/** Result of following a confirmation/recovery LINK from an email. `purpose`
+ * drives where the callback screen routes next. */
+export interface EmailLinkResult extends AuthResult {
+  purpose: OtpPurpose;
+  /** No auth params in the URL at all — not an email link (e.g. a bare
+   * petpal://auth-callback open). The caller should just redirect. */
+  ignored?: boolean;
+}
+
+const OTP_PURPOSES: OtpPurpose[] = ["signup", "recovery", "email_change"];
+
+/**
+ * Completes an emailed auth link that landed on petpal://auth-callback.
+ *
+ * Supabase sends one of two shapes depending on the flow and GoTrue version:
+ *   ?token_hash=…&type=signup|recovery|email_change|magiclink  → verifyOtp
+ *   ?code=…                                                    → PKCE exchange
+ * OAuth redirects use the SAME ?code= shape and are normally already exchanged
+ * by completeBrowserOAuth, so `hasSession` short-circuits a second (failing)
+ * exchange of a spent code.
+ */
+export async function completeEmailLink(url: string, hasSession: boolean): Promise<EmailLinkResult> {
+  const rawType = paramFromRedirect(url, "type");
+  // magiclink/invite verify like a signup as far as routing is concerned.
+  const purpose: OtpPurpose = OTP_PURPOSES.includes(rawType as OtpPurpose) ? (rawType as OtpPurpose) : "signup";
+
+  const description = paramFromRedirect(url, "error_description") ?? paramFromRedirect(url, "error");
+  if (description) return { error: friendlyAuthError(description), purpose };
+
+  const tokenHash = paramFromRedirect(url, "token_hash");
+  if (tokenHash) {
+    // Pass the link's own `type` straight through when it's one GoTrue accepts;
+    // "email" is the catch-all that verifies a plain confirmation token.
+    const emailTypes: EmailOtpType[] = ["signup", "invite", "magiclink", "recovery", "email_change", "email"];
+    const type = emailTypes.includes(rawType as EmailOtpType) ? (rawType as EmailOtpType) : "email";
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    return { error: error ? friendlyAuthError(error.message) : null, purpose };
+  }
+
+  const code = paramFromRedirect(url, "code");
+  if (code) {
+    // Already signed in → this is the OAuth round-trip's redirect landing after
+    // lib/auth.ts already spent the code. Nothing left to do.
+    if (hasSession) return { error: null, purpose, ignored: true };
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return { error: error ? friendlyAuthError(error.message) : null, purpose };
+  }
+
+  return { error: null, purpose, ignored: true };
 }
 
 // --------------------------------------------- Connected accounts (link) ----

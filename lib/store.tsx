@@ -261,6 +261,18 @@ function isMissingFunction(e: { code?: string; message?: string } | null | undef
 }
 
 /**
+ * 42883 "function ... does not exist" raised from INSIDE an RPC. Distinct from
+ * isMissingFunction (which is PostgREST failing to find the RPC itself): the
+ * RPC ran, but its body called something the DB can't resolve. Pre-0031 that
+ * was create_invite's gen_random_bytes (pgcrypto lives in the `extensions`
+ * schema, off the function's pinned search_path). Treated as "backend needs
+ * updating", not a transient failure, so callers can fall back cleanly.
+ */
+function isBrokenFunctionBody(e: { code?: string } | null | undefined) {
+  return e?.code === "42883";
+}
+
+/**
  * Client-side fallback for create_household (migration 0028 not applied yet):
  * a bare EMPTY household — just the row, the creator's card, and the links.
  * No demo data (owner decision 2026-07-25: fresh households start clean; the
@@ -3077,7 +3089,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         uses: input.maxUses ?? null,
       });
       if (error || !data) {
-        if (isMissingFunction(error)) {
+        if (isMissingFunction(error) || isBrokenFunctionBody(error)) {
+          // 42883 here means migration 0031 hasn't landed — create_invite exists
+          // but can't reach pgcrypto. Same user-visible outcome as a missing
+          // RPC: degrade to the legacy Family-ID share instead of pretending a
+          // retry might help.
+          if (isBrokenFunctionBody(error)) console.error("[petpal] create_invite failed:", describeErr(error) ?? error);
           invitesSchemaRef.current = true;
           toast("alert", "Invite codes need the next backend update", "Sharing the Family ID still works meanwhile");
         } else if ((error as { code?: string } | null)?.code === "42501") {
