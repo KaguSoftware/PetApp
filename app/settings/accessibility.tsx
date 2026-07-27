@@ -2,15 +2,21 @@ import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { useMemo } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
-import { Chevron, Group, IconCircle, Row, SectionHeader, Toggle } from "@/components/ui";
+import { Chevron, Group, IconCircle, Row, SectionHeader, Segmented, Toggle } from "@/components/ui";
 import { PushedScreen } from "@/components/Screen";
+import type { IconName } from "@/components/Icons";
 import { useA11yPrefs } from "@/lib/a11y";
+import { useStore, type ThemeMode } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
+
+/** Icon for the appearance row's leading circle, per preference. */
+const APPEARANCE_ICON: Record<ThemeMode, IconName> = { system: "sparkles", light: "sun", dark: "moon" };
 
 export default function AccessibilitySettingsPage() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { reduceMotion, reduceTransparency, haptics, setReduceMotion, setReduceTransparency, setHaptics } = useA11yPrefs();
+  const { themeMode, setThemeMode, resolvedTheme, toast } = useStore();
 
   const toggles = [
     {
@@ -55,6 +61,38 @@ export default function AccessibilitySettingsPage() {
 
   return (
     <PushedScreen title="Accessibility">
+      <SectionHeader>Appearance</SectionHeader>
+      <Group>
+        {/* Full-width rather than a trailing control: three labelled options
+            don't fit legibly in a Row's trailing slot. */}
+        <View style={styles.appearanceRow}>
+          <View style={styles.appearanceHeader}>
+            <IconCircle icon={APPEARANCE_ICON[themeMode]} tint={colors.accent} bg={colors.accentSoft} />
+            <View style={styles.appearanceText}>
+              <Text style={styles.appearanceTitle}>Appearance</Text>
+              <Text style={styles.appearanceHint}>
+                {themeMode === "system"
+                  ? `Following your system setting — currently ${resolvedTheme}.`
+                  : `Always ${themeMode}, whatever your system is set to.`}
+              </Text>
+            </View>
+          </View>
+          <Segmented
+            options={[
+              { value: "system", label: "System", icon: "sparkles" },
+              { value: "light", label: "Light", icon: "sun" },
+              { value: "dark", label: "Dark", icon: "moon" },
+            ]}
+            value={themeMode}
+            onChange={(m) => {
+              setThemeMode(m);
+              if (m === "system") toast("sparkles", "Appearance follows your system setting", "");
+              else toast(m === "dark" ? "moon" : "sun", `Switched to ${m} mode`, "");
+            }}
+          />
+        </View>
+      </Group>
+
       <SectionHeader>In-app</SectionHeader>
       <Group>
         {toggles.map((r) => (
@@ -100,4 +138,11 @@ export default function AccessibilitySettingsPage() {
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
+    // Mirrors ui.tsx's `row` padding so this stacked variant lines up with the
+    // ordinary Rows in the groups below it.
+    appearanceRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+    appearanceHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+    appearanceText: { flex: 1, minWidth: 0 },
+    appearanceTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+    appearanceHint: { fontSize: 13, fontFamily: font.regular, color: colors.label2, marginTop: 1 },
   });

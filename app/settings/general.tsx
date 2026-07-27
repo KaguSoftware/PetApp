@@ -9,7 +9,7 @@ import { font, useColors, type Colors } from "@/lib/theme";
 export default function GeneralSettingsPage() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, setUnits, themeMode, setThemeMode, setNotificationPref, toast } = useStore();
+  const { state, hydrated, setUnits, setNotificationPref, toast } = useStore();
   const currentMember = state.members.find((m) => m.id === state.currentMemberId);
 
   if (!hydrated) {
@@ -22,29 +22,6 @@ export default function GeneralSettingsPage() {
 
   return (
     <PushedScreen title="General">
-      <SectionHeader>Appearance</SectionHeader>
-      <Group>
-        <Row
-          leading={<IconCircle icon={themeMode === "dark" ? "moon" : "sun"} tint={colors.accent} bg={colors.accentSoft} />}
-          title="Appearance"
-          trailing={
-            <View style={{ width: 132 }}>
-              <Segmented
-                options={[
-                  { value: "light", label: "Light", icon: "sun" },
-                  { value: "dark", label: "Dark", icon: "moon" },
-                ]}
-                value={themeMode}
-                onChange={(m) => {
-                  setThemeMode(m);
-                  toast(m === "dark" ? "moon" : "sun", `Switched to ${m} mode`, "");
-                }}
-              />
-            </View>
-          }
-        />
-      </Group>
-
       <SectionHeader>Units</SectionHeader>
       <Group>
         <Row

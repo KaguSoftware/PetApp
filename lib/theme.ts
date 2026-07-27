@@ -74,8 +74,9 @@ export const colors = lightColors;
 
 /** Live color palette for the current theme — the only way components should read colors. */
 export function useColors(): Colors {
-  const { themeMode } = useStore();
-  return themeMode === "dark" ? darkColors : lightColors;
+  // resolvedTheme, not themeMode: "system" is a preference, not a palette.
+  const { resolvedTheme } = useStore();
+  return resolvedTheme === "dark" ? darkColors : lightColors;
 }
 
 /**
@@ -89,12 +90,12 @@ export function useColors(): Colors {
  */
 export function useNavTheme(): Theme {
   const colors = useColors();
-  const { themeMode } = useStore();
+  const { resolvedTheme } = useStore();
   return useMemo(() => {
-    const base = themeMode === "dark" ? DarkTheme : DefaultTheme;
+    const base = resolvedTheme === "dark" ? DarkTheme : DefaultTheme;
     return {
       ...base,
-      dark: themeMode === "dark",
+      dark: resolvedTheme === "dark",
       colors: {
         ...base.colors,
         primary: colors.accent,
@@ -105,7 +106,7 @@ export function useNavTheme(): Theme {
         notification: colors.red,
       },
     };
-  }, [colors, themeMode]);
+  }, [colors, resolvedTheme]);
 }
 
 export const radius = { sm: 10, md: 14, lg: 20, xl: 28, full: 999 } as const;

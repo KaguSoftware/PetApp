@@ -20,7 +20,7 @@ const androidIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => (
 
 export default function TabsLayout() {
   const colors = useColors();
-  const { themeMode, state, hydrated } = useStore();
+  const { resolvedTheme, state, hydrated } = useStore();
   const { session } = useSession();
   if (!session) return <Redirect href="/(auth)/login" />;
   // A signed-in account with zero households goes through create-or-join
@@ -38,9 +38,11 @@ export default function TabsLayout() {
       // standardAppearance to an already-mounted tab bar when only color
       // props change (the bar keeps the colors from when it first mounted),
       // so toggling theme in Settings and returning left the bar stuck on
-      // the old theme. Keying on themeMode forces a full remount, which
-      // always paints fresh with the current colors.
-      key={themeMode}
+      // the old theme. Keying on the RESOLVED theme forces a full remount,
+      // which always paints fresh with the current colors — resolved rather
+      // than the raw preference so flipping the phone's own light/dark switch
+      // in "system" mode remounts too (the preference itself never changes).
+      key={resolvedTheme}
       tintColor={colors.accent}
       iconColor={Platform.OS === "android" ? colors.label2 : undefined}
       backgroundColor={Platform.OS === "android" ? colors.card : undefined}

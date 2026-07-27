@@ -26,7 +26,7 @@ SplashScreen.preventAutoHideAsync();
 LogBox.ignoreLogs(["expo-notifications: Android Push notifications"]);
 
 function AppChrome() {
-  const { themeMode } = useStore();
+  const { themeMode, resolvedTheme } = useStore();
   const colors = useColors();
   // The NATIVE root view background. app.json pins userInterfaceStyle to
   // "light", so this defaults to white — and during a push/pop the navigator
@@ -36,22 +36,27 @@ function AppChrome() {
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
   }, [colors.bg]);
-  // THE actual fix for the push-transition flash: app.json's
-  // `userInterfaceStyle: "light"` locks the app's native trait collection to
-  // light, so every NEWLY CREATED native screen (react-native-screens makes a
-  // fresh one per push) starts with the OS's light-mode default background
-  // (systemBackground = white on iOS) for the instant before its own RN
+  // THE actual fix for the push-transition flash: every NEWLY CREATED native
+  // screen (react-native-screens makes a fresh one per push) starts with the
+  // OS's default background for the trait collection it's born into
+  // (systemBackground = white under light) for the instant before its own RN
   // content paints on top — that instant is the flash. `contentStyle`/
   // `SystemUI.setBackgroundColorAsync` only affect the persistent root/content
   // views, not this native-level default. Overriding the runtime color scheme
-  // makes fresh native screens default to OUR dark palette instead.
+  // makes fresh native screens default to OUR palette instead.
   useEffect(() => {
     // react-native-web doesn't implement this (no native screens to patch
     // there anyway — the web canvas repaints from React state directly),
     // and calling it unconditionally crashed the whole app on web.
-    if (Platform.OS !== "web") Appearance.setColorScheme(themeMode);
+    if (Platform.OS === "web") return;
+    // null = "unspecified", i.e. hand the trait collection back to the OS. In
+    // "system" mode that's exactly what we want, and it's also what keeps
+    // useColorScheme() reporting the DEVICE scheme rather than an override we
+    // wrote ourselves (Appearance.setColorScheme populates the same cache
+    // getColorScheme reads) — which is what makes System track live changes.
+    Appearance.setColorScheme(themeMode === "system" ? null : themeMode);
   }, [themeMode]);
-  return <StatusBar style={themeMode === "dark" ? "light" : "dark"} />;
+  return <StatusBar style={resolvedTheme === "dark" ? "light" : "dark"} />;
 }
 
 function RootStack() {

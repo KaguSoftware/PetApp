@@ -29,7 +29,7 @@ export default function AuthProviderButtons({
   disabled?: boolean;
 }) {
   const colors = useColors();
-  const { themeMode } = useStore();
+  const { resolvedTheme } = useStore();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [busy, setBusy] = useState<"apple" | "google" | null>(null);
@@ -68,7 +68,7 @@ export default function AuthProviderButtons({
         <AppleAuthentication.AppleAuthenticationButton
           buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
           buttonStyle={
-            themeMode === "dark"
+            resolvedTheme === "dark"
               ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
               : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
           }

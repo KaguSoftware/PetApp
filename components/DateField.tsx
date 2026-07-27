@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { PressableScale, PRESS_SCALE_SMALL, SelectableChip } from "@/components/ui";
+import { useStore } from "@/lib/store";
 import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 /**
@@ -54,14 +55,23 @@ export default function DateField({
   onChange,
   mode = "past",
   allowClear = false,
+  showChips = true,
 }: {
   value: number | null;
   onChange: (ts: number | null) => void;
   mode?: DateFieldMode;
   allowClear?: boolean;
+  /**
+   * The quick-jump chips under the wheel ("1 wk ago", "In 3 mo", …). Off for
+   * birth dates, where relative offsets from today are never the answer — a
+   * pet born "1 week ago" or "6 months ago" is a coincidence, not a shortcut,
+   * so the chips are noise there. `allowClear` still renders its "None" chip.
+   */
+  showChips?: boolean;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { resolvedTheme } = useStore();
   const today = atNoon(new Date());
   const chips: { label: string; ts: number }[] =
     mode === "past"
@@ -109,7 +119,9 @@ export default function DateField({
             onChange={handleChange}
             minimumDate={minimumDate}
             maximumDate={maximumDate}
-            themeVariant="light"
+            // Must follow the app's own resolved theme, not the OS: pinned to
+            // "light" the wheel drew near-black digits on the dark card.
+            themeVariant={resolvedTheme}
             style={styles.wheel}
           />
         </View>
@@ -140,12 +152,18 @@ export default function DateField({
           ) : null}
         </>
       )}
-      <View style={styles.chipRow}>
-        {chips.map((c) => (
-          <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
-        ))}
-        {allowClear ? <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} /> : null}
-      </View>
+      {/* Skip the row entirely when it would be empty — an empty View still
+          contributes its marginTop, leaving a phantom gap under the wheel. */}
+      {showChips || allowClear ? (
+        <View style={styles.chipRow}>
+          {showChips
+            ? chips.map((c) => (
+                <SelectableChip key={c.label} label={c.label} selected={value === c.ts} onPress={() => onChange(c.ts)} />
+              ))
+            : null}
+          {allowClear ? <SelectableChip label="None" selected={value == null} onPress={() => onChange(null)} /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }

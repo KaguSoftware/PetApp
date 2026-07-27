@@ -793,7 +793,7 @@ export default function PetDetailPage() {
         <SheetSubtitle>Age updates automatically from now on</SheetSubtitle>
 
         <FieldLabel>Born</FieldLabel>
-        <DateField value={birthdayTs} onChange={setBirthdayTs} mode="past" />
+        <DateField value={birthdayTs} onChange={setBirthdayTs} mode="past" showChips={false} />
 
         <SheetFooter>
           <AccentButton

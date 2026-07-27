@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
 // Aliased: this app's own state type is also named AppState (lib/data.ts).
-import { AppState as RNAppState } from "react-native";
+import { AppState as RNAppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
@@ -15,6 +15,13 @@ const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 function safeGradient(from: unknown, to: unknown): [string, string] {
   return [typeof from === "string" && HEX_COLOR.test(from) ? from : colors.accent, typeof to === "string" && HEX_COLOR.test(to) ? to : colors.accentDeep];
 }
+
+/**
+ * Appearance preference. "system" is not a palette — it defers to the device's
+ * own light/dark setting and is resolved to one at render time
+ * (`resolvedTheme`), so flipping the phone's setting re-themes the app live.
+ */
+export type ThemeMode = "light" | "dark" | "system";
 
 // Verb used in alert copy for each loggable action that can carry a /plan daily target.
 export const ALERT_VERB: Partial<Record<ActionType, string>> = {
@@ -202,9 +209,14 @@ interface Store {
   deleteVetVisit: (petId: string, visitId: string) => void;
   setSeenWelcome: (seen: boolean) => void;
   setUnits: (units: "kg" | "lb") => void;
-  /** On-device appearance preference — not synced to the household. */
-  themeMode: "light" | "dark";
-  setThemeMode: (mode: "light" | "dark") => void;
+  /** On-device appearance preference — not synced to the household. "system"
+   *  follows the phone's own light/dark setting; read `resolvedTheme` for the
+   *  palette to actually paint. */
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  /** `themeMode` with "system" already resolved against the device scheme — the
+   *  only value the theme layer should switch a palette on. */
+  resolvedTheme: "light" | "dark";
   /** True once the device-level last-theme cache has been read at startup, so
    *  the UI can hold its first paint until the correct appearance is known
    *  instead of flashing the "light" default. */
@@ -508,6 +520,10 @@ const shortcutsLocalKey = (householdId: string) => `petpal.shortcuts.${household
 // Keyed by user id so switching accounts on a shared device doesn't leak one
 // person's appearance preference onto another's session.
 const themeModeLocalKey = (userId: string) => `petpal.themeMode.${userId}`;
+/** Narrow an unknown cached/DB value to a ThemeMode, or null if it isn't one. */
+function asThemeMode(v: unknown): ThemeMode | null {
+  return v === "light" || v === "dark" || v === "system" ? v : null;
+}
 // Device-level "last theme used", NOT keyed by user. Read once at startup —
 // before the session (and thus the per-user value) is known — so the very
 // first frame the app paints already matches the last chosen appearance
@@ -529,14 +545,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [themeMode, setThemeModeState] = useState<"light" | "dark">("light");
+  // Default "system": a fresh install follows the phone until told otherwise.
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [themeReady, setThemeReady] = useState(false);
+  // The device's own light/dark setting. Only meaningful while themeMode is
+  // "system" — in the explicit modes AppChrome calls
+  // Appearance.setColorScheme(), which overwrites the very value this hook
+  // reads (see Appearance.js: setColorScheme writes the cache getColorScheme
+  // reads from). That's harmless because we only consult it in "system" mode,
+  // where we deliberately pass null and let the native scheme through.
+  const deviceScheme = useColorScheme();
+  const resolvedTheme: "light" | "dark" = themeMode === "system" ? (deviceScheme === "dark" ? "dark" : "light") : themeMode;
   // Read the device-level last-theme cache once, before anything paints, so the
   // first frame already matches the chosen appearance (see THEME_MODE_LAST_KEY).
   useEffect(() => {
     AsyncStorage.getItem(THEME_MODE_LAST_KEY)
       .then((v) => {
-        if (v === "dark" || v === "light") setThemeModeState(v);
+        const m = asThemeMode(v);
+        if (m) setThemeModeState(m);
       })
       .finally(() => setThemeReady(true));
   }, []);
@@ -551,7 +577,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // so it still follows THIS account on THIS device, just not across devices.
   const themeModeSchemaRef = useRef(false);
   const setThemeMode = useCallback(
-    (mode: "light" | "dark") => {
+    (mode: ThemeMode) => {
       setThemeModeState(mode);
       // Always keep the device-level cache current so the next cold start /
       // first push paints this appearance immediately, before the per-user
@@ -1093,7 +1119,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           // Reset to the default so a signed-out screen (or the next account
           // that logs in, before its own preference loads) never shows
           // whichever appearance the previous session left behind.
-          setThemeModeState("light");
+          setThemeModeState("system");
           setState(EMPTY_STATE);
           setHydrated(true);
           resolvePendingRefreshes();
@@ -1121,9 +1147,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // the network round trip below settles), then reconcile with the synced
       // value once user_profiles answers.
       AsyncStorage.getItem(themeModeLocalKey(user.id)).then((v) => {
-        if (!cancelled && (v === "dark" || v === "light")) {
-          setThemeModeState(v);
-          AsyncStorage.setItem(THEME_MODE_LAST_KEY, v).catch(() => {});
+        const m = asThemeMode(v);
+        if (!cancelled && m) {
+          setThemeModeState(m);
+          AsyncStorage.setItem(THEME_MODE_LAST_KEY, m).catch(() => {});
         }
       });
 
@@ -1133,7 +1160,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Per-user profile columns arrive in different migrations (theme_mode
       // 0025, seen_welcome 0030) — probe by retrying without whichever column
       // the error names, so any mix of applied migrations works.
-      let profile: { active_household_id: string | null; theme_mode?: "light" | "dark" | null; seen_welcome?: boolean | null } | null =
+      let profile: { active_household_id: string | null; theme_mode?: ThemeMode | null; seen_welcome?: boolean | null } | null =
         null;
       for (;;) {
         const cols = [
@@ -1145,7 +1172,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .from("user_profiles")
           .select(cols.join(", "))
           .eq("user_id", user.id)
-          .maybeSingle<{ active_household_id: string | null; theme_mode?: "light" | "dark" | null; seen_welcome?: boolean | null }>();
+          .maybeSingle<{ active_household_id: string | null; theme_mode?: ThemeMode | null; seen_welcome?: boolean | null }>();
         if (!res.error) {
           profile = res.data;
           break;
@@ -1163,10 +1190,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         break; // unknown error — same as before, proceed with no profile row
       }
-      if (!cancelled && profile?.theme_mode) {
-        setThemeModeState(profile.theme_mode);
-        AsyncStorage.setItem(themeModeLocalKey(user.id), profile.theme_mode).catch(() => {});
-        AsyncStorage.setItem(THEME_MODE_LAST_KEY, profile.theme_mode).catch(() => {});
+      const syncedMode = asThemeMode(profile?.theme_mode);
+      if (!cancelled && syncedMode) {
+        setThemeModeState(syncedMode);
+        AsyncStorage.setItem(themeModeLocalKey(user.id), syncedMode).catch(() => {});
+        AsyncStorage.setItem(THEME_MODE_LAST_KEY, syncedMode).catch(() => {});
       }
       const { data: memberships, error: membershipsErr } = await supabase
         .from("household_members")
@@ -3613,6 +3641,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setUnits,
         themeMode,
         setThemeMode,
+        resolvedTheme,
         themeReady,
         setFamilyPassword,
         verifyFamilyPassword,

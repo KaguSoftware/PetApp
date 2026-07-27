@@ -834,7 +834,7 @@ export default function FamilySettingsPage() {
             <Text style={styles.fieldHint}>Used for the age-and-gender-specific weight & feeding guide.</Text>
 
             <FieldLabel>Birth date (optional)</FieldLabel>
-            <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear />
+            <DateField value={editPetBirth} onChange={setEditPetBirth} mode="past" allowClear showChips={false} />
             {editPetBirth != null ? (
               <Text style={styles.fieldHint}>With a birth date set, age is calculated automatically.</Text>
             ) : null}
