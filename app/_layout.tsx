@@ -86,11 +86,13 @@ function RootStack() {
           <Stack.Screen name="reminders" />
           <Stack.Screen name="pet/[id]/index" />
           <Stack.Screen name="pet/[id]/card" />
+          <Stack.Screen name="pet/new" />
           <Stack.Screen name="settings/index" />
           <Stack.Screen name="settings/account" />
           <Stack.Screen name="settings/family" />
           <Stack.Screen name="settings/general" />
           <Stack.Screen name="settings/accessibility" />
+          <Stack.Screen name="settings/subscription" />
           <Stack.Screen name="vets/index" />
           <Stack.Screen name="vets/[id]" />
         </Stack.Protected>

@@ -24,15 +24,18 @@ import { friendlyAuthError } from "@/lib/authErrors";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { font, useColors, type Colors } from "@/lib/theme";
+import { countryByCode, searchCountries } from "@/lib/countries";
 
 export default function AccountSettingsPage() {
   const router = useRouter();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, signOut, setSeenWelcome, userEmail, toast } = useStore();
+  const { state, hydrated, signOut, setSeenWelcome, setHouseholdCountry, userEmail, toast } = useStore();
   const [pwOpen, setPwOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countryQuery, setCountryQuery] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -270,6 +273,20 @@ export default function AccountSettingsPage() {
       <SectionHeader>App</SectionHeader>
       <Group>
         <Row
+          onPress={() => {
+            setCountryQuery("");
+            setCountryOpen(true);
+          }}
+          leading={<IconCircle icon="pin" tint={colors.accent} bg={colors.accentSoft} />}
+          title="Country"
+          subtitle="Sets which Community Local chat room you join"
+          trailing={
+            <Text style={state.country ? styles.identityValue : styles.identityUnset}>
+              {state.country ? `${countryByCode(state.country)?.flag ?? ""} ${countryByCode(state.country)?.name ?? state.country}` : "Set"}
+            </Text>
+          }
+        />
+        <Row
           leading={<IconCircle icon="flame" tint={colors.orange} bg={colors.orangeSoft} />}
           title="Day streak"
           subtitle={state.streak === 1 ? "1 day" : `${state.streak} days`}
@@ -341,6 +358,28 @@ export default function AccountSettingsPage() {
         </View>
       </Sheet>
       <StreakCalendarSheet open={streakOpen} onClose={() => setStreakOpen(false)} />
+
+      <Sheet open={countryOpen} onClose={() => setCountryOpen(false)}>
+        <SheetTitle>Country</SheetTitle>
+        <SheetSubtitle>Sets which Community Local chat room your household joins</SheetSubtitle>
+        <View style={styles.form}>
+          <TextField placeholder="Search countries" value={countryQuery} onChangeText={setCountryQuery} autoCapitalize="none" autoCorrect={false} />
+        </View>
+        <Group style={{ marginTop: 12 }}>
+          {searchCountries(countryQuery).map((c) => (
+            <Row
+              key={c.code}
+              onPress={() => {
+                setHouseholdCountry(c.code);
+                setCountryOpen(false);
+                toast("pin", `Country set to ${c.name}`, "");
+              }}
+              title={`${c.flag} ${c.name}`}
+              trailing={state.country === c.code ? <Chevron /> : undefined}
+            />
+          ))}
+        </Group>
+      </Sheet>
     </PushedScreen>
   );
 }
@@ -350,4 +389,6 @@ const makeStyles = (colors: Colors) =>
     footnote: { marginTop: 6, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3 },
     form: { marginTop: 20, gap: 12 },
     errorText: { fontSize: 14, fontFamily: font.medium, color: colors.red, textAlign: "left" },
+    identityValue: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
+    identityUnset: { fontSize: 13, fontFamily: font.semibold, color: colors.label3 },
   });

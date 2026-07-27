@@ -8,7 +8,7 @@ import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
-import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SmallButton } from "@/components/ui";
+import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
@@ -16,7 +16,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, setPremium, toast } = useStore();
+  const { state, hydrated } = useStore();
   const [paywallOpen, setPaywallOpen] = useState(false);
 
   if (!hydrated) {
@@ -53,23 +53,15 @@ export default function SettingsPage() {
       {state.premium ? (
         <Group>
           <Row
+            onPress={() => router.push("/settings/subscription")}
             leading={
               <LinearGradient colors={[colors.accent, colors.accentDeep]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.plusTile}>
                 <Icon name="sparkles" size={18} color={colors.white} />
               </LinearGradient>
             }
-            title="PetPal+ is active"
+            title="Peting Subscription"
             subtitle="Care plans, smart reminders & vet booking"
-            trailing={
-              <SmallButton
-                label="Turn off"
-                tone="gray"
-                onPress={() => {
-                  setPremium(false);
-                  toast("sparkles", "PetPal+ deactivated", "You can re-enable it anytime");
-                }}
-              />
-            }
+            trailing={<Chevron />}
           />
         </Group>
       ) : (

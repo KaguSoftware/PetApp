@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import Purchases, { LOG_LEVEL, type PurchasesPackage } from "react-native-purchases";
+import Purchases, { LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from "react-native-purchases";
 import { COIN_PACKS, PLUS_MONTHLY_ID } from "./products";
 import type { EntitlementState, PurchasePackage, PurchasesGateway } from "./types";
 
@@ -23,6 +23,20 @@ const COIN_PACK_IDS = new Set(COIN_PACKS.map((p) => p.id));
 /** RevenueCat prefixes StoreKit ids on some platforms; match on the suffix. */
 function productIdOf(pkg: PurchasesPackage): string {
   return pkg.product.identifier.replace(/:.*$/, "");
+}
+
+/** Builds an EntitlementState from whatever RevenueCat's customerInfo currently says. */
+function entitlementFrom(customerInfo: CustomerInfo): EntitlementState {
+  const entitlement = customerInfo.entitlements.active[PLUS_ENTITLEMENT];
+  if (!entitlement) return { plusActive: false, source: "none" };
+  return {
+    plusActive: true,
+    source: "revenuecat",
+    latestPurchaseDate: entitlement.latestPurchaseDate,
+    expirationDate: entitlement.expirationDate,
+    willRenew: entitlement.willRenew,
+    productIdentifier: entitlement.productIdentifier,
+  };
 }
 
 export class RevenueCatPurchases implements PurchasesGateway {
@@ -61,10 +75,7 @@ export class RevenueCatPurchases implements PurchasesGateway {
       const pkg = offerings.current?.availablePackages.find((p) => productIdOf(p) === productId);
       if (!pkg) return { plusActive: false, source: "none", error: "That item isn't available right now." };
       const { customerInfo } = await Purchases.purchasePackage(pkg);
-      return {
-        plusActive: !!customerInfo.entitlements.active[PLUS_ENTITLEMENT],
-        source: "revenuecat",
-      };
+      return entitlementFrom(customerInfo);
     } catch (e) {
       // userCancelled is a normal outcome, not a failure to report.
       if ((e as { userCancelled?: boolean })?.userCancelled) {
@@ -79,11 +90,20 @@ export class RevenueCatPurchases implements PurchasesGateway {
   async restore(): Promise<EntitlementState> {
     try {
       const customerInfo = await Purchases.restorePurchases();
-      const plusActive = !!customerInfo.entitlements.active[PLUS_ENTITLEMENT];
-      return { plusActive, source: plusActive ? "revenuecat" : "none" };
+      return entitlementFrom(customerInfo);
     } catch (e) {
       console.warn("[petpal] restore failed:", e);
       return { plusActive: false, source: "none", error: "Couldn't restore purchases." };
+    }
+  }
+
+  async getEntitlement(): Promise<EntitlementState> {
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      return entitlementFrom(customerInfo);
+    } catch (e) {
+      console.warn("[petpal] getEntitlement failed:", e);
+      return { plusActive: false, source: "none", error: "Couldn't load subscription details." };
     }
   }
 }

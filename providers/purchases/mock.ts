@@ -39,4 +39,23 @@ export class MockPurchases implements PurchasesGateway {
   async restore(): Promise<EntitlementState> {
     return { plusActive: false, source: "none" };
   }
+
+  /**
+   * Expo Go has no real customerInfo to read, and this mock doesn't know the
+   * store's `households.premium` flag — placeholder dates only, clearly a
+   * 30-day window ending 30 days out, so the subscription page has something
+   * sane to render while developing in Expo Go.
+   */
+  async getEntitlement(): Promise<EntitlementState> {
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    return {
+      plusActive: true,
+      source: "mock",
+      latestPurchaseDate: new Date(now - 30 * day).toISOString(),
+      expirationDate: new Date(now + 30 * day).toISOString(),
+      willRenew: true,
+      productIdentifier: PLUS_MONTHLY_ID,
+    };
+  }
 }

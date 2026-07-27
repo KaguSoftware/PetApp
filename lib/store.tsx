@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { AppState as RNAppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -145,6 +145,7 @@ interface Store {
   /** Compensating undo for a just-logged action: removes the activity, takes back the coins, recomputes the streak. */
   undoLogAction: (activityId: string) => void;
   setPremium: (on: boolean) => void;
+  setHouseholdCountry: (country: string | null) => void;
   buyCosmetic: (petId: string, cosmeticId: string) => void;
   toggleEquip: (petId: string, cosmeticId: string) => void;
   addReminder: (r: Omit<Reminder, "id" | "done" | "source">) => void;
@@ -242,13 +243,19 @@ interface Store {
   setMemberRole: (targetUserId: string, role: "admin" | "member") => Promise<boolean>;
   /** Owner-only: hand the active household to another member (you become admin). */
   transferOwnership: (targetUserId: string) => Promise<boolean>;
-  /** Redeem an invite code (XXXX-XXXX). Joins + switches on success. */
-  redeemInvite: (code: string) => Promise<{ ok: boolean; reason?: "notFound" | "expired" | "unavailable" | "error" }>;
+  /** Redeem an invite code (XXXX-XXXX). Existing members switch immediately; new members file a pending request instead. */
+  redeemInvite: (code: string) => Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "error" }>;
   /** Create an invite code for the active household (admin+; admin-role invites owner-only). */
   createInvite: (input: { role: "member" | "admin"; targetMemberId?: string; ttlHours?: number; maxUses?: number }) => Promise<HouseholdInvite | null>;
   /** The active household's live (unrevoked, unexpired) invites. */
   fetchInvites: () => Promise<HouseholdInvite[]>;
   revokeInvite: (inviteId: string) => Promise<boolean>;
+  /** Pending invite redemptions awaiting owner/admin approval (admin+ only). */
+  fetchJoinRequests: () => Promise<JoinRequest[]>;
+  /** Approve a pending join request — adds the requester to the household. */
+  approveJoinRequest: (requestId: string) => Promise<boolean>;
+  /** Reject a pending join request. */
+  rejectJoinRequest: (requestId: string) => Promise<boolean>;
   setNotificationPref: (key: "notifyCareReminders" | "notifyFamilyActivity" | "notifyVetSuggestions", on: boolean) => void;
   signOut: () => Promise<void>;
   /** Re-fetch the active household from Supabase (pull-to-refresh). Resolves once the reload settles. */
@@ -260,6 +267,7 @@ const Ctx = createContext<Store | null>(null);
 const EMPTY_STATE: AppState = {
   currentMemberId: "",
   premium: false,
+  country: null,
   coins: 0,
   streak: 0,
   pets: [],
@@ -432,6 +440,8 @@ type HouseholdRow = {
   name: string;
   current_member_id: string | null;
   premium: boolean;
+  /** ISO 3166-1 alpha-2 code, or null. Absent from pre-0035 rows — hydration tolerates that. */
+  country?: string | null;
   coins: number;
   xp: number;
   streak: number;
@@ -1514,6 +1524,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setState({
         currentMemberId,
         premium: h.premium,
+        country: h.country ?? null,
         coins: h.coins,
         streak: computedStreak,
         pets,
@@ -1739,6 +1750,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => {
       const next = { ...prev };
       if (typeof row.premium === "boolean") next.premium = row.premium;
+      if (typeof row.country === "string" || row.country === null) next.country = row.country as string | null;
       if (row.units === "kg" || row.units === "lb") next.units = row.units;
       if (typeof row.seen_welcome === "boolean") next.seenWelcome = row.seen_welcome;
       next.familyPasswordSet = row.family_password_hash != null;
@@ -2192,6 +2204,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         persist(supabase.from("households").update({ premium: on }).eq("id", h), {
           rollback: () => setState((p) => ({ ...p, premium: prev })),
           message: "Couldn't update PetPal+",
+        });
+    },
+    [supabase, persist]
+  );
+
+  const setHouseholdCountry = useCallback(
+    (country: string | null) => {
+      const prev = stateRef.current.country;
+      setState((p) => ({ ...p, country }));
+      const h = hid();
+      if (h)
+        persist(supabase.from("households").update({ country }).eq("id", h), {
+          rollback: () => setState((p) => ({ ...p, country: prev })),
+          message: "Couldn't update country",
         });
     },
     [supabase, persist]
@@ -3533,10 +3559,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const redeemInvite = useCallback(
-    async (code: string): Promise<{ ok: boolean; reason?: "notFound" | "expired" | "unavailable" | "error" }> => {
+    async (code: string): Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "error" }> => {
       const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
       if (normalized.length !== 8) return { ok: false, reason: "notFound" };
-      const { error } = await supabase.rpc("redeem_invite", { invite_code: normalized });
+      const { data, error } = await supabase.rpc("redeem_invite", { invite_code: normalized });
       if (error) {
         const errCode = (error as { code?: string }).code;
         if (isMissingFunction(error)) {
@@ -3548,12 +3574,62 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         console.error("[petpal] redeem_invite failed:", describeErr(error) ?? error);
         return { ok: false, reason: "error" };
       }
+      const status = (data as { status?: "active" | "pending" } | null)?.status ?? "active";
+      if (status === "pending") {
+        toast("home", "Request sent", "An admin needs to approve you before you can access the household");
+        return { ok: true, status: "pending" };
+      }
       toast("home", "Joined household", "Loading it now…");
       flushCounters();
       setReloadNonce((n) => n + 1);
-      return { ok: true };
+      return { ok: true, status: "active" };
     },
     [supabase, toast, flushCounters]
+  );
+
+  const fetchJoinRequests = useCallback(async (): Promise<JoinRequest[]> => {
+    const h = hid();
+    if (!h || invitesSchemaRef.current) return [];
+    const { data, error } = await supabase.rpc("list_join_requests", { hid: h });
+    if (error) {
+      if (isMissingFunction(error)) invitesSchemaRef.current = true;
+      else console.error("[petpal] list_join_requests failed:", describeErr(error) ?? error);
+      return [];
+    }
+    return (data ?? []).map((r: { id: string; role: "member" | "admin"; requester_name: string | null; created_at: string }) => ({
+      id: r.id,
+      role: r.role,
+      requesterName: r.requester_name,
+      createdAt: Date.parse(r.created_at),
+    }));
+  }, [supabase]);
+
+  const approveJoinRequest = useCallback(
+    async (requestId: string) => {
+      const { error } = await supabase.rpc("approve_join_request", { request_id: requestId });
+      if (error) {
+        console.error("[petpal] approve_join_request failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't approve that request", "Please try again");
+        return false;
+      }
+      toast("check", "Member approved", "They now have access to the household");
+      return true;
+    },
+    [supabase, toast]
+  );
+
+  const rejectJoinRequest = useCallback(
+    async (requestId: string) => {
+      const { error } = await supabase.rpc("reject_join_request", { request_id: requestId });
+      if (error) {
+        console.error("[petpal] reject_join_request failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't reject that request", "Please try again");
+        return false;
+      }
+      toast("check", "Request rejected", "They were not added to the household");
+      return true;
+    },
+    [supabase, toast]
   );
 
   const setNotificationPref = useCallback(
@@ -3608,6 +3684,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         logAction,
         undoLogAction,
         setPremium,
+        setHouseholdCountry,
         buyCosmetic,
         toggleEquip,
         addReminder,
@@ -3658,6 +3735,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         createInvite,
         fetchInvites,
         revokeInvite,
+        fetchJoinRequests,
+        approveJoinRequest,
+        rejectJoinRequest,
         setNotificationPref,
         signOut,
         refresh,

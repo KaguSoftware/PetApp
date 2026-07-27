@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import CareStatusRow from "@/components/CareStatusRow";
 import DurationPickerSheet, { formatDuration } from "@/components/DurationPickerSheet";
 import EmptyState from "@/components/EmptyState";
@@ -50,10 +50,11 @@ type CareItem = { key: string; type: ActionType; medId?: string };
 export default function LogsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, logAction, addVetVisit, toast } = useStore();
+  const { state, hydrated, logAction, undoLogAction, addVetVisit, toast } = useStore();
   const refreshControl = usePullToRefresh();
   const router = useRouter();
   const [petId, setPetId] = useState("");
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [justLogged, setJustLogged] = useState<string | null>(null);
   const [feedPortionOpen, setFeedPortionOpen] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
@@ -317,24 +318,45 @@ export default function LogsScreen() {
             const medName = a.medId ? pet.meds.find((m) => m.id === a.medId)?.name : undefined;
             const gramsNote = a.grams != null ? `${Math.round(a.grams)} g` : undefined;
             const durationNote = a.durationMinutes != null ? formatDuration(a.durationMinutes) : undefined;
+            const isYou = a.memberId === state.currentMemberId;
+            const expanded = expandedLogId === a.id;
             return (
-              <Row
-                key={a.id}
-                leading={
-                  member ? (
-                    <InitialAvatar name={member.name} gradient={member.gradient} size={36} />
-                  ) : (
-                    <IconCircle icon={ACTION_ICON[a.type].icon} tint={ACTION_ICON[a.type].tint} bg={ACTION_ICON[a.type].bg} />
-                  )
-                }
-                title={`${member?.name ?? "Someone"} ${ACTIONS[a.type].verb} ${pet.name}`}
-                subtitle={[medName, gramsNote, durationNote].filter(Boolean).join(" · ") || undefined}
-                trailing={
-                  <Text style={styles.timelineTime}>
-                    {new Date(a.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                  </Text>
-                }
-              />
+              <View key={a.id}>
+                <Row
+                  leading={
+                    member ? (
+                      <InitialAvatar name={member.name} gradient={member.gradient} size={36} />
+                    ) : (
+                      <IconCircle icon={ACTION_ICON[a.type].icon} tint={ACTION_ICON[a.type].tint} bg={ACTION_ICON[a.type].bg} />
+                    )
+                  }
+                  title={`${member?.name ?? "Someone"} ${ACTIONS[a.type].verb} ${pet.name}`}
+                  subtitle={[medName, gramsNote, durationNote].filter(Boolean).join(" · ") || undefined}
+                  trailing={
+                    <Text style={styles.timelineTime}>
+                      {new Date(a.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    </Text>
+                  }
+                  onPress={isYou ? () => setExpandedLogId(expanded ? null : a.id) : undefined}
+                />
+                {expanded && isYou ? (
+                  <FadeInItem style={styles.timelineExpand}>
+                    <AccentButton
+                      variant="tinted"
+                      size="sm"
+                      onPress={() => {
+                        setExpandedLogId(null);
+                        Alert.alert("Remove this log?", "This undoes the coins and streak credit it gave you.", [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Remove", style: "destructive", onPress: () => undoLogAction(a.id) },
+                        ]);
+                      }}
+                    >
+                      Remove log
+                    </AccentButton>
+                  </FadeInItem>
+                ) : null}
+              </View>
             );
           })}
         </Group>
@@ -510,6 +532,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   addMedTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
   scheduleHint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
   timelineTime: { fontSize: 13, fontFamily: font.regular, color: colors.label3 },
+  timelineExpand: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 2 },
   emptyToday: { paddingHorizontal: 4, paddingVertical: 10 },
   emptyTodayText: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   footnote: { marginTop: 16, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import BreedField from "@/components/BreedField";
-import Sheet from "@/components/Sheet";
+import { PushedScreen } from "@/components/Screen";
 import SpeciesField from "@/components/SpeciesField";
-import { AccentButton, FieldLabel, Segmented, SheetFooter, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, FieldLabel, Segmented, TextField } from "@/components/ui";
 import { BREEDS_BY_SPECIES, kgToUnit, OTHER_BREED, unitToKg, weightUnitLabel } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -16,20 +17,14 @@ const SPECIES_DEFAULTS: Record<"cat" | "dog", { weightKg: number; cupGrams: numb
 
 /**
  * The one add-a-pet form, shared by the Pets tab and the onboarding
- * first-pet step. Owns its own form state and resets it every time it opens.
+ * first-pet step (via `?onboarding=1`, which advances onboarding on success
+ * instead of just going back).
  */
-export default function AddPetSheet({
-  open,
-  onClose,
-  onAdded,
-}: {
-  open: boolean;
-  onClose: () => void;
-  /** Called after the pet is committed to the store (onboarding advances on this). */
-  onAdded?: () => void;
-}) {
+export default function AddPetPage() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const router = useRouter();
+  const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
   const { state, addPet } = useStore();
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
@@ -39,32 +34,16 @@ export default function AddPetSheet({
   // answer (it just costs the gender-specific weight/feeding guide).
   const [gender, setGender] = useState<"female" | "male" | "unset">("unset");
   const [ageInput, setAgeInput] = useState("1");
-  const [weightInput, setWeightInput] = useState("");
-  const [cupInput, setCupInput] = useState("");
+  const [weightInput, setWeightInput] = useState(() => String(Math.round(kgToUnit(SPECIES_DEFAULTS.cat.weightKg, state.units) * 10) / 10));
+  const [cupInput, setCupInput] = useState(() => String(SPECIES_DEFAULTS.cat.cupGrams));
 
   // Prefill the weight/cup inputs from the species defaults (weight shown in
-  // the household's unit) so the sheet opens with reasonable numbers to tweak.
+  // the household's unit) so switching species offers reasonable numbers to tweak.
   const prefillFor = (sp: "cat" | "dog") => {
     const d = SPECIES_DEFAULTS[sp];
     setWeightInput(String(Math.round(kgToUnit(d.weightKg, state.units) * 10) / 10));
     setCupInput(String(d.cupGrams));
   };
-
-  useEffect(() => {
-    if (!open) return;
-    setSpecies("cat");
-    setBreed(BREEDS_BY_SPECIES.cat[0]);
-    setCustomBreed("");
-    setGender("unset");
-    setAgeInput("1");
-    setPetName("");
-    const d = SPECIES_DEFAULTS.cat;
-    setWeightInput(String(Math.round(kgToUnit(d.weightKg, state.units) * 10) / 10));
-    setCupInput(String(d.cupGrams));
-    // Reset belongs to the moment of opening only — units changing mid-open
-    // shouldn't wipe what the user typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   // A picklist match is saved under its canonical name so it picks up the
   // vet-built CARE_PLANS entry; "Other" falls back to the typed custom name,
@@ -84,9 +63,7 @@ export default function AddPetSheet({
     parsedCup > 0;
 
   return (
-    <Sheet open={open} onClose={onClose}>
-      <SheetTitle>Add a pet</SheetTitle>
-
+    <PushedScreen title="Add a pet">
       <FieldLabel>Name</FieldLabel>
       <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
 
@@ -134,7 +111,7 @@ export default function AddPetSheet({
       <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
       <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
 
-      <SheetFooter>
+      <View style={{ marginTop: 24 }}>
         <AccentButton
           disabled={!valid}
           onPress={() => {
@@ -147,14 +124,14 @@ export default function AddPetSheet({
               weightKg: unitToKg(parsedWeightUnit, state.units),
               cupGrams: Math.round(parsedCup),
             });
-            onClose();
-            onAdded?.();
+            if (onboarding === "1") router.replace("/(onboarding)/invite");
+            else router.back();
           }}
         >
           Add to family
         </AccentButton>
-      </SheetFooter>
-    </Sheet>
+      </View>
+    </PushedScreen>
   );
 }
 

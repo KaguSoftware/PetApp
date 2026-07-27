@@ -1,4 +1,3 @@
-import AddPetSheet from "@/components/AddPetSheet";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
 import { Icon } from "@/components/Icons";
@@ -40,7 +39,7 @@ import {
 import { useStore } from "@/lib/store";
 import { cardShadow, font, HIT, radius, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
@@ -153,13 +152,13 @@ export default function PetsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, buyCosmetic, toggleEquip, addWeight, editPet, toast } = useStore();
+  const router = useRouter();
   const refreshControl = usePullToRefresh();
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
   const [accessoriesOpen, setAccessoriesOpen] = useState(() => searchParams.shop === "1");
   // Which tab the accessories sheet shows: the head/hat slot, or "other" for everything else.
   const [accessoryTab, setAccessoryTab] = useState<CosmeticSlot | "other">("head");
-  const [addPetOpen, setAddPetOpen] = useState(false);
   const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
@@ -186,10 +185,7 @@ export default function PetsScreen() {
       </TabScreen>
     );
 
-  const openAddPet = () => setAddPetOpen(true);
-  // The form itself lives in components/AddPetSheet.tsx (shared with the
-  // onboarding first-pet step).
-  const addPetSheet = <AddPetSheet open={addPetOpen} onClose={() => setAddPetOpen(false)} />;
+  const openAddPet = () => router.push("/pet/new");
 
   if (!pet) {
     return (
@@ -197,7 +193,6 @@ export default function PetsScreen() {
         <View style={{ marginTop: 16 }}>
           <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
         </View>
-        {addPetSheet}
       </TabScreen>
     );
   }
@@ -334,8 +329,6 @@ export default function PetsScreen() {
           </>
         ) : null}
       </Sheet>
-
-      {addPetSheet}
 
       <EditStatSheet
         open={editingStat === "weight"}

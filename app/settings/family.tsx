@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View, type KeyboardTypeOptions } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar, { InitialAvatar } from "@/components/PetAvatar";
@@ -41,6 +41,7 @@ import {
   weightUnitLabel,
   type HouseholdAccount,
   type HouseholdInvite,
+  type JoinRequest,
   type Member,
   type Pet,
 } from "@/lib/data";
@@ -211,6 +212,9 @@ export default function FamilySettingsPage() {
     createInvite,
     fetchInvites,
     revokeInvite,
+    fetchJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest,
     toast,
   } = useStore();
 
@@ -225,6 +229,14 @@ export default function FamilySettingsPage() {
   const myRole = state.myRole;
   const refreshControl = usePullToRefresh();
   const canManage = myRole === "owner" || myRole === "admin";
+
+  // Pending invite redemptions awaiting approval — admin+ only.
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [decidingRequestId, setDecidingRequestId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canManage) return;
+    fetchJoinRequests().then(setJoinRequests);
+  }, [canManage, state.activeHouseholdId, fetchJoinRequests]);
 
   const [familyPwOpen, setFamilyPwOpen] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
@@ -491,6 +503,49 @@ export default function FamilySettingsPage() {
       <Text style={styles.footnote}>
         Everyone here has their own PetPal account. Roles are enforced — only the owner and admins can invite or manage.
       </Text>
+
+      {/* Pending invite redemptions — must be approved before they get access. */}
+      {canManage && joinRequests.length > 0 ? (
+        <>
+          <SectionHeader>Pending requests</SectionHeader>
+          <Group>
+            {joinRequests.map((r) => (
+              <Row
+                key={r.id}
+                leading={<InitialAvatar name={r.requesterName ?? "New member"} gradient={["oklch(0.6 0.13 200)", "oklch(0.48 0.13 240)"]} size={36} />}
+                title={r.requesterName ?? "New member"}
+                subtitle={`Wants to join as ${r.role === "admin" ? "an admin" : "a member"}`}
+                trailing={
+                  <View style={styles.rowActions}>
+                    <SmallButton
+                      label="Reject"
+                      tone="red"
+                      disabled={decidingRequestId === r.id}
+                      onPress={async () => {
+                        setDecidingRequestId(r.id);
+                        const ok = await rejectJoinRequest(r.id);
+                        setDecidingRequestId(null);
+                        if (ok) setJoinRequests((prev) => prev.filter((x) => x.id !== r.id));
+                      }}
+                    />
+                    <SmallButton
+                      label="Approve"
+                      tone="green"
+                      disabled={decidingRequestId === r.id}
+                      onPress={async () => {
+                        setDecidingRequestId(r.id);
+                        const ok = await approveJoinRequest(r.id);
+                        setDecidingRequestId(null);
+                        if (ok) setJoinRequests((prev) => prev.filter((x) => x.id !== r.id));
+                      }}
+                    />
+                  </View>
+                }
+              />
+            ))}
+          </Group>
+        </>
+      ) : null}
 
       {/* Households the user belongs to + create/join */}
       <SectionHeader>Households</SectionHeader>

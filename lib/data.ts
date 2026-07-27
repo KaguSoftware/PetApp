@@ -347,9 +347,19 @@ export interface HouseholdInvite {
   revokedAt: number | null;
 }
 
+/** A pending redemption of an invite code, awaiting owner/admin approval. */
+export interface JoinRequest {
+  id: string;
+  role: "member" | "admin";
+  requesterName: string | null;
+  createdAt: number;
+}
+
 export interface AppState {
   currentMemberId: string;
   premium: boolean;
+  /** ISO 3166-1 alpha-2 code, or null if not set. Determines the household's Local chat room. */
+  country: string | null;
   coins: number;
   streak: number;
   pets: Pet[];

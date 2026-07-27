@@ -25,6 +25,14 @@ export interface EntitlementState {
   cancelled?: boolean;
   /** Something went wrong; already human-readable. */
   error?: string;
+  /** ISO date string — when the current billing period started. */
+  latestPurchaseDate?: string | null;
+  /** ISO date string — when the current billing period renews or ends. */
+  expirationDate?: string | null;
+  /** Whether the store will auto-renew the subscription. */
+  willRenew?: boolean;
+  /** The store product identifier backing the active entitlement. */
+  productIdentifier?: string;
 }
 
 export interface PurchasesGateway {
@@ -34,4 +42,6 @@ export interface PurchasesGateway {
   getOfferings(): Promise<PurchasePackage[]>;
   purchase(productId: string): Promise<EntitlementState>;
   restore(): Promise<EntitlementState>;
+  /** Current entitlement state, without triggering a purchase/restore flow. */
+  getEntitlement(): Promise<EntitlementState>;
 }

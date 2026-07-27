@@ -64,6 +64,7 @@ export default function JoinPage() {
   const [code, setCode] = useState(() => formatCode(typeof params.code === "string" ? params.code : ""));
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingApproval, setPendingApproval] = useState(false);
   // Flips when the backend predates invite codes (migration 0027) — the form
   // then falls back to pasting a Family ID.
   const [legacyMode, setLegacyMode] = useState(false);
@@ -164,6 +165,29 @@ export default function JoinPage() {
     );
   }
 
+  // --- Waiting on admin approval ----------------------------------------------
+  if (pendingApproval) {
+    return (
+      <PushedScreen title="Join household">
+        <View style={styles.card}>
+          <View style={styles.iconWrap}>
+            <Icon name="clock" size={26} color={colors.accent} />
+          </View>
+          <Text style={styles.title}>Request sent</Text>
+          <Text style={styles.body}>
+            An admin needs to approve you before you can see this household&apos;s pets, reminders, and activity. You&apos;ll get
+            access as soon as they do.
+          </Text>
+          <View style={styles.cta}>
+            <AccentButton variant="tinted" onPress={() => router.replace("/home")}>
+              Back to home
+            </AccentButton>
+          </View>
+        </View>
+      </PushedScreen>
+    );
+  }
+
   // --- Invite code entry ------------------------------------------------------
   async function handleRedeem() {
     if (joining) return;
@@ -175,6 +199,10 @@ export default function JoinPage() {
     const result = await redeemInvite(code);
     setJoining(false);
     if (result.ok) {
+      if (result.status === "pending") {
+        setPendingApproval(true);
+        return;
+      }
       router.replace("/home");
       return;
     }

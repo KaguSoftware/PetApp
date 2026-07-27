@@ -1,7 +1,6 @@
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import AddPetSheet from "@/components/AddPetSheet";
 import { Icon } from "@/components/Icons";
 import { AccentButton } from "@/components/ui";
 import { useStore } from "@/lib/store";
@@ -11,7 +10,6 @@ export default function FirstPetScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state } = useStore();
-  const [sheetOpen, setSheetOpen] = useState(false);
   const householdName = state.households.find((h) => h.id === state.activeHouseholdId)?.name ?? "Your household";
 
   const next = () => router.replace("/(onboarding)/invite");
@@ -27,12 +25,11 @@ export default function FirstPetScreen() {
         Pets are the heart of PetPal — feeding, walks, meds and vet visits all hang off them. You can always add more later.
       </Text>
       <View style={styles.cta}>
-        <AccentButton onPress={() => setSheetOpen(true)}>Add a pet</AccentButton>
+        <AccentButton onPress={() => router.push("/pet/new?onboarding=1")}>Add a pet</AccentButton>
         <Pressable onPress={next} style={styles.skip} accessibilityRole="button">
           <Text style={styles.skipLabel}>Skip for now</Text>
         </Pressable>
       </View>
-      <AddPetSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onAdded={next} />
     </ScrollView>
   );
 }
