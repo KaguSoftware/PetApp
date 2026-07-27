@@ -70,7 +70,7 @@ function HeaderBackButton() {
       hitSlop={{ top: 12, bottom: 12, left: 16, right: 8 }}
       style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.35 }]}
     >
-      <Icon name="chevron-left" size={24} color={colors.accent} />
+      <Icon name="chevron-left" size={24} color={colors.label} />
       <Text style={styles.backLabel} numberOfLines={1}>
         Back
       </Text>
@@ -350,7 +350,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   // flexShrink: 0 on both: the UIBarButtonItem width-constrains this row, and
   // without it the label gets squeezed down to a single glyph ("< B").
   backButton: { flexDirection: "row", alignItems: "center", minHeight: 32, paddingRight: 6, flexShrink: 0 },
-  backLabel: { fontSize: 17, fontFamily: font.regular, color: colors.accent, marginLeft: 2, flexShrink: 0 },
+  backLabel: { fontSize: 17, fontFamily: font.regular, color: colors.label, marginLeft: 2, flexShrink: 0 },
   // Compact nav-bar title that fades in on scroll (WhatsApp-style). Larger than
   // the stock 17pt inline title so it reads prominently, still well below the
   // big in-content pageTitle.

@@ -30,11 +30,16 @@ import { useReduceMotion } from "@/lib/a11y";
 import { dueLabel, useStore } from "@/lib/store";
 import { cardShadow, font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
+import { useGooeyBump, useGooeyGlow } from "@/lib/useGooeyBump";
 
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Same liquid bump as the coin pill — extending a streak is an earn, so it
+  // gets identical feedback. Shared hook keeps the two pills in step.
+  const { style: anim } = useGooeyBump(streak, "streak");
+  const glow = useGooeyGlow(streak, "streak");
   return (
     <PressableScale
       haptic
@@ -42,9 +47,12 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
       accessibilityRole="button"
       accessibilityLabel={`${streak} day streak`}
     >
-      <View style={styles.streakPill}>
-        <Icon name="flame" size={14} color={colors.orange} />
-        <Text style={styles.streakPillLabel}>{streak}</Text>
+      <View style={styles.streakPillWrap}>
+        <Animated.View pointerEvents="none" style={[styles.streakGlow, glow]} />
+        <Animated.View style={[styles.streakPill, anim]}>
+          <Icon name="flame" size={14} color={colors.orange} />
+          <Text style={styles.streakPillLabel}>{streak}</Text>
+        </Animated.View>
       </View>
     </PressableScale>
   );
@@ -618,6 +626,21 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     backgroundColor: colors.orangeSoft,
   },
   streakPillLabel: { fontSize: 14, fontFamily: font.bold, color: colors.orange },
+  // Untransformed wrapper so the glow scales independently of the pill's
+  // squash — see the matching pair on CoinPill in components/ui.tsx.
+  streakPillWrap: { position: "relative" },
+  // Flush, not inset — the native header clips outside its bounds. See the
+  // matching coinGlow note in components/ui.tsx.
+  streakGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.full,
+    backgroundColor: colors.orange,
+    opacity: 0,
+  },
   loadingWrap: { marginTop: 40, alignItems: "center" },
   loadingText: { fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
   // The frame is fixed and clips the sliding track. Padding lives on each slide

@@ -13,12 +13,13 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
-import Animated, { Easing, interpolateColor, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { Easing, interpolateColor, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Icon, type IconName } from "@/components/Icons";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { COIN_SPRITE } from "@/components/pixel/hudSprites";
 import { hapticsEnabled, useReduceMotion } from "@/lib/a11y";
 import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
+import { useGooeyBump, useGooeyGlow } from "@/lib/useGooeyBump";
 
 /**
  * Press-feedback system — the standard iOS control behavior: the pressed
@@ -372,24 +373,19 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Bump whenever the balance INCREASES — one place gives coin-earn feedback
   // for every source. Spending (a decrease) doesn't bump.
-  const reduceMotion = useReduceMotion();
-  const prev = useRef(amount);
-  const scale = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  useEffect(() => {
-    if (amount > prev.current && !reduceMotion) {
-      scale.value = withSequence(
-        withTiming(1.18, { duration: 160, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
-      );
-    }
-    prev.current = amount;
-  }, [amount, scale, reduceMotion]);
+  const { style: anim } = useGooeyBump(amount, "coins");
+  const glow = useGooeyGlow(amount, "coins");
   const pill = (
-    <Animated.View style={[styles.coinPill, Platform.OS === "ios" && styles.coinPillOpaque, anim]}>
-      <PixelSprite sprite={COIN_SPRITE} size={13} />
-      <Text style={styles.coinPillLabel}>{amount.toLocaleString()}</Text>
-    </Animated.View>
+    // The wrapper stays untransformed so the glow can scale independently of
+    // the pill's squash — nesting it inside the animated view would multiply
+    // the two transforms together.
+    <View style={styles.coinPillWrap}>
+      <Animated.View pointerEvents="none" style={[styles.coinGlow, glow]} />
+      <Animated.View style={[styles.coinPill, Platform.OS === "ios" && styles.coinPillOpaque, anim]}>
+        <PixelSprite sprite={COIN_SPRITE} size={13} />
+        <Text style={styles.coinPillLabel}>{amount.toLocaleString()}</Text>
+      </Animated.View>
+    </View>
   );
   if (!onPress) return pill;
   return (
@@ -468,6 +464,22 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     borderColor: withAlpha(colors.orange, 0.45),
   },
   coinPillLabel: { fontSize: 13, fontFamily: font.semibold, color: "#8a5a17", lineHeight: 14 },
+  // Sizes to the pill; the glow is an absolutely-positioned sibling behind it.
+  coinPillWrap: { position: "relative" },
+  // Flush with the pill (NOT inset negatively): this renders inside a
+  // UIBarButtonItem, and the header bar clips anything drawn outside its
+  // bounds — a bleeding halo would be cut off mid-glow on iOS. The scale in
+  // useGooeyGlow supplies the bloom instead.
+  coinGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.full,
+    backgroundColor: colors.orange,
+    opacity: 0,
+  },
 });
 
 /* ---------------------------------------------------------------------------
