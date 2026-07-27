@@ -25,7 +25,7 @@ alter table households add column if not exists country text;
 -- Tables
 -- ---------------------------------------------------------------------------
 
-create table chat_rooms (
+create table if not exists chat_rooms (
   id uuid primary key default gen_random_uuid(),
   kind text not null check (kind in ('global', 'local')),
   -- Null for the single global room; an ISO 3166-1 alpha-2 code for local rooms.
@@ -39,10 +39,10 @@ create table chat_rooms (
 -- One room per kind+country: global has exactly one row (country is null,
 -- and a plain unique index treats all-NULL as distinct, so this partial index
 -- is scoped to the global row via a fixed expression instead).
-create unique index chat_rooms_global_uniq on chat_rooms (kind) where kind = 'global';
-create unique index chat_rooms_local_country_uniq on chat_rooms (country) where kind = 'local';
+create unique index if not exists chat_rooms_global_uniq on chat_rooms (kind) where kind = 'global';
+create unique index if not exists chat_rooms_local_country_uniq on chat_rooms (country) where kind = 'local';
 
-create table chat_messages (
+create table if not exists chat_messages (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references chat_rooms (id) on delete cascade,
   author_user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
@@ -55,7 +55,7 @@ create table chat_messages (
   created_at timestamptz not null default now()
 );
 
-create index chat_messages_room_created_idx on chat_messages (room_id, created_at desc);
+create index if not exists chat_messages_room_created_idx on chat_messages (room_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- Row-Level Security
@@ -66,15 +66,18 @@ alter table chat_messages enable row level security;
 
 -- Room list itself isn't sensitive — any authenticated user can see which
 -- rooms exist (message content is what's actually gated).
+drop policy if exists "chat_rooms read" on chat_rooms;
 create policy "chat_rooms read" on chat_rooms
   for select using (auth.uid() is not null);
 
+drop policy if exists "chat_rooms insert" on chat_rooms;
 create policy "chat_rooms insert" on chat_rooms
   for insert with check (auth.uid() is not null);
 
 -- Messages: global-room messages are readable/writable by any authenticated
 -- user; local-room messages require the author's household to currently be
 -- set to that room's country.
+drop policy if exists "chat_messages read" on chat_messages;
 create policy "chat_messages read" on chat_messages
   for select using (
     exists (
@@ -91,6 +94,7 @@ create policy "chat_messages read" on chat_messages
     )
   );
 
+drop policy if exists "chat_messages insert" on chat_messages;
 create policy "chat_messages insert" on chat_messages
   for insert with check (
     author_user_id = auth.uid()
