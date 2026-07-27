@@ -147,13 +147,17 @@ export function useGooeyBump(value: number, key: string, enabled = true): GooeyB
  * — the part that reads as "designed" rather than "popped into existence".
  *
  * @param index position in the island (0 = leftmost), for the stagger delay
+ * @param enabled false to mount already in place, no entrance. HeaderActions
+ *                passes false for controls the PREVIOUS island also had: those
+ *                are meant to look like they never left, so the only motion the
+ *                eye catches is the island resizing around them.
  */
-export function useHeaderPillEntrance(index = 0): AnimatedViewStyle {
+export function useHeaderPillEntrance(index = 0, enabled = true): AnimatedViewStyle {
   const reduceMotion = useReduceMotion();
-  const t = useSharedValue(reduceMotion ? 1 : 0);
+  const t = useSharedValue(reduceMotion || !enabled ? 1 : 0);
 
   useEffect(() => {
-    if (reduceMotion) {
+    if (reduceMotion || !enabled) {
       t.value = 1;
       return;
     }
@@ -166,7 +170,7 @@ export function useHeaderPillEntrance(index = 0): AnimatedViewStyle {
       // like it lands rather than merely fading up.
       withSpring(1, { damping: 14, stiffness: 220, mass: 0.6 })
     );
-  }, [reduceMotion, index, t]);
+  }, [reduceMotion, index, enabled, t]);
 
   return useAnimatedStyle<ViewStyle>(() => ({
     opacity: Math.min(1, t.value * 1.6),
