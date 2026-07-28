@@ -1,16 +1,16 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import ActivityRow from "@/components/ActivityRow";
 import CareStatusRow from "@/components/CareStatusRow";
-import DurationPickerSheet, { formatDuration } from "@/components/DurationPickerSheet";
+import DurationPickerSheet from "@/components/DurationPickerSheet";
 import EmptyState from "@/components/EmptyState";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
 import HeaderActions from "@/components/HeaderActions";
 import MedPickerSheet from "@/components/MedPickerSheet";
 import { FadeInItem } from "@/components/Motion";
 import PageLoading from "@/components/PageLoading";
-import { InitialAvatar } from "@/components/PetAvatar";
 import PetSelectorRow from "@/components/PetSelectorRow";
 import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
 import { TabScreen } from "@/components/Screen";
@@ -23,6 +23,7 @@ import {
   FieldLabel,
   Group,
   IconCircle,
+  PressableScale,
   Row,
   SectionHeader,
   Segmented,
@@ -309,54 +310,41 @@ export default function LogsScreen() {
         />
       </Group>
 
-      {/* Today's timeline — who did what, newest first. */}
-      <SectionHeader>Today</SectionHeader>
+      {/* Today's timeline — who did what, newest first. Capped at 5; the rest
+          live behind "See all logs" so a busy household doesn't turn this
+          into an endless scroll. */}
+      <SectionHeader
+        trailing={
+          todays.length > 0 ? (
+            <PressableScale
+              onPress={() => router.push({ pathname: "/logs/all", params: { petId: pet.id } })}
+              accessibilityRole="button"
+              accessibilityLabel="See all logs"
+              hitSlop={8}
+            >
+              <Text style={styles.seeAll}>See all</Text>
+            </PressableScale>
+          ) : undefined
+        }
+      >
+        Today
+      </SectionHeader>
       {todays.length > 0 ? (
         <Group>
-          {todays.map((a) => {
+          {todays.slice(0, 5).map((a) => {
             const member = state.members.find((m) => m.id === a.memberId);
-            const medName = a.medId ? pet.meds.find((m) => m.id === a.medId)?.name : undefined;
-            const gramsNote = a.grams != null ? `${Math.round(a.grams)} g` : undefined;
-            const durationNote = a.durationMinutes != null ? formatDuration(a.durationMinutes) : undefined;
             const isYou = a.memberId === state.currentMemberId;
-            const expanded = expandedLogId === a.id;
             return (
-              <View key={a.id}>
-                <Row
-                  leading={
-                    member ? (
-                      <InitialAvatar name={member.name} gradient={member.gradient} size={36} />
-                    ) : (
-                      <IconCircle icon={ACTION_ICON[a.type].icon} tint={ACTION_ICON[a.type].tint} bg={ACTION_ICON[a.type].bg} />
-                    )
-                  }
-                  title={`${member?.name ?? "Someone"} ${ACTIONS[a.type].verb} ${pet.name}`}
-                  subtitle={[medName, gramsNote, durationNote].filter(Boolean).join(" · ") || undefined}
-                  trailing={
-                    <Text style={styles.timelineTime}>
-                      {new Date(a.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    </Text>
-                  }
-                  onPress={isYou ? () => setExpandedLogId(expanded ? null : a.id) : undefined}
-                />
-                {expanded && isYou ? (
-                  <FadeInItem style={styles.timelineExpand}>
-                    <AccentButton
-                      variant="tinted"
-                      size="sm"
-                      onPress={() => {
-                        setExpandedLogId(null);
-                        Alert.alert("Remove this log?", "This undoes the coins and streak credit it gave you.", [
-                          { text: "Cancel", style: "cancel" },
-                          { text: "Remove", style: "destructive", onPress: () => undoLogAction(a.id) },
-                        ]);
-                      }}
-                    >
-                      Remove log
-                    </AccentButton>
-                  </FadeInItem>
-                ) : null}
-              </View>
+              <ActivityRow
+                key={a.id}
+                activity={a}
+                pet={pet}
+                member={member}
+                isYou={isYou}
+                expanded={expandedLogId === a.id}
+                onToggleExpand={() => setExpandedLogId(expandedLogId === a.id ? null : a.id)}
+                onUndo={undoLogAction}
+              />
             );
           })}
         </Group>
@@ -365,6 +353,16 @@ export default function LogsScreen() {
           <Text style={styles.emptyTodayText}>Nothing logged yet today — tap Log on any row above.</Text>
         </View>
       )}
+      {todays.length > 5 ? (
+        <AccentButton
+          variant="tinted"
+          size="sm"
+          style={{ marginTop: 12 }}
+          onPress={() => router.push({ pathname: "/logs/all", params: { petId: pet.id } })}
+        >
+          See all logs
+        </AccentButton>
+      ) : null}
 
       <Text style={styles.footnote}>
         Every action is shared with the family and shows up in Activity. Tap the bell any time to see what everyone&apos;s been up to.
@@ -531,8 +529,7 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   retroHint: { marginTop: 8, fontSize: 13, fontFamily: font.regular, color: colors.red },
   addMedTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
   scheduleHint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-  timelineTime: { fontSize: 13, fontFamily: font.regular, color: colors.label3 },
-  timelineExpand: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 2 },
+  seeAll: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
   emptyToday: { paddingHorizontal: 4, paddingVertical: 10 },
   emptyTodayText: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
   footnote: { marginTop: 16, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },

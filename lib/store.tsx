@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { AppState as RNAppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, Activity, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -164,6 +164,8 @@ interface Store {
     ageYears: number;
     weightKg: number;
     cupGrams: number;
+    heightCm?: number;
+    lengthCm?: number;
     customPlan?: Pet["customPlan"];
   }) => void;
   editPet: (
@@ -181,6 +183,8 @@ interface Store {
       microchip?: string | null;
       allergies?: string | null;
       notes?: string | null;
+      heightCm?: number | null;
+      lengthCm?: number | null;
     }
   ) => void;
   deletePet: (petId: string) => void;
@@ -398,6 +402,8 @@ type PetRow = {
   microchip: string | null;
   allergies: string | null;
   notes: string | null;
+  height_cm?: number | null;
+  length_cm?: number | null;
   weights?: { id: string; ts: number; kg: number; created_at?: string }[];
   supplies?: { supply_key: string; name: string; icon: string; level: number }[];
   meds?: { id: string; name: string; dosage: string | null; frequency: string | null }[];
@@ -466,7 +472,7 @@ type HouseholdRow = {
   }[];
   pets: (PetRow & { created_at: string })[];
   activities: { id: string; pet_id: string; member_id: string; type: ActionType; ts: number; note: string | null; grams: number | null; med_id?: string | null; duration_minutes?: number | null }[];
-  reminders: { id: string; pet_id: string; title: string; emoji: string; due: number; done: boolean; source: "manual" | "plan"; alert: boolean | null; vet_id: string | null; alert_kind: string | null; repeat_kind: RepeatKind | "none" | null; repeat_interval: number | null; vaccination_id: string | null }[];
+  reminders: { id: string; pet_id: string; title: string; emoji: string; due: number; done: boolean; source: "manual" | "plan"; alert: boolean | null; vet_id: string | null; alert_kind: string | null; repeat_kind: RepeatKind | "none" | null; repeat_interval: number | null; vaccination_id: string | null; tag?: string | null }[];
   booked_vets: { vet_id: string }[];
 };
 
@@ -644,6 +650,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // the account attribution. Like duration_minutes, learned from the first
   // insert that bounces (hydration's `select *` succeeds either way).
   const attributionSchemaRef = useRef(false);
+  // True when reminders.tag (migration 0038) is missing — reminders then save
+  // without a category instead of failing outright. Same "learned from the
+  // first bounced insert" approach as duration_minutes/user_id above.
+  const tagSchemaRef = useRef(false);
   const notifiedActivityIdsRef = useRef<Set<string>>(new Set());
   // setTimeout ids for the staggered "what everyone else did" toast batch
   // (see notifyRecentActivity below) — lets stopNotifications cancel any
@@ -991,11 +1001,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const title = `${pet.name} is ${verb} today — worth a vet visit`;
       const id = Crypto.randomUUID();
       const vetId = VET.id;
-      const reminder: Reminder = { id, petId: pet.id, title, emoji: "🩺", due: ts, done: false, source: "manual", alert: true, vetId };
+      const tag = ALERT_KIND_TAG[type] ?? "Health";
+      const reminder: Reminder = { id, petId: pet.id, title, emoji: "🩺", due: ts, done: false, source: "manual", alert: true, vetId, tag };
       setState((prev) => ({ ...prev, reminders: [...prev.reminders, reminder] }));
       supabase
         .from("reminders")
-        .insert({ id, household_id: h, pet_id: pet.id, title, emoji: "🩺", due: ts, done: false, source: "manual", alert: true, vet_id: vetId })
+        .insert({ id, household_id: h, pet_id: pet.id, title, emoji: "🩺", due: ts, done: false, source: "manual", alert: true, vet_id: vetId, ...(tagSchemaRef.current ? {} : { tag }) })
         .then(({ error }) => {
           // Roll the optimistic alert back out if it didn't persist, so the
           // in-memory reminders don't silently diverge from the DB. 23505 is
@@ -1041,11 +1052,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const cooldownUntil = alertCooldownRef.current.get(`${pet.id}|${kind}`);
       if (cooldownUntil != null && cooldownUntil > ts) return;
       const id = Crypto.randomUUID();
-      const reminder: Reminder = { id, petId: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, alertKind: kind };
+      const tag = ALERT_KIND_TAG[kind];
+      const reminder: Reminder = { id, petId: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, alertKind: kind, tag };
       setState((prev) => ({ ...prev, reminders: [...prev.reminders, reminder] }));
       supabase
         .from("reminders")
-        .insert({ id, household_id: h, pet_id: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, vet_id: null, alert_kind: kind })
+        .insert({ id, household_id: h, pet_id: pet.id, title, emoji, due: ts, done: false, source: "manual", alert: true, vet_id: null, alert_kind: kind, ...(tagSchemaRef.current ? {} : { tag }) })
         .then(({ error }) => {
           // 23505 = the 0023 dedupe index rejected a cross-device duplicate
           // raise — expected, not an error. Everything else still logs.
@@ -1434,6 +1446,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         equipped: p.equipped,
         gradient: safeGradient(p.gradient_from, p.gradient_to),
         cupGrams: p.cup_grams ?? (p.species === "cat" ? 60 : 120),
+        heightCm: p.height_cm ?? undefined,
+        lengthCm: p.length_cm ?? undefined,
         customPlan: p.custom_plan ?? undefined,
         weights: [...(p.weights ?? [])]
           .sort((a, b) => Number(a.ts) - Number(b.ts))
@@ -1510,6 +1524,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           repeatKind: r.repeat_kind && r.repeat_kind !== "none" ? r.repeat_kind : undefined,
           repeatInterval: r.repeat_interval ?? undefined,
           vaccinationId: r.vaccination_id ?? undefined,
+          tag: r.tag ?? undefined,
         }));
       // Derive the streak from real history so the headline always matches the
       // calendar's lit days; persist it back if the stored value drifted.
@@ -1636,11 +1651,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             done: false,
             source: "manual",
             vaccinationId: v.id,
+            tag: "Vet",
           };
           setState((prev) => ({ ...prev, reminders: [...prev.reminders, reminder] }));
           supabase
             .from("reminders")
-            .insert({ id: rid, household_id: h.id, pet_id: p.id, title: reminder.title, emoji: "💉", due: v.nextDue, done: false, source: "manual", vaccination_id: v.id })
+            .insert({ id: rid, household_id: h.id, pet_id: p.id, title: reminder.title, emoji: "💉", due: v.nextDue, done: false, source: "manual", vaccination_id: v.id, ...(tagSchemaRef.current ? {} : { tag: "Vet" }) })
             .then(({ error }) => {
               if (error) {
                 console.error("[petpal] vaccine reminder insert failed:", error);
@@ -2311,8 +2327,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         row.repeat_interval = r.repeatInterval ?? null;
         row.vaccination_id = r.vaccinationId ?? null;
       }
+      if (r.tag != null && !tagSchemaRef.current) row.tag = r.tag;
+      // reminders.tag (migration 0038) can't be probed by a select (hydration's
+      // `select *` succeeds either way), so — same as duration_minutes/user_id
+      // above — it's learned from the first insert that bounces on it.
+      const insertWithFallback = (insertRow: Record<string, unknown>): PromiseLike<{ error: unknown }> =>
+        supabase
+          .from("reminders")
+          .insert(insertRow)
+          .then((res) => {
+            const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
+            if (res.error && insertRow.tag != null && msg.includes("tag")) {
+              console.warn("[petpal] reminders.tag unavailable — apply migration 0038; saving without a tag");
+              tagSchemaRef.current = true;
+              const { tag: _omit, ...rest } = insertRow;
+              return insertWithFallback(rest);
+            }
+            return res;
+          });
       persist(
-        supabase.from("reminders").insert(row),
+        insertWithFallback(row),
         {
           rollback: () => setState((prev) => ({ ...prev, reminders: prev.reminders.filter((x) => x.id !== id) })),
           message: "Reminder wasn't saved",
@@ -2440,9 +2474,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ageYears: number;
       weightKg: number;
       cupGrams: number;
+      heightCm?: number;
+      lengthCm?: number;
       customPlan?: Pet["customPlan"];
     }) => {
-      const { name, species, breed, gender, ageYears, weightKg, cupGrams, customPlan } = input;
+      const { name, species, breed, gender, ageYears, weightKg, cupGrams, heightCm, lengthCm, customPlan } = input;
       const h = hid();
       if (!h) {
         console.error("[petpal] addPet called before household loaded");
@@ -2468,7 +2504,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         pets: [
           ...prev.pets,
-          { id, name, species, breed, gender, emoji: species === "cat" ? "🐱" : "🐶", ageYears, weightKg, owned: [], equipped: {}, gradient, weights, supplies, meds: [], vaccinations: [], vetVisits: [], createdAt: Date.now(), cupGrams, customPlan },
+          { id, name, species, breed, gender, emoji: species === "cat" ? "🐱" : "🐶", ageYears, weightKg, heightCm, lengthCm, owned: [], equipped: {}, gradient, weights, supplies, meds: [], vaccinations: [], vetVisits: [], createdAt: Date.now(), cupGrams, customPlan },
         ],
       }));
       const rollback = () => setState((prev) => ({ ...prev, pets: prev.pets.filter((p) => p.id !== id) }));
@@ -2491,6 +2527,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           gradient_from: gradient[0],
           gradient_to: gradient[1],
           cup_grams: cupGrams,
+          height_cm: heightCm ?? null,
+          length_cm: lengthCm ?? null,
           custom_plan: customPlan ?? null,
         });
         if (petError) {
@@ -2532,6 +2570,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         microchip?: string | null;
         allergies?: string | null;
         notes?: string | null;
+        heightCm?: number | null;
+        lengthCm?: number | null;
       }
     ) => {
       const prev = stateRef.current.pets.find((p) => p.id === petId);
@@ -2551,6 +2591,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if ("microchip" in patch) identity.microchip = patch.microchip ?? undefined;
       if ("allergies" in patch) identity.allergies = patch.allergies ?? undefined;
       if ("notes" in patch) identity.notes = patch.notes ?? undefined;
+      if ("heightCm" in patch) identity.heightCm = patch.heightCm ?? undefined;
+      if ("lengthCm" in patch) identity.lengthCm = patch.lengthCm ?? undefined;
       setState((s) => ({
         ...s,
         pets: s.pets.map((p) =>
@@ -2582,6 +2624,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if ("microchip" in patch) updateRow.microchip = patch.microchip ?? null;
       if ("allergies" in patch) updateRow.allergies = patch.allergies ?? null;
       if ("notes" in patch) updateRow.notes = patch.notes ?? null;
+      if ("heightCm" in patch) updateRow.height_cm = patch.heightCm ?? null;
+      if ("lengthCm" in patch) updateRow.length_cm = patch.lengthCm ?? null;
       const ops: PromiseLike<{ error: unknown }>[] = [supabase.from("pets").update(updateRow).eq("id", petId)];
       if (weightChanged) ops.push(supabase.from("weights").insert({ id: weightId, pet_id: petId, ts, kg: patch.weightKg }));
       persist(ops, {

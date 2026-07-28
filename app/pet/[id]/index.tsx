@@ -33,11 +33,15 @@ import {
 import {
   ACTIONS,
   CARE_PLANS,
+  cmToUnit,
   formatAge,
+  formatLength,
   formatWeight,
   kgToUnit,
+  lengthUnitLabel,
   nextAnniversary,
   nextBirthday,
+  unitToCm,
   unitToKg,
   weightFeedingEntry,
   weightTargetRange,
@@ -77,7 +81,7 @@ export default function PetDetailPage() {
     deleteVetVisit,
     toast,
   } = useStore();
-  const [editing, setEditing] = useState<"weight" | "age" | null>(null);
+  const [editing, setEditing] = useState<"weight" | "age" | "height" | "length" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [bfWeight, setBfWeight] = useState("");
@@ -135,6 +139,8 @@ export default function PetDetailPage() {
     ageYears: pet.ageYears,
     weightKg: pet.weightKg,
     cupGrams: pet.cupGrams,
+    heightCm: pet.heightCm,
+    lengthCm: pet.lengthCm,
   };
 
   return (
@@ -172,6 +178,30 @@ export default function PetDetailPage() {
           >
             <Chip>
               <Text style={styles.chipText}>{formatWeight(pet.weightKg, state.units)}</Text>
+              <Icon name="chevron-right" size={9} color={colors.label3} />
+            </Chip>
+          </PressableScale>
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            accessibilityRole="button"
+            accessibilityLabel="Edit height"
+            hitSlop={8}
+            onPress={() => setEditing("height")}
+          >
+            <Chip>
+              <Text style={styles.chipText}>{pet.heightCm != null ? formatLength(pet.heightCm, state.units) : "Height —"}</Text>
+              <Icon name="chevron-right" size={9} color={colors.label3} />
+            </Chip>
+          </PressableScale>
+          <PressableScale
+            scaleTo={PRESS_SCALE_SMALL}
+            accessibilityRole="button"
+            accessibilityLabel="Edit length"
+            hitSlop={8}
+            onPress={() => setEditing("length")}
+          >
+            <Chip>
+              <Text style={styles.chipText}>{pet.lengthCm != null ? formatLength(pet.lengthCm, state.units) : "Length —"}</Text>
               <Icon name="chevron-right" size={9} color={colors.label3} />
             </Chip>
           </PressableScale>
@@ -643,6 +673,38 @@ export default function PetDetailPage() {
         onSave={(ageYears) => {
           editPet(pet.id, { ...basePatch, ageYears });
           toast("calendar", `${pet.name}'s age updated`, formatAge(ageYears));
+        }}
+      />
+
+      <EditStatSheet
+        open={editing === "height"}
+        onClose={() => setEditing(null)}
+        title={`${pet.name}'s height`}
+        label={`Height (${lengthUnitLabel(state.units)})`}
+        min={state.units === "lb" ? 2 : 5}
+        max={state.units === "lb" ? 60 : 150}
+        unit={lengthUnitLabel(state.units)}
+        initialValue={pet.heightCm != null ? cmToUnit(pet.heightCm, state.units) : undefined}
+        onSave={(v) => {
+          const heightCm = unitToCm(v, state.units);
+          editPet(pet.id, { ...basePatch, heightCm });
+          toast("scale", `${pet.name}'s height updated`, formatLength(heightCm, state.units));
+        }}
+      />
+
+      <EditStatSheet
+        open={editing === "length"}
+        onClose={() => setEditing(null)}
+        title={`${pet.name}'s length`}
+        label={`Length (${lengthUnitLabel(state.units)})`}
+        min={state.units === "lb" ? 4 : 10}
+        max={state.units === "lb" ? 120 : 300}
+        unit={lengthUnitLabel(state.units)}
+        initialValue={pet.lengthCm != null ? cmToUnit(pet.lengthCm, state.units) : undefined}
+        onSave={(v) => {
+          const lengthCm = unitToCm(v, state.units);
+          editPet(pet.id, { ...basePatch, lengthCm });
+          toast("scale", `${pet.name}'s length updated`, formatLength(lengthCm, state.units));
         }}
       />
 

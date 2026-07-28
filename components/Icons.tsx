@@ -11,7 +11,7 @@ export type IconName =
   | "list" | "eye" | "person"
   | "yarn" | "clipper" | "shield" | "door"
   | "syringe" | "repeat" | "share" | "gift"
-  | "alert" | "trash" | "scale" | "sun" | "moon";
+  | "alert" | "trash" | "scale" | "sun" | "moon" | "filter";
 
 /*
  * Clean stroke icon set (SF Symbols / Lucide register): 24×24 grid,
@@ -314,6 +314,16 @@ const P: Record<IconName, React.ReactNode> = {
     </>
   ),
   moon: <Path d="M20.5 14.3A8.5 8.5 0 1 1 9.7 3.5a7 7 0 0 0 10.8 10.8Z" />,
+  filter: (
+    <>
+      <Path d="M4 6h16" />
+      <Circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+      <Path d="M4 12h16" />
+      <Circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+      <Path d="M4 18h16" />
+      <Circle cx="11" cy="18" r="2" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 /**

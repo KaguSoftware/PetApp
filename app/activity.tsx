@@ -1,29 +1,21 @@
-import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import EmptyState from "@/components/EmptyState";
+import FilterSheet from "@/components/FilterSheet";
+import { ACTION_ICON, Icon } from "@/components/Icons";
 import { FadeInItem } from "@/components/Motion";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import { usePullToRefresh } from "@/lib/useRefresh";
-import { ACTION_ICON } from "@/components/Icons";
 import { AccentButton, Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
-import { ACTIONS, Activity } from "@/lib/data";
+import { ACTIONS, ActionType, Activity, dayKey } from "@/lib/data";
 import { dueLabel, timeAgo, useStore } from "@/lib/store";
+import { useListFilter } from "@/lib/useListFilter";
 import { font, useColors, type Colors } from "@/lib/theme";
 
-function dayKey(ts: number) {
-  const d = new Date(ts);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const that = new Date(d);
-  that.setHours(0, 0, 0, 0);
-  const diff = Math.round((today.getTime() - that.getTime()) / 86_400_000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
-}
+const isIOS = Platform.OS === "ios";
 
 /**
  * The bell's landing page — notifications, and ONLY notifications: the
@@ -40,10 +32,31 @@ export default function ActivityScreen() {
   const [visible, setVisible] = useState(40);
   const refreshControl = usePullToRefresh();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const filter = useListFilter();
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  // Reset paging whenever the filter narrows/widens the feed, so "Show more"
+  // doesn't sit on a stale offset into the unfiltered list.
+  useEffect(() => {
+    setVisible(40);
+  }, [filter.petId, filter.types, filter.range]);
+
+  const filterButton = (
+    <Pressable
+      onPress={() => setFilterOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Filter notifications"
+      hitSlop={6}
+      style={({ pressed }) => [styles.filterButton, pressed && { opacity: 0.6 }]}
+    >
+      <Icon name="filter" size={isIOS ? 22 : 17} color={isIOS ? colors.accent : colors.white} />
+      {filter.activeCount > 0 ? <View style={styles.filterDot} /> : null}
+    </Pressable>
+  );
 
   if (!hydrated) {
     return (
-      <PushedScreen title="Notifications" refreshControl={refreshControl}>
+      <PushedScreen title="Notifications" trailing={filterButton} refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -58,6 +71,8 @@ export default function ActivityScreen() {
   const seenAlert = new Set<string>();
   const alerts = state.reminders
     .filter((r) => r.alert && !r.done)
+    .filter((r) => filter.petId == null || r.petId === filter.petId)
+    .filter((r) => filter.types.size === 0 || (r.alertKind && filter.types.has(r.alertKind as ActionType)))
     .sort((a, b) => a.due - b.due)
     .filter((r) => {
       const key = `${r.petId}|${r.title}`;
@@ -70,7 +85,11 @@ export default function ActivityScreen() {
     .filter((g) => g.items.length > 0);
 
   // Family feed — newest first, paged in blocks of 40.
-  const filtered = [...state.activities].sort((a, b) => b.ts - a.ts);
+  const filtered = [...state.activities]
+    .filter((a) => filter.petId == null || a.petId === filter.petId)
+    .filter((a) => filter.types.size === 0 || filter.types.has(a.type))
+    .filter((a) => filter.range === "all" || a.ts >= filter.rangeCutoff)
+    .sort((a, b) => b.ts - a.ts);
   const sorted = filtered.slice(0, visible);
   const groups: { day: string; items: Activity[] }[] = [];
   for (const a of sorted) {
@@ -81,7 +100,7 @@ export default function ActivityScreen() {
   }
 
   return (
-    <PushedScreen title="Notifications" refreshControl={refreshControl}>
+    <PushedScreen title="Notifications" trailing={filterButton} refreshControl={refreshControl}>
       {/* Needs attention — one group per pet, standard rows */}
       {alertGroups.length > 0 ? (
         <>
@@ -141,7 +160,11 @@ export default function ActivityScreen() {
       {/* Family feed */}
       <SectionHeader>Recent activity</SectionHeader>
       {groups.length === 0 ? (
-        <EmptyState icon="bell" title="No activity yet" body="Log some care from the Logs tab and it'll show up here for the whole family." />
+        filter.activeCount > 0 ? (
+          <EmptyState icon="filter" title="No matches" body="Nothing fits these filters — try resetting them." />
+        ) : (
+          <EmptyState icon="bell" title="No activity yet" body="Log some care from the Logs tab and it'll show up here for the whole family." />
+        )
       ) : (
         groups.map((g, gi) => (
           <FadeInItem key={g.day} index={gi}>
@@ -193,11 +216,42 @@ export default function ActivityScreen() {
           Show more
         </AccentButton>
       ) : null}
+
+      <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} filter={filter} pets={state.pets} showRange showTypes />
     </PushedScreen>
   );
 }
 
 const makeStyles = (colors: Colors) => StyleSheet.create({
+  // Mirrors the Reminders "+" header button metrics — chromeless glyph on iOS
+  // (no pill, no shadow, no transform inside the UIBarButtonItem), accent
+  // circle on Android.
+  filterButton: {
+    width: isIOS ? 38 : 36,
+    height: isIOS ? 38 : 36,
+    alignItems: "center",
+    justifyContent: "center",
+    ...(isIOS
+      ? null
+      : {
+          borderRadius: 18,
+          backgroundColor: colors.accent,
+          shadowColor: colors.accent,
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 4,
+        }),
+  },
+  filterDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.red,
+  },
   alertPetHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   alertPetName: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
   alertTitle: { fontSize: 16, fontFamily: font.medium, color: colors.red },

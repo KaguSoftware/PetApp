@@ -25,11 +25,15 @@ import {
   SheetTitle,
 } from "@/components/ui";
 import {
+  cmToUnit,
   cosmetic,
   COSMETICS,
   formatAge,
+  formatLength,
   formatWeight,
   kgToUnit,
+  lengthUnitLabel,
+  unitToCm,
   unitToKg,
   weightUnitLabel,
   type Cosmetic,
@@ -159,7 +163,7 @@ export default function PetsScreen() {
   const [accessoriesOpen, setAccessoriesOpen] = useState(() => searchParams.shop === "1");
   // Which tab the accessories sheet shows: the head/hat slot, or "other" for everything else.
   const [accessoryTab, setAccessoryTab] = useState<CosmeticSlot | "other">("head");
-  const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
+  const [editingStat, setEditingStat] = useState<"weight" | "age" | "height" | "length" | null>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
   const bump = useSharedValue(1);
@@ -252,6 +256,24 @@ export default function PetsScreen() {
               accessibilityLabel={`Weight ${formatWeight(pet.weightKg, state.units)} — tap to edit`}
             >
               <Chip>{formatWeight(pet.weightKg, state.units)}</Chip>
+            </PressableScale>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
+              onPress={() => setEditingStat("height")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Height ${pet.heightCm != null ? formatLength(pet.heightCm, state.units) : "not set"} — tap to edit`}
+            >
+              <Chip>{pet.heightCm != null ? formatLength(pet.heightCm, state.units) : "Height —"}</Chip>
+            </PressableScale>
+            <PressableScale
+              scaleTo={PRESS_SCALE_SMALL}
+              onPress={() => setEditingStat("length")}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`Length ${pet.lengthCm != null ? formatLength(pet.lengthCm, state.units) : "not set"} — tap to edit`}
+            >
+              <Chip>{pet.lengthCm != null ? formatLength(pet.lengthCm, state.units) : "Length —"}</Chip>
             </PressableScale>
             <Chip>{`${pet.owned.length} items`}</Chip>
           </View>
@@ -355,8 +377,46 @@ export default function PetsScreen() {
         unit="yr"
         initialValue={pet.ageYears}
         onSave={(ageYears) => {
-          editPet(pet.id, { name: pet.name, breed: pet.breed, ageYears, weightKg: pet.weightKg, cupGrams: pet.cupGrams });
+          editPet(pet.id, {
+            name: pet.name,
+            breed: pet.breed,
+            ageYears,
+            weightKg: pet.weightKg,
+            cupGrams: pet.cupGrams,
+            heightCm: pet.heightCm,
+            lengthCm: pet.lengthCm,
+          });
           toast("calendar", `${pet.name}'s age updated`, formatAge(ageYears));
+        }}
+      />
+      <EditStatSheet
+        open={editingStat === "height"}
+        onClose={() => setEditingStat(null)}
+        title={`${pet.name}'s height`}
+        label={`Height (${lengthUnitLabel(state.units)})`}
+        min={state.units === "lb" ? 2 : 5}
+        max={state.units === "lb" ? 60 : 150}
+        unit={lengthUnitLabel(state.units)}
+        initialValue={pet.heightCm != null ? cmToUnit(pet.heightCm, state.units) : undefined}
+        onSave={(v) => {
+          const heightCm = unitToCm(v, state.units);
+          editPet(pet.id, { name: pet.name, breed: pet.breed, ageYears: pet.ageYears, weightKg: pet.weightKg, cupGrams: pet.cupGrams, heightCm, lengthCm: pet.lengthCm });
+          toast("scale", `${pet.name}'s height updated`, formatLength(heightCm, state.units));
+        }}
+      />
+      <EditStatSheet
+        open={editingStat === "length"}
+        onClose={() => setEditingStat(null)}
+        title={`${pet.name}'s length`}
+        label={`Length (${lengthUnitLabel(state.units)})`}
+        min={state.units === "lb" ? 4 : 10}
+        max={state.units === "lb" ? 120 : 300}
+        unit={lengthUnitLabel(state.units)}
+        initialValue={pet.lengthCm != null ? cmToUnit(pet.lengthCm, state.units) : undefined}
+        onSave={(v) => {
+          const lengthCm = unitToCm(v, state.units);
+          editPet(pet.id, { name: pet.name, breed: pet.breed, ageYears: pet.ageYears, weightKg: pet.weightKg, cupGrams: pet.cupGrams, heightCm: pet.heightCm, lengthCm });
+          toast("scale", `${pet.name}'s length updated`, formatLength(lengthCm, state.units));
         }}
       />
     </TabScreen>

@@ -1,5 +1,8 @@
 export type ActionType = "fed" | "water" | "litter" | "walk" | "groomed" | "meds" | "vet";
 
+/** Every ActionType, in the app's canonical display order — used by the type filter chips. */
+export const ACTION_TYPES: ActionType[] = ["fed", "water", "litter", "walk", "groomed", "meds", "vet"];
+
 export type CosmeticSlot = "head" | "face" | "neck" | "body";
 
 export interface Cosmetic {
@@ -79,6 +82,10 @@ export interface Pet {
   notes?: string;
   /** Grams in one full cup of food — used to size the Fed portion picker. */
   cupGrams: number;
+  /** Withers/shoulder height in cm — canonical unit; shown in in when units === "lb". */
+  heightCm?: number;
+  /** Body length (nose to tail base) in cm — canonical unit; shown in in when units === "lb". */
+  lengthCm?: number;
   /** User-entered daily targets for a pet whose breed has no CARE_PLANS entry
    *  (e.g. a custom/"Other" breed). Any key present overrides the matching
    *  species-default target; absent keys still fall back normally. */
@@ -283,7 +290,15 @@ export interface Reminder {
   repeatInterval?: number;
   /** Set on auto-created vaccine reminders — links back to the vaccination record. */
   vaccinationId?: string;
+  /** Free-text category ("Feeding", "Vet", a custom tag…) — used for filtering. */
+  tag?: string;
 }
+
+/** Preset chips offered when tagging a reminder; the field itself is free text — a "+" chip lets the user type any other tag. */
+export const REMINDER_TAGS = ["Feeding", "Water", "Litter", "Walk", "Grooming", "Meds", "Vet", "Health", "Other"] as const;
+
+/** Care-warning alertKind → preset tag, so auto-raised alerts are filterable by the same tags as manual reminders. */
+export const ALERT_KIND_TAG: Record<string, string> = { fed: "Feeding", water: "Water", litter: "Litter", walk: "Walk" };
 
 export type RepeatKind = "daily" | "weekly" | "every_n_days";
 
@@ -1080,10 +1095,47 @@ export function formatWeight(kg: number, units: "kg" | "lb"): string {
   return `${kg % 1 === 0 ? kg : kg.toFixed(1)} kg`;
 }
 
+/** Centimetres per inch — shared by every height/length display/input conversion. */
+export const CM_PER_IN = 2.54;
+
+/** The unit suffix shown in editor labels for body measurements, e.g. "Height (cm)" vs "Height (in)". */
+export function lengthUnitLabel(units: "kg" | "lb"): string {
+  return units === "lb" ? "in" : "cm";
+}
+
+/** Convert a stored cm value into the user's display unit (in rounded to 1 dp). */
+export function cmToUnit(cm: number, units: "kg" | "lb"): number {
+  return units === "lb" ? Math.round((cm / CM_PER_IN) * 10) / 10 : cm;
+}
+
+/** Convert a value the user typed in their display unit back into stored cm. */
+export function unitToCm(value: number, units: "kg" | "lb"): number {
+  return units === "lb" ? value * CM_PER_IN : value;
+}
+
+export function formatLength(cm: number, units: "kg" | "lb"): string {
+  if (units === "lb") return `${(cm / CM_PER_IN).toFixed(1)} in`;
+  return `${cm % 1 === 0 ? cm : cm.toFixed(1)} cm`;
+}
+
 export function formatAge(ageYears: number): string {
   if (ageYears < 1) {
     const months = Math.round(ageYears * 12);
     return `${months} mo`;
   }
   return `${Math.round(ageYears)} yr${Math.round(ageYears) === 1 ? "" : "s"}`;
+}
+
+/** "Today" / "Yesterday" / a long weekday date — the day-grouping label shared by
+ *  every activity timeline (Notifications, the per-pet all-logs screen). */
+export function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const that = new Date(d);
+  that.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - that.getTime()) / 86_400_000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
 }

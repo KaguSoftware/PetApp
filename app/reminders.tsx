@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
+import FilterSheet from "@/components/FilterSheet";
 import PageLoading from "@/components/PageLoading";
 import Sheet from "@/components/Sheet";
 import { Stepper } from "@/components/TimeStepper";
@@ -10,6 +11,7 @@ import { usePullToRefresh } from "@/lib/useRefresh";
 import { Icon } from "@/components/Icons";
 import {
   AccentButton,
+  Chip,
   FieldLabel,
   Group,
   IconCircle,
@@ -23,8 +25,9 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
-import { RepeatKind, Reminder, nextRepeatDue } from "@/lib/data";
+import { RepeatKind, Reminder, REMINDER_TAGS, nextRepeatDue } from "@/lib/data";
 import { dueLabel, useStore } from "@/lib/store";
+import { useListFilter } from "@/lib/useListFilter";
 import { font, withAlpha, useColors, type Colors } from "@/lib/theme";
 
 const DAY_MS = 86_400_000;
@@ -62,9 +65,14 @@ export default function RemindersScreen() {
   const [minute, setMinute] = useState(0);
   const [repeat, setRepeat] = useState<"none" | RepeatKind>("none");
   const [intervalDays, setIntervalDays] = useState(3);
+  const [tag, setTag] = useState<string | undefined>(undefined);
+  const [customTagOpen, setCustomTagOpen] = useState(false);
+  const [customTag, setCustomTag] = useState("");
   // Long titles/subtitles are clipped to one line by default; tapping a row
   // toggles it to show the full text instead of navigating anywhere.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const filter = useListFilter();
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Plain Pressable with an opacity dim, NOT PressableScale: this renders
   // inside the native header's UIBarButtonItem, where a spring-scale transform
@@ -89,9 +97,28 @@ export default function RemindersScreen() {
     </Pressable>
   );
 
+  const filterButton = (
+    <Pressable
+      onPress={() => setFilterOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Filter reminders"
+      hitSlop={6}
+      style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.6 }]}
+    >
+      <Icon name="filter" size={isIOS ? 22 : 17} color={isIOS ? colors.accent : colors.white} />
+      {filter.activeCount > 0 ? <View style={styles.filterDot} /> : null}
+    </Pressable>
+  );
+  const headerTrailing = (
+    <>
+      {filterButton}
+      {addButton}
+    </>
+  );
+
   if (!hydrated) {
     return (
-      <PushedScreen title="Reminders" trailing={addButton} refreshControl={refreshControl}>
+      <PushedScreen title="Reminders" trailing={headerTrailing} refreshControl={refreshControl}>
         <PageLoading />
       </PushedScreen>
     );
@@ -101,9 +128,12 @@ export default function RemindersScreen() {
   // useState initializer ran while the store was still empty, so petId can't
   // seed itself from state.pets.
   const activePetId = petId || state.pets[0]?.id || "";
-  const upcoming = state.reminders.filter((r) => !r.done).sort((a, b) => a.due - b.due);
-  const done = state.reminders.filter((r) => r.done);
   const petOf = (id: string) => state.pets.find((p) => p.id === id);
+  const matchesFilter = (r: Reminder) =>
+    (filter.petId == null || r.petId === filter.petId) && (filter.tags.size === 0 || (r.tag != null && filter.tags.has(r.tag)));
+  const upcoming = state.reminders.filter((r) => !r.done && matchesFilter(r)).sort((a, b) => a.due - b.due);
+  const done = state.reminders.filter((r) => r.done && matchesFilter(r));
+  const extraTags = Array.from(new Set(state.reminders.map((r) => r.tag).filter((t): t is string => !!t)));
 
   // Agenda grouping — one section per calendar day so the list reads as a
   // schedule, not a flat pile.
@@ -132,6 +162,9 @@ export default function RemindersScreen() {
     setHour(9);
     setMinute(0);
     setRepeat("none");
+    setTag(undefined);
+    setCustomTagOpen(false);
+    setCustomTag("");
   };
 
   // One calm row per reminder — alerts get red title text only (the red wall,
@@ -188,6 +221,7 @@ export default function RemindersScreen() {
                 </Text>
               </>
             ) : null}
+            {r.tag ? <Chip style={styles.tagChip}>{r.tag}</Chip> : null}
           </View>
         }
         trailing={
@@ -248,6 +282,44 @@ export default function RemindersScreen() {
             <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
           ))}
         </View>
+
+        <FieldLabel>Tag</FieldLabel>
+        <View style={styles.chipRow}>
+          {REMINDER_TAGS.map((t) => (
+            <SelectableChip
+              key={t}
+              label={t}
+              selected={tag === t}
+              onPress={() => {
+                setTag(tag === t ? undefined : t);
+                setCustomTagOpen(false);
+              }}
+            />
+          ))}
+          <SelectableChip
+            label="+"
+            selected={customTagOpen}
+            onPress={() => {
+              setCustomTagOpen((v) => !v);
+              setTag(undefined);
+            }}
+          />
+        </View>
+        {customTagOpen ? (
+          <View style={styles.pickerRow}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                value={customTag}
+                onChangeText={(t) => {
+                  setCustomTag(t);
+                  setTag(t.trim() || undefined);
+                }}
+                placeholder="Custom tag"
+                returnKeyType="done"
+              />
+            </View>
+          </View>
+        ) : null}
 
         <FieldLabel>Due</FieldLabel>
         <View style={styles.chipRow}>
@@ -342,6 +414,7 @@ export default function RemindersScreen() {
                 due,
                 repeatKind: repeat === "none" ? undefined : repeat,
                 repeatInterval: repeat === "every_n_days" ? Math.round(intervalDays) : undefined,
+                tag,
               });
               closeSheet();
               toast(
@@ -355,6 +428,8 @@ export default function RemindersScreen() {
           </AccentButton>
         </SheetFooter>
       </Sheet>
+
+      <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} filter={filter} pets={state.pets} showTags extraTags={extraTags} />
     </PushedScreen>
   );
 }
@@ -380,6 +455,16 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
           elevation: 4,
         }),
   },
+  filterDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.red,
+  },
+  tagChip: { marginLeft: 2 },
   checkZone: {
     width: 44,
     height: 44,
