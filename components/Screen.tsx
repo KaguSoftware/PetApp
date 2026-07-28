@@ -48,8 +48,17 @@ const HEADER_ITEM_HEIGHT = 38;
  * sits behind the bar.
  */
 const IOS_TAB_BAR_HEIGHT = 49;
-const ANDROID_TAB_BAR_HEIGHT = 56;
-const TAB_BAR_HEIGHT = Platform.OS === "android" ? ANDROID_TAB_BAR_HEIGHT : IOS_TAB_BAR_HEIGHT;
+/**
+ * NOT 56 (the old Material 2 `design_bottom_navigation_height`). RNScreens'
+ * `TabsHost` builds its `BottomNavigationView` under a
+ * `Theme_Material3_DayNight_NoActionBar` context wrapper, so it lays out at the
+ * Material 3 navigation-bar height of 80dp — and, being a Material
+ * `NavigationBarView`, it also pads itself by the system navigation-bar inset
+ * on top of that (this app is `edgeToEdgeEnabled`). Under-reserving by those
+ * 24dp is what pushed the Community composer down into the system nav bar.
+ */
+const ANDROID_TAB_BAR_HEIGHT = 80;
+export const TAB_BAR_HEIGHT = Platform.OS === "android" ? ANDROID_TAB_BAR_HEIGHT : IOS_TAB_BAR_HEIGHT;
 
 /** Gap between the nav bar and the first row of content on a pushed screen. */
 const CONTENT_TOP_PAD = 10;

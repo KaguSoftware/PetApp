@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
 import { Icon } from "@/components/Icons";
-import { TabScreen } from "@/components/Screen";
+import { TabScreen, TAB_BAR_HEIGHT } from "@/components/Screen";
 import { PressableScale, Segmented, TextField } from "@/components/ui";
 import { countryByCode } from "@/lib/countries";
 import {
@@ -204,8 +204,13 @@ export default function Community() {
   );
 }
 
-/** Clears the tab bar (Screen.tsx's IOS_TAB_BAR_HEIGHT / ANDROID_TAB_BAR_HEIGHT). */
-const INPUT_BOTTOM = Platform.OS === "android" ? 68 : 61;
+/**
+ * Clears the tab bar, plus a gap. Derived from Screen.tsx's own measurement
+ * rather than re-stated as a magic number here — the two used to be written out
+ * separately and drifted apart on Android, which sank the composer into the
+ * system navigation bar.
+ */
+const INPUT_BOTTOM = TAB_BAR_HEIGHT + 12;
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({

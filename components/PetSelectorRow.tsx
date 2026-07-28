@@ -1,13 +1,16 @@
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LayoutChangeEvent, Platform, StyleSheet, Text, View } from "react-native";
+import { Dimensions, LayoutChangeEvent, Platform, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
-  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-  type SharedValue,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import PetAvatar from "@/components/PetAvatar";
@@ -16,18 +19,53 @@ import { hapticsEnabled, useReduceMotion } from "@/lib/a11y";
 import type { Pet } from "@/lib/data";
 import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
-// Slot width (one pet's share of the reel) and the visible tile inside it —
-// the gap between the two is what lets neighbours peek in from the sides.
-const SLOT = 96;
+/** Ideal gap between neighbouring pets. Squeezed for big herds — see `spread`. */
+const SLOT = 92;
+/** The visible tile inside a slot (avatar disc + name). */
 const TILE = 76;
+const REEL_H = 88;
 const ADD_ZONE = 64;
+/** Hold this long on a pet to jump to its profile instead of selecting it. */
+const PROFILE_HOLD_MS = 500;
+/** One full re-order. Halved for the pet that wraps around the ends. */
+const ROTATE_MS = 320;
+const EASE = Easing.bezier(0.22, 1, 0.36, 1);
 
 /**
- * Roulette-style pet selector — snaps to one pet at a time, haptic tick per
- * detent, and the centered pet IS the selection (there's no separate tap
- * target vs. highlighted state to keep in sync). Used identically on Logs,
- * Care and Pets; selection always follows the reel, never the other way
- * around — tapping an off-center pet just scrolls the reel to it.
+ * The selected pet's slot — fixed by the HERD SIZE, not by which pet is
+ * selected. One pet centers alone; with an even herd the extra neighbour goes
+ * on the left, with an odd herd the neighbours split evenly:
+ *
+ *   1 pet → (sel)          2 → [a](sel)        3 → [a](sel)[b]
+ *   4 → [a][b](sel)[c]     5 → [a][b](sel)[c][d]
+ */
+const centerSlot = (count: number) => Math.ceil((count - 1) / 2);
+
+/**
+ * Pet selector — the centered pet IS the selection, and the reel ROTATES so the
+ * selection always lands on `centerSlot` (above), dead center of the page, for
+ * every herd size. Used identically on Logs, Care and Pets.
+ *
+ * WHY THERE IS NO SCROLLVIEW HERE. The obvious build — a snapping horizontal
+ * ScrollView whose children are re-ordered, then re-pinned to the center offset
+ * — cannot be made smooth: re-ordering the children is a React commit and
+ * moving the offset is an imperative `scrollTo`, and nothing sequences those
+ * two into one frame. Every rotation showed the row at the old order with the
+ * new offset (or the reverse) for a frame or three. That is jitter you can only
+ * fix by removing the race, not by tuning it.
+ *
+ * So position is owned outright instead. Tiles are absolutely positioned over
+ * the card's center line and each animates its own `slot` — a signed distance
+ * from center, in slots — with Reanimated: one interruptible timing per pet,
+ * entirely on the UI thread, no React commit in the loop. A rotation is then
+ * just "every pet slides one slot over", which is smooth by construction, and
+ * interrupting it mid-flight (tapping again) retargets from wherever each tile
+ * currently is rather than restarting.
+ *
+ * The one pet that can't simply slide is the one whose new slot is on the far
+ * side of the row. It doesn't fly back across all the others — it carries on
+ * off its near edge, fades out, and fades back in from the opposite edge, so
+ * the herd reads as a continuous ring. See `PetTile`.
  */
 export default function PetSelectorRow({
   pets,
@@ -44,112 +82,111 @@ export default function PetSelectorRow({
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const reduceMotion = useReduceMotion();
-  const scrollRef = useRef<Animated.ScrollView>(null);
-  const scrollX = useSharedValue(0);
-  const lastHapticIndex = useSharedValue(-1);
-  // Measured off the scroll viewport itself (not the whole card) so the
-  // reel centers within its own lane — the "+" button sits in a separate
-  // fixed-width lane to the right and never eats into that centering math.
-  const [scrollW, setScrollW] = useState(0);
-  const [settledIndex, setSettledIndex] = useState(0);
-  const scrollIndexRef = useRef<number | null>(null);
-  const firstAlignRef = useRef(true);
+  const router = useRouter();
+  // Seeded from the window so the very first paint is already at the right
+  // spacing; the measured value only ever corrects it by a pixel or two.
+  const [cardW, setCardW] = useState(Dimensions.get("window").width - 32);
 
-  const targetIndex = useMemo(() => {
+  const count = pets.length;
+  const center = centerSlot(count);
+
+  const selectedIndex = useMemo(() => {
     const i = pets.findIndex((p) => p.id === selectedId);
     return i >= 0 ? i : 0;
   }, [pets, selectedId]);
+
+  /**
+   * Pixels between neighbouring pets: `SLOT` whenever the herd fits, otherwise
+   * squeezed so the outermost pet still peeks in at the card's edge instead of
+   * sitting entirely off it. `center` is always the longer of the two arms, so
+   * it alone sets the bound.
+   */
+  const spread = useMemo(
+    () => (center === 0 ? SLOT : Math.min(SLOT, (cardW / 2 - 30) / center)),
+    [cardW, center]
+  );
 
   const fireHaptic = useCallback(() => {
     if (reduceMotion || !hapticsEnabled()) return;
     if (Platform.OS === "ios") Haptics.selectionAsync();
   }, [reduceMotion]);
 
-  const commitSelection = useCallback(
-    (idx: number) => {
-      const clamped = Math.max(0, Math.min(pets.length - 1, idx));
-      scrollIndexRef.current = clamped;
-      setSettledIndex(clamped);
-      const p = pets[clamped];
-      if (p && p.id !== selectedId) onSelect(p.id);
+  const select = useCallback(
+    (petId: string) => {
+      if (petId === selectedId) return;
+      fireHaptic();
+      onSelect(petId);
     },
-    [pets, selectedId, onSelect]
+    [selectedId, onSelect, fireHaptic]
   );
 
-  const scrollHandler = useAnimatedScrollHandler(
-    {
-      onScroll: (e) => {
-        scrollX.value = e.contentOffset.x;
-        const idx = Math.round(e.contentOffset.x / SLOT);
-        if (idx !== lastHapticIndex.value) {
-          lastHapticIndex.value = idx;
-          runOnJS(fireHaptic)();
-        }
-      },
-      onEndDrag: (e) => {
-        runOnJS(commitSelection)(Math.round(e.contentOffset.x / SLOT));
-      },
-      onMomentumEnd: (e) => {
-        runOnJS(commitSelection)(Math.round(e.contentOffset.x / SLOT));
-      },
+  /** Step the ring by one — what a horizontal flick does. */
+  const step = useCallback(
+    (dir: 1 | -1) => {
+      if (count < 2) return;
+      const next = pets[(selectedIndex + dir + count) % count];
+      if (next) select(next.id);
     },
-    [fireHaptic, commitSelection]
+    [pets, selectedIndex, count, select]
   );
 
-  // Keep the reel aligned to an externally-driven selectedId (e.g. another
-  // screen deep-linking to a specific pet). Never fights a live drag.
-  useEffect(() => {
-    if (scrollIndexRef.current === targetIndex) return;
-    scrollIndexRef.current = targetIndex;
-    setSettledIndex(targetIndex);
-    const animated = !firstAlignRef.current;
-    firstAlignRef.current = false;
-    const raf = requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ x: targetIndex * SLOT, animated });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [targetIndex]);
+  const openProfile = useCallback(
+    (petId: string) => {
+      if (!reduceMotion && hapticsEnabled() && Platform.OS === "ios") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      router.push(`/pet/${petId}`);
+    },
+    [router, reduceMotion]
+  );
 
-  if (pets.length === 0) return null;
+  // Flick left/right to step the ring. The offset thresholds stop this stealing
+  // the page's vertical scroll, or a tap that was meant for a tile.
+  const flick = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-14, 14])
+        .failOffsetY([-10, 10])
+        .onEnd((e) => {
+          if (Math.abs(e.translationX) < 24 && Math.abs(e.velocityX) < 320) return;
+          runOnJS(step)(e.translationX < 0 ? 1 : -1);
+        }),
+    [step]
+  );
 
-  // Symmetric padding so index 0 and the last pet can both reach dead center —
-  // every pet, including the ones at the ends, gets the same left/right travel.
-  const sidePad = Math.max(SLOT / 2, scrollW > 0 ? (scrollW - SLOT) / 2 : SLOT);
+  const onCardLayout = (e: LayoutChangeEvent) => setCardW(e.nativeEvent.layout.width);
 
-  const onScrollWrapLayout = (e: LayoutChangeEvent) => setScrollW(e.nativeEvent.layout.width);
+  if (count === 0) return null;
 
   return (
-    <View style={styles.card}>
-      <View style={styles.scrollWrap} onLayout={onScrollWrapLayout}>
-        <Animated.ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={SLOT}
-          decelerationRate="fast"
-          snapToAlignment="start"
-          scrollEventThrottle={16}
-          onScroll={scrollHandler}
-          contentContainerStyle={{ paddingHorizontal: sidePad }}
-        >
-          {pets.map((p, i) => (
-            <PetSelectorItem
-              key={p.id}
-              pet={p}
-              index={i}
-              scrollX={scrollX}
-              selected={i === settledIndex}
-              reduceMotion={reduceMotion}
-              onPress={() => {
-                if (i === scrollIndexRef.current) return;
-                scrollRef.current?.scrollTo({ x: i * SLOT, animated: true });
-              }}
-            />
-          ))}
-        </Animated.ScrollView>
-      </View>
+    <View style={styles.card} onLayout={onCardLayout}>
+      <GestureDetector gesture={flick}>
+        <View style={styles.reel}>
+          {pets.map((p, j) => {
+            // The slot this pet occupies, as a signed distance from the center
+            // one. The selected pet is 0 by construction; everyone else keeps
+            // their place in the ring around it.
+            const target = (((j - selectedIndex + center) % count) + count) % count - center;
+            return (
+              <PetTile
+                key={p.id}
+                pet={p}
+                target={target}
+                span={count}
+                spread={spread}
+                reduceMotion={reduceMotion}
+                onPress={() => select(p.id)}
+                onHold={() => openProfile(p.id)}
+              />
+            );
+          })}
+        </View>
+      </GestureDetector>
       {onAdd ? (
-        <View style={styles.addZone}>
+        // Floats OVER the reel's right edge rather than taking a lane of its
+        // own — a lane would shift the reel's centre left of the page's centre
+        // by half its width, which is the whole thing being centered here.
+        <View style={styles.addZone} pointerEvents="box-none">
           <PressableScale haptic onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add a pet">
             <View style={styles.addCircle}>
               <Text style={styles.addGlyph}>+</Text>
@@ -161,52 +198,123 @@ export default function PetSelectorRow({
   );
 }
 
-function PetSelectorItem({
+/**
+ * One pet, absolutely centered on the card and pushed out to its slot by
+ * `translateX`. Owns its own position value, so a re-order never re-renders
+ * anything: only `target` changes, and the effect below hands the move
+ * straight to the UI thread.
+ */
+function PetTile({
   pet,
-  index,
-  scrollX,
-  selected,
+  target,
+  span,
+  spread,
   reduceMotion,
   onPress,
+  onHold,
 }: {
   pet: Pet;
-  index: number;
-  scrollX: SharedValue<number>;
-  selected: boolean;
+  /** Destination slot, signed distance from center. */
+  target: number;
+  /** Herd size — half of it is the wrap threshold. */
+  span: number;
+  /** Pixels per slot. */
+  spread: number;
   reduceMotion: boolean;
   onPress: () => void;
+  onHold: () => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const slot = useSharedValue(target);
+  const fade = useSharedValue(1);
+  const prev = useRef(target);
+
+  useEffect(() => {
+    const from = prev.current;
+    prev.current = target;
+    if (from === target) return;
+    if (reduceMotion) {
+      slot.value = target;
+      fade.value = 1;
+      return;
+    }
+    // A move longer than half the ring means the short way round is off the
+    // near edge and back in from the far one — sliding straight there would
+    // sweep this pet across every other tile.
+    if (Math.abs(target - from) <= span / 2) {
+      slot.value = withTiming(target, { duration: ROTATE_MS, easing: EASE });
+      return;
+    }
+    const dir = target > from ? -1 : 1;
+    const half = ROTATE_MS / 2;
+    slot.value = withSequence(
+      // Out past the near edge…
+      withTiming(from + dir, { duration: half, easing: Easing.in(Easing.quad) }),
+      // …cut, while invisible, to just outside the far edge…
+      withTiming(target - dir, { duration: 0 }),
+      // …and back in to the slot it was headed for.
+      withTiming(target, { duration: half, easing: Easing.out(Easing.quad) })
+    );
+    fade.value = withSequence(
+      withTiming(0, { duration: half, easing: Easing.in(Easing.quad) }),
+      withTiming(1, { duration: half, easing: Easing.out(Easing.quad) })
+    );
+  }, [target, span, reduceMotion, slot, fade]);
 
   const anim = useAnimatedStyle(() => {
-    if (reduceMotion) return { transform: [{ scale: 1 }], opacity: 1 };
-    const dist = Math.abs(scrollX.value / SLOT - index);
-    const scale = interpolate(dist, [0, 1], [1.16, 0.86], Extrapolation.CLAMP);
-    const opacity = interpolate(dist, [0, 1], [1, 0.55], Extrapolation.CLAMP);
-    return { transform: [{ scale }], opacity };
+    const x = slot.value * spread;
+    if (reduceMotion) return { transform: [{ translateX: x }], opacity: fade.value };
+    const d = Math.abs(slot.value);
+    return {
+      transform: [{ translateX: x }],
+      opacity: interpolate(d, [0, 1, 2], [1, 0.6, 0.36], Extrapolation.CLAMP) * fade.value,
+    };
   });
 
+  // Scale rides the avatar alone, never the tile: scaling the tile would also
+  // scale the name, rendering the selected pet's label at a fractional point
+  // size (blurry, and a different size to every other label in the app).
+  const avatarAnim = useAnimatedStyle(() => {
+    if (reduceMotion) return { transform: [{ scale: 1 }] };
+    return {
+      transform: [{ scale: interpolate(Math.abs(slot.value), [0, 1], [1.14, 0.84], Extrapolation.CLAMP) }],
+    };
+  });
+
+  // Only the centered pet's name stays legible — with a squeezed spread the
+  // neighbours' labels would otherwise run into one another.
+  const nameAnim = useAnimatedStyle(() => ({
+    opacity: interpolate(Math.abs(slot.value), [0, 0.6], [1, 0], Extrapolation.CLAMP),
+  }));
+
+  const selected = target === 0;
+
   return (
-    <View style={styles.slot}>
+    // zIndex rather than render order: re-sorting the children array to paint
+    // the centered pet last would detach and re-attach native views mid-flight.
+    <Animated.View style={[styles.tile, { zIndex: span - Math.abs(target) }, anim]} pointerEvents="box-none">
       <PressableScale
         haptic
         onPress={onPress}
+        onLongPress={onHold}
+        delayLongPress={PROFILE_HOLD_MS}
         accessibilityRole="button"
         accessibilityLabel={pet.name}
+        accessibilityHint={`Hold to open ${pet.name}'s profile`}
         accessibilityState={{ selected }}
         overflowsBounds
       >
         <View style={styles.item}>
-          <Animated.View style={[styles.avatarWrap, selected ? styles.avatarSelected : styles.avatarUnselected, anim]}>
+          <Animated.View style={[styles.avatarWrap, selected ? styles.avatarSelected : styles.avatarUnselected, avatarAnim]}>
             <PetAvatar pet={pet} size="md" />
           </Animated.View>
-          <Text numberOfLines={1} style={[styles.name, selected ? styles.nameSelected : null]}>
+          <Animated.Text numberOfLines={1} style={[styles.name, selected ? styles.nameSelected : null, nameAnim]}>
             {pet.name}
-          </Text>
+          </Animated.Text>
         </View>
       </PressableScale>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -214,8 +322,6 @@ const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     card: {
       marginTop: 12,
-      flexDirection: "row",
-      alignItems: "center",
       borderRadius: radius.md,
       backgroundColor: colors.card,
       borderWidth: StyleSheet.hairlineWidth,
@@ -223,8 +329,12 @@ const makeStyles = (colors: Colors) =>
       paddingVertical: 14,
       overflow: "hidden",
     },
-    scrollWrap: { flex: 1 },
-    slot: { width: SLOT, alignItems: "center" },
+    reel: { height: REEL_H },
+    // Stretched to all four edges so the tile's own centre IS the card's centre
+    // — translateX is then a pure offset from the middle of the page, and the
+    // tile stays vertically centred without the reel having to size to it
+    // (absolute children ignore the parent's justifyContent).
+    tile: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
     item: { alignItems: "center", width: TILE, paddingVertical: 2 },
     avatarWrap: {
       padding: 3,
@@ -243,9 +353,14 @@ const makeStyles = (colors: Colors) =>
     },
     nameSelected: { fontFamily: font.semibold, color: colors.label },
     addZone: {
+      position: "absolute",
+      right: 0,
+      top: 0,
+      bottom: 0,
       width: ADD_ZONE,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: colors.card,
       borderLeftWidth: StyleSheet.hairlineWidth,
       borderLeftColor: colors.sep,
     },
