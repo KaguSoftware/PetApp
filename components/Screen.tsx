@@ -1,30 +1,112 @@
 import { router, useNavigation } from "expo-router";
-import { useLayoutEffect, useMemo } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from "react-native";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ScrollViewProps } from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
+ * ONE header system — same mechanism on both platforms, on every screen.
+ *
+ * Every stack takes its options from `useNativeHeaderOptions`, and every page
+ * body is either a `TabScreen` (the top level of a tab) or a `PushedScreen`
+ * (anything pushed on top of one). That is the whole system. A screen that
+ * reaches for `navigation.setOptions` to build its own bar, or draws a top bar
+ * in its own content, drifts out of step with every other page — which is what
+ * made the header read as unreliable before this pass:
+ *
+ *  - tab pages hid the native header on Android and drew a 48pt stand-in
+ *    instead, so the bar was a different height, and briefly a DOUBLE bar on
+ *    mount (the native one showed for a frame before the effect hid it);
+ *  - the tab stacks defaulted `headerTitle: ""`, and a string headerTitle wins
+ *    over `title`, so screens pushed inside a tab (/logs/all) had no title;
+ *  - pushed screens let UIKit adjust their content insets while ALSO adding
+ *    their own, so the bottom gap was applied twice;
+ *  - screens pushed inside a tab reserved no room for the tab bar, which stays
+ *    on screen there, so their last rows sat behind it.
+ *
+ * Geometry that is now fixed rather than per page:
+ *  - the bar is the platform's native one everywhere (44pt + inset on iOS,
+ *    56pt + inset on Android) — no stand-in on either platform;
+ *  - every accessory lays out at HEADER_ITEM_HEIGHT, so a page with taller
+ *    controls can't stretch the bar (Android sizes its toolbar to its children);
+ *  - a tab page's title block occupies the same space with or without a
+ *    subtitle, and hands off to the compact title only once the big title has
+ *    actually scrolled away — never both at once;
+ *  - content insets are always set explicitly (`never`), never left to UIKit.
+ */
+
+/** Height every header accessory lays out at — see the geometry note above. */
+const HEADER_ITEM_HEIGHT = 38;
+
+/**
+ * `NativeTabs` (expo-router/unstable-native-tabs) does not feed the tab bar's
+ * height into the safe-area chain on either platform: `insets.bottom` only
+ * reflects the home-indicator/gesture inset underneath the bar, not the bar
+ * itself. Without an explicit allowance, the last ~50pt of scrollable content
+ * sits behind the bar.
+ */
+const IOS_TAB_BAR_HEIGHT = 49;
+const ANDROID_TAB_BAR_HEIGHT = 56;
+const TAB_BAR_HEIGHT = Platform.OS === "android" ? ANDROID_TAB_BAR_HEIGHT : IOS_TAB_BAR_HEIGHT;
+
+/** Gap between the nav bar and the first row of content on a pushed screen. */
+const CONTENT_TOP_PAD = 10;
+/** Gap between a tab page's title block and its content — constant whether or
+ * not that page has a subtitle, so tabs don't start at different heights. */
+const TITLE_BLOCK_BOTTOM_PAD = 12;
+/** Page-body side padding. Shared so both scaffolds gutter identically. */
+const CONTENT_SIDE_PAD = 16;
+
+/**
+ * True for every screen rendered inside the tab navigator — including screens
+ * PUSHED inside a tab's own stack (/logs/all), where the tab bar is still on
+ * screen and still has to be cleared. Provided statically by
+ * app/(tabs)/_layout.tsx rather than derived from the current route, so an
+ * unfocused screen re-rendering can never flip it.
+ */
+const InsideTabsContext = createContext(false);
+export const InsideTabs = InsideTabsContext.Provider;
+
+/** Bottom space a page must reserve: its own breathing room, the home
+ * indicator (with a floor so content never hugs the edge) and, under the tab
+ * navigator, the tab bar. One formula for every scroll view in the app. */
+function useBottomAllowance(extra: number) {
+  const insets = useSafeAreaInsets();
+  const insideTabs = useContext(InsideTabsContext);
+  return extra + Math.max(insets.bottom, 12) + (insideTabs ? TAB_BAR_HEIGHT : 0);
+}
+
+/**
  * The compact nav-bar title (WhatsApp/iOS style). It stays hidden while the big
  * in-content title is visible, then fades in once that title has scrolled up
  * and out of view. Driven by the shared scroll offset from TabScreen.
+ *
+ * The handoff range is MEASURED, not guessed: `handoff` is the scroll offset at
+ * which the big title's bottom edge crosses under the bar. Fixed thresholds
+ * (the old 24→60) fade in while the big title is still on screen on some pages
+ * and long after it's gone on others — i.e. two titles stacked, or a bar that
+ * reads as empty, depending on the page's type scale.
  */
-// Scroll offsets (px) over which the big title hands off to the compact one.
-// The compact title stays hidden until FADE_START, then eases fully in by
-// FADE_END — roughly the span where the big in-content title scrolls away.
-const FADE_START = 24;
-const FADE_END = 60;
-
-function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: SharedValue<number> }) {
+function CollapsingHeaderTitle({
+  title,
+  scrollY,
+  handoff,
+}: {
+  title: string;
+  scrollY: SharedValue<number>;
+  handoff: SharedValue<number>;
+}) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const style = useAnimatedStyle(() => {
-    // Linear progress across the handoff range, then eased with a smoothstep
-    // (3t²−2t³) so the fade accelerates in and decelerates out instead of
-    // snapping at the thresholds — the "smooth" feel.
-    const t = interpolate(scrollY.value, [FADE_START, FADE_END], [0, 1], Extrapolation.CLAMP);
+    // Starts fading in when the big title is a bit under halfway gone and is
+    // fully in exactly as it disappears, then eased with a smoothstep
+    // (3t²−2t³) so it accelerates in and decelerates out instead of snapping
+    // at the thresholds — the "smooth" feel.
+    const end = Math.max(handoff.value, 1);
+    const t = interpolate(scrollY.value, [end * 0.45, end], [0, 1], Extrapolation.CLAMP);
     const eased = t * t * (3 - 2 * t);
     return {
       opacity: eased,
@@ -33,7 +115,16 @@ function CollapsingHeaderTitle({ title, scrollY }: { title: string; scrollY: Sha
       transform: [{ translateY: (1 - eased) * 6 }],
     };
   });
-  return <Animated.Text style={[styles.collapsedTitle, style]}>{title}</Animated.Text>;
+  return (
+    // Fixed-height wrapper: Android measures its toolbar against this view, so
+    // letting it size to the text would make the bar's height depend on the
+    // font metrics of whatever page you're on.
+    <View style={styles.headerTitleWrap} pointerEvents="none">
+      <Animated.Text numberOfLines={1} style={[styles.collapsedTitle, style]}>
+        {title}
+      </Animated.Text>
+    </View>
+  );
 }
 
 /**
@@ -79,16 +170,22 @@ function HeaderBackButton() {
 }
 
 /**
- * Native UINavigationBar styling shared by every stack in the app. Real
- * system chrome — large titles that collapse with UIKit physics, blur under
- * the bar, interactive edge-swipe pop. The back button is the one exception
- * to "no hand-rolled chrome" (see HeaderBackButton for why).
+ * Native UINavigationBar/Toolbar options for EVERY stack in the app — root,
+ * onboarding and the five tab stacks all pass this same object, so the bar can
+ * only ever look and measure one way. Real system chrome: blur under the bar as
+ * content scrolls, interactive edge-swipe pop. The back button is the one
+ * exception to "no hand-rolled chrome" (see HeaderBackButton for why).
+ *
+ * Call it inside a Stack's parent component — it's theme-aware.
  */
-/** Native UINavigationBar options, theme-aware — call inside a Stack's parent component. */
 export function useNativeHeaderOptions() {
   const colors = useColors();
   return useMemo(
     () => ({
+      // Blank unless a screen sets its own. Without this every screen falls
+      // back to its ROUTE NAME ("[id]", "index") the moment its own title
+      // hasn't been applied yet.
+      title: "",
       // A standard OPAQUE native header. iOS gives it the system material and
       // auto-blurs it as content scrolls under — a *transparent* header here left a
       // blank gap with no title painted, so we let UIKit own the background.
@@ -113,8 +210,9 @@ export function useNativeHeaderOptions() {
       // rendered too short: its icons (gear/bell/coin) landed underneath the
       // system status bar instead of below it. This tells screens the status bar
       // really is translucent/overlaid, so it adds the correct inset to the
-      // header height. iOS ignores this option — its header already accounts for
-      // the notch/Dynamic Island on its own.
+      // header height (react-navigation maps it straight to the header's
+      // `topInsetEnabled`). iOS ignores this option — its header already
+      // accounts for the notch/Dynamic Island on its own.
       statusBarTranslucent: true,
     }),
     [colors]
@@ -122,16 +220,11 @@ export function useNativeHeaderOptions() {
 }
 
 /**
- * Tab stacks render their big title as in-content text (see TabScreen), not as
- * a native large title — the native large-title header did not paint reliably
- * in Expo Go on iOS (blank gap, no title). We keep a normal small header only
- * for the trailing accessories (coins + bell), with no title text of its own.
+ * The header's trailing island. Always exactly ONE view at a fixed height:
+ * `headerRight` is wrapped in a single UIBarButtonItem and react-native-screens'
+ * hit test returns on the first right subview it finds, and on Android the
+ * toolbar grows to fit whatever it's given. See components/HeaderActions.tsx.
  */
-export function useTabStackScreenOptions() {
-  const base = useNativeHeaderOptions();
-  return useMemo(() => ({ ...base, headerTitle: "" }), [base]);
-}
-
 function HeaderTrailing({ children }: { children: React.ReactNode }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -139,22 +232,11 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * `NativeTabs` (expo-router/unstable-native-tabs) does not feed the tab bar's
- * height into the safe-area chain on either platform: `insets.bottom` only
- * reflects the home-indicator/gesture inset underneath the bar, not the bar
- * itself. Without an explicit allowance, the last ~50–56pt of scrollable
- * content sits behind the bar.
- */
-const ANDROID_TAB_BAR_HEIGHT = 56;
-const IOS_TAB_BAR_HEIGHT = 49;
-
-/** Height of the Android sticky header bar itself, sitting below the status-bar inset. */
-const ANDROID_HEADER_HEIGHT = 48;
-
-/**
- * Top-level tab page scaffold. The big page title is rendered as in-content
- * text (reliable everywhere), while the small native header carries only the
- * trailing accessories (coins + bell). Content starts just below that header.
+ * Top-level tab page scaffold: the native bar carries the trailing accessories
+ * (coins + bell + gear) and the compact title that fades in on scroll, while
+ * the page's big title is in-content text right beneath it — the iOS
+ * large-title idiom, hand-driven because the native large title did not paint
+ * reliably in Expo Go on iOS (blank gap, no title).
  */
 export function TabScreen({
   title,
@@ -178,137 +260,122 @@ export function TabScreen({
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-
-  // iOS keeps the native header for the trailing accessories (it clears the
-  // notch reliably). On Android the native header's status-bar inset proved
-  // unreliable under edge-to-edge (accessories rendered UNDER the status bar,
-  // whatever we set for statusBarTranslucent/topInsetEnabled), so instead we
-  // hide the native header on Android and render the same accessories as an
-  // in-content row, offset by the real measured `insets.top`. That inset is
-  // ours to control, so the row is guaranteed to sit below the status bar.
-  const isAndroid = Platform.OS === "android";
+  const paddingBottom = useBottomAllowance(contentBottomPad);
 
   // WhatsApp-style collapsing title: the big in-content title stays as the
   // page's main heading; a compact title fades into the nav bar only once the
   // big one has scrolled away. `scrollY` is the live scroll offset that drives
-  // that fade (see CollapsingHeaderTitle).
+  // that fade, `handoff` the offset at which the big title clears the bar.
   const scrollY = useSharedValue(0);
+  const handoff = useSharedValue(HEADER_ITEM_HEIGHT);
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
+  // The big title's bottom edge, in content coordinates. `layout.y` already
+  // includes the block's top padding, and the block is the first child of a
+  // container with no top padding, so this IS the scroll offset at which the
+  // title disappears under the bar.
+  const onTitleLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      handoff.value = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+    },
+    [handoff]
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      // Compact nav-bar title that fades in on scroll (iOS only — Android has
-      // no native header here). Empty on Android.
-      headerTitle: !isAndroid ? () => <CollapsingHeaderTitle title={title} scrollY={scrollY} /> : "",
-      headerShown: !isAndroid,
-      headerRight: !isAndroid && trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
+      headerTitle: () => <CollapsingHeaderTitle title={title} scrollY={scrollY} handoff={handoff} />,
+      headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
-  }, [navigation, title, trailing, isAndroid, scrollY]);
+  }, [navigation, title, trailing, scrollY, handoff]);
 
   return (
     <View style={styles.root}>
       <Animated.ScrollView
         style={styles.root}
-        // `never` so the scroll offset starts at 0 (not the header inset), making
-        // the fade thresholds in CollapsingHeaderTitle predictable. The big title
-        // sits directly under the opaque header.
+        // `never` on every scroll view in the app: the opaque header already
+        // lays content out beneath itself (react-native-screens sets
+        // edgesForExtendedLayout minus the top edge), so letting UIKit adjust
+        // insets on top of that only ever double-counts. It also keeps the
+        // scroll offset starting at 0, which is what makes the title handoff
+        // above predictable.
         contentInsetAdjustmentBehavior="never"
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          // Content begins just below the opaque header. On Android the accessory
-          // row is a pinned overlay outside this ScrollView, so content must
-          // reserve the status-bar inset plus the bar's own height. iOS: no extra
-          // gap (pageTitle has its own small top padding) — keeps the big title
-          // tucked under the native header.
-          paddingTop: isAndroid ? insets.top + ANDROID_HEADER_HEIGHT : 0,
-          paddingBottom:
-            contentBottomPad + Math.max(insets.bottom, 12) + (isAndroid ? ANDROID_TAB_BAR_HEIGHT : IOS_TAB_BAR_HEIGHT),
-          paddingHorizontal: 16,
-        }}
+        contentContainerStyle={{ paddingBottom, paddingHorizontal: CONTENT_SIDE_PAD }}
         {...scrollProps}
       >
-        <Text style={styles.pageTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {/* One block, one constant gap to the content below it — a page with a
+            subtitle and a page without must still start at the same height. */}
+        <View style={styles.titleBlock}>
+          <Text style={styles.pageTitle} onLayout={onTitleLayout}>
+            {title}
+          </Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
         {children}
       </Animated.ScrollView>
       {overlay}
-      {/* Android stand-in for the native header. Pinned outside the ScrollView so
-          it stays put while content scrolls under it, carrying the same
-          scroll-driven collapsing title iOS gets from its nav bar.
-
-          CRITICAL — `top: insets.top`, NOT top:0 with paddingTop. Under
-          `edgeToEdgeEnabled` the status-bar strip is composited by the system
-          over app content; an opaque layer intruding into that strip changes
-          what paints there. Starting the bar BELOW the inset leaves that strip
-          untouched, so <StatusBar style="dark" /> keeps working as before. */}
-      {isAndroid ? (
-        <>
-          {/* Opaque fill for the status-bar strip itself. Separate from the bar
-              below so it is pure background — no children, no touch handling —
-              which keeps it out of the way of expo-status-bar's icon
-              compositing under edgeToEdgeEnabled. Without it, content scrolls
-              visibly behind the clock and battery icons. */}
-          <View style={[styles.androidStatusFill, { height: insets.top }]} pointerEvents="none" />
-          <View style={[styles.androidHeader, { top: insets.top }]} pointerEvents="box-none">
-            <View style={styles.androidHeaderTitle} pointerEvents="none">
-              <CollapsingHeaderTitle title={title} scrollY={scrollY} />
-            </View>
-            {trailing ? <HeaderTrailing>{trailing}</HeaderTrailing> : null}
-          </View>
-        </>
-      ) : null}
     </View>
   );
 }
 
 /**
- * Pushed detail screen scaffold: native inline header (back chevron comes from
- * the system), scrollable body inset under the transparent bar.
+ * Pushed detail screen scaffold: the same native bar as everywhere else, with
+ * the title in the bar (back chevron on the left, optional accessory island on
+ * the right) and the body scrolling beneath it.
  */
 export function PushedScreen({
   title,
   trailing,
   children,
   scroll = true,
+  contentBottomPad = 32,
   ...scrollProps
 }: {
   title?: string;
   trailing?: React.ReactNode;
   children: React.ReactNode;
   scroll?: boolean;
+  /** Extra bottom breathing room, on top of the tab-bar + safe-area allowance. */
+  contentBottomPad?: number;
 } & ScrollViewProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
+  const paddingBottom = useBottomAllowance(contentBottomPad);
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      // `title`, never `headerTitle` — a string headerTitle anywhere in the
+      // options chain wins over every screen's own title (getHeaderTitle in
+      // @react-navigation/elements), which is how pushed screens inside a tab
+      // stack ended up with a blank bar.
       title: title ?? "",
       headerRight: trailing ? () => <HeaderTrailing>{trailing}</HeaderTrailing> : undefined,
     });
   }, [navigation, title, trailing]);
 
   if (!scroll) {
-    return <View style={[styles.root, { paddingTop: 10 }]}>{children}</View>;
+    return (
+      <View style={[styles.root, { paddingTop: CONTENT_TOP_PAD, paddingBottom, paddingHorizontal: CONTENT_SIDE_PAD }]}>
+        {children}
+      </View>
+    );
   }
   return (
     <ScrollView
       style={styles.root}
-      contentInsetAdjustmentBehavior="automatic"
+      // See the matching note in TabScreen — insets are ours, not UIKit's.
+      contentInsetAdjustmentBehavior="never"
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        // Opaque header → content already sits below it on both platforms.
-        paddingTop: 10,
-        paddingBottom: insets.bottom + 32,
-        paddingHorizontal: 16,
+        paddingTop: CONTENT_TOP_PAD,
+        paddingBottom,
+        paddingHorizontal: CONTENT_SIDE_PAD,
       }}
       // Spread last so callers can pass `refreshControl` (usePullToRefresh) and
       // override the defaults above, matching TabScreen.
@@ -321,30 +388,19 @@ export function PushedScreen({
 
 const makeStyles = (colors: Colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-  // Android-only stand-in for the native header, which couldn't be trusted to
-  // clear the status bar under edge-to-edge. Pinned over the ScrollView (not
-  // inside it) so it behaves like iOS's nav bar: sticky, opaque, content
-  // scrolling underneath, collapsed title left and accessories right. `top` is
-  // set inline from the live safe-area inset — see the render site for why it
-  // must not extend into the status-bar strip.
-  androidHeader: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: ANDROID_HEADER_HEIGHT,
+  titleBlock: { paddingHorizontal: 4, paddingTop: 4, paddingBottom: TITLE_BLOCK_BOTTOM_PAD },
+  pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label },
+  subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingTop: 2 },
+  // Both header accessories are pinned to the same height so the bar measures
+  // the same on every page (Android sizes its toolbar to its children).
+  headerTitleWrap: { height: HEADER_ITEM_HEIGHT, justifyContent: "center", flexShrink: 1, minWidth: 0 },
+  headerTrailing: {
+    height: HEADER_ITEM_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    backgroundColor: colors.bg,
+    gap: 12,
+    paddingRight: Platform.OS === "android" ? 4 : 0,
   },
-  androidHeaderTitle: { flex: 1, minWidth: 0 },
-  // Status-bar strip fill (height set inline from the live inset). Deliberately
-  // childless and pointerEvents="none" — see the render site.
-  androidStatusFill: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: colors.bg },
-  pageTitle: { fontSize: 32, fontFamily: font.bold, letterSpacing: -0.6, color: colors.label, paddingHorizontal: 4, paddingTop: 4 },
-  subtitle: { fontSize: 15, fontFamily: font.medium, color: colors.label2, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 10 },
-  headerTrailing: { flexDirection: "row", alignItems: "center", gap: 12, paddingRight: Platform.OS === "android" ? 4 : 0 },
   // Custom back item (see HeaderBackButton). Mirrors the system metrics: 17pt
   // label, chevron tucked 4px left of it, 44pt-tall touch area via hitSlop.
   // flexShrink: 0 on both: the UIBarButtonItem width-constrains this row, and

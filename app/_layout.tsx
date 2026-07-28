@@ -65,7 +65,7 @@ function RootStack() {
   const { session } = useSession();
   return (
     <ThemeProvider value={navTheme}>
-      <Stack screenOptions={{ ...nativeHeaderOptions, title: "" }}>
+      <Stack screenOptions={nativeHeaderOptions}>
         {/* Session gating lives HERE, once, for every route. Screens not
             listed inside a Protected block are auto-registered UNGUARDED by
             expo-router — every new root-level route file must be added to the

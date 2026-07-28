@@ -240,8 +240,11 @@ export default function RemindersScreen() {
     );
   };
 
+  // Same pair of controls as the loading state above — this branch used to drop
+  // the filter button once the data arrived, which left FilterSheet (below)
+  // mounted with nothing left on screen able to open it.
   return (
-    <PushedScreen title="Reminders" trailing={addButton} refreshControl={refreshControl}>
+    <PushedScreen title="Reminders" trailing={headerTrailing} refreshControl={refreshControl}>
       {upcoming.length > 0 ? (
         agenda.map((g) => (
           <View key={g.day}>

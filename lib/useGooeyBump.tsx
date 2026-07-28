@@ -210,9 +210,15 @@ export function useGooeyGlow(value: number, key: string, enabled = true) {
     }
   }, [value, key, enabled, reduceMotion, glow]);
 
+  // The bloom is deliberately small. A transform is not layout: the pill still
+  // occupies its original box, so anything the halo gains in scale is drawn
+  // straight over whatever sits next to it in the header island. At 1.18 on the
+  // widest pill (~75pt) it reaches ~7pt past its own edge, which the island's
+  // 10pt gap absorbs (components/HeaderActions.tsx). The read comes from the
+  // opacity swell and the hold, not from the size.
   const style = useAnimatedStyle<ViewStyle>(() => ({
     opacity: glow.value * 0.55,
-    transform: [{ scale: 1 + glow.value * 0.35 }],
+    transform: [{ scale: 1 + glow.value * 0.18 }],
   }));
 
   return style;

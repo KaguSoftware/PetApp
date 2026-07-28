@@ -9,7 +9,7 @@ export const unstable_settings = { initialRouteName: "index", anchor: "index" };
 export default function OnboardingLayout() {
   const nativeHeaderOptions = useNativeHeaderOptions();
   return (
-    <Stack screenOptions={{ ...nativeHeaderOptions, title: "" }}>
+    <Stack screenOptions={nativeHeaderOptions}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
     </Stack>
   );

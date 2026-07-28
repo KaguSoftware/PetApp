@@ -383,7 +383,12 @@ export function CoinPill({ amount, onPress }: { amount: number; onPress?: () => 
       <Animated.View pointerEvents="none" style={[styles.coinGlow, glow]} />
       <Animated.View style={[styles.coinPill, Platform.OS === "ios" && styles.coinPillOpaque, anim]}>
         <PixelSprite sprite={COIN_SPRITE} size={13} />
-        <Text style={styles.coinPillLabel}>{amount.toLocaleString()}</Text>
+        {/* One line, always: a balance that wrapped would make the pill taller
+            than the rest of the island and, on Android, the whole toolbar with
+            it. The pill widens with the number instead. */}
+        <Text style={styles.coinPillLabel} numberOfLines={1}>
+          {amount.toLocaleString()}
+        </Text>
       </Animated.View>
     </View>
   );

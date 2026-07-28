@@ -12,14 +12,15 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import BreedFactsSection from "@/components/BreedFactsSection";
 import EmptyState from "@/components/EmptyState";
 import EditStatSheet from "@/components/EditStatSheet";
 import HeaderActions from "@/components/HeaderActions";
-import HighlightsSection from "@/components/HighlightsSection";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import ShortcutsSection from "@/components/ShortcutsSection";
+import StockStrip from "@/components/StockStrip";
 import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
 import { Icon } from "@/components/Icons";
@@ -51,7 +52,10 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
         <Animated.View pointerEvents="none" style={[styles.streakGlow, glow]} />
         <Animated.View style={[styles.streakPill, anim]}>
           <Icon name="flame" size={14} color={colors.orange} />
-          <Text style={styles.streakPillLabel}>{streak}</Text>
+          {/* One line, always — see the matching note on CoinPill. */}
+          <Text style={styles.streakPillLabel} numberOfLines={1}>
+            {streak}
+          </Text>
         </Animated.View>
       </View>
     </PressableScale>
@@ -446,6 +450,9 @@ export default function Home() {
         )}
       </View>
 
+      {/* This pet's supply levels, right off the hero — colour + percentage only */}
+      <StockStrip pet={pet} />
+
       {/* One calm entry point for everything that needs attention */}
       {alertCount > 0 && (
         <PressableScale onPress={() => router.push("/activity")} accessibilityRole="button" style={{ marginTop: 12 }}>
@@ -461,11 +468,9 @@ export default function Home() {
         </PressableScale>
       )}
 
-      {/* One-tap logging for the things this family does every day */}
-      <ShortcutsSection />
-
-      {/* Collective supply levels — what needs buying next */}
-      <HighlightsSection />
+      {/* One-tap logging for the things this family does every day — the fixed
+          buttons log against whichever pet the carousel above is showing */}
+      <ShortcutsSection pet={pet} />
 
       {/* Every pet's next reminders, each tagged with whose it is */}
       <SectionHeader
@@ -532,6 +537,10 @@ export default function Home() {
           />
         )}
       </Group>
+
+      {/* Ambient breed trivia about whichever pet the hero is showing — closes
+          the page on a light note, below everything actionable */}
+      <BreedFactsSection pet={pet} />
 
       {/* Switch pet */}
       <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
