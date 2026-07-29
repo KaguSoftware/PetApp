@@ -2,6 +2,8 @@ import * as Haptics from "expo-haptics";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  InputAccessoryView,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -511,7 +513,10 @@ export function FieldLabel({ children }: { children: string }) {
 }
 
 /** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
-export const TextField = forwardRef<TextInput, TextInputProps>(function TextField(props, ref) {
+export const TextField = forwardRef<TextInput, TextInputProps & { invalid?: boolean }>(function TextField(
+  { invalid = false, ...props },
+  ref,
+) {
   const colors = useColors();
   const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   const [focused, setFocused] = useState(false);
@@ -528,10 +533,56 @@ export const TextField = forwardRef<TextInput, TextInputProps>(function TextFiel
         setFocused(false);
         props.onBlur?.(e);
       }}
-      style={[primStyles.textField, focused && primStyles.textFieldFocused, props.style]}
+      // Invalid wins over focus: a field the user is fixing must keep showing
+      // it's the problem, not switch back to the neutral accent ring the moment
+      // it's tapped. The base style already carries a 1pt border, so swapping
+      // the color can't shift layout.
+      style={[
+        primStyles.textField,
+        focused && primStyles.textFieldFocused,
+        invalid && primStyles.textFieldInvalid,
+        props.style,
+      ]}
     />
   );
 });
+
+/**
+ * The shared id for the keyboard Done toolbar. Pass it to a TextField as
+ * `inputAccessoryViewID` and render one <KeyboardDoneAccessory /> on the screen.
+ */
+export const DONE_ACCESSORY_ID = "done-accessory";
+
+/**
+ * iOS's native "Done" bar above the keyboard. Numeric keyboards
+ * (decimal-pad/number-pad) have NO return key, so without this there is no way
+ * to dismiss them but tapping elsewhere — `returnKeyType="done"` is silently
+ * ignored on those keyboards.
+ *
+ * iOS-only by design: InputAccessoryView is not implemented on Android, and
+ * Android's software keyboard already provides its own dismiss affordance in
+ * the system nav bar. Renders null there rather than faking a bar.
+ */
+export function KeyboardDoneAccessory({ label = "Done" }: { label?: string }) {
+  const colors = useColors();
+  const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
+  if (Platform.OS !== "ios") return null;
+  return (
+    <InputAccessoryView nativeID={DONE_ACCESSORY_ID}>
+      <View style={primStyles.doneBar}>
+        <Pressable
+          onPress={() => Keyboard.dismiss()}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          hitSlop={8}
+          style={({ pressed }) => [primStyles.doneButton, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={primStyles.doneLabel}>{label}</Text>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}
 
 export function SheetFooter({ children }: { children: React.ReactNode }) {
   const colors = useColors();
@@ -685,6 +736,20 @@ export function SmallButton({
 }
 
 const makePrimStyles = (colors: Colors) => StyleSheet.create({
+  // Mirrors UIKit's keyboard toolbar: full-bleed bar, hairline top rule, the
+  // action right-aligned in accent blue at semibold — iOS's own "Done" metrics.
+  doneBar: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    backgroundColor: colors.card,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.sep,
+  },
+  doneButton: { paddingHorizontal: 8, paddingVertical: 6 },
+  doneLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.accent },
   sheetTitle: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.4, color: colors.label, paddingHorizontal: 4 },
   sheetSubtitle: { marginTop: 2, fontSize: 14, fontFamily: font.regular, lineHeight: 19, color: colors.label2, paddingHorizontal: 4 },
   fieldLabel: {
@@ -715,6 +780,14 @@ const makePrimStyles = (colors: Colors) => StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+  },
+  // Error ring for a required field left empty/invalid. Slightly thicker than
+  // the 1pt resting border so it reads at a glance; the base style reserves the
+  // border box, so only the width delta (1pt) can affect layout.
+  textFieldInvalid: {
+    borderColor: colors.red,
+    borderWidth: 1.5,
+    shadowOpacity: 0,
   },
   sheetFooter: { marginTop: 28 },
   footnote: { marginTop: 10, textAlign: "center", fontSize: 12, fontFamily: font.regular, lineHeight: 17, color: colors.label3 },

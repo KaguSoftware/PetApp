@@ -309,10 +309,15 @@ export function TabScreen({
         // scroll offset starting at 0, which is what makes the title handoff
         // above predictable.
         contentInsetAdjustmentBehavior="never"
+        // Same reasoning as PushedScreen: keyboard height becomes a scroll
+        // inset so focused inputs rise above the keyboard rather than hiding
+        // behind it.
+        automaticallyAdjustKeyboardInsets
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         contentContainerStyle={{ paddingBottom, paddingHorizontal: CONTENT_SIDE_PAD }}
         {...scrollProps}
       >
@@ -379,8 +384,15 @@ export function PushedScreen({
       style={styles.root}
       // See the matching note in TabScreen — insets are ours, not UIKit's.
       contentInsetAdjustmentBehavior="never"
+      // Lifts the content above the keyboard instead of letting it cover the
+      // lower fields (iOS). This adds the keyboard height as a SCROLL inset, so
+      // the focused field scrolls into view and every field below it stays
+      // reachable — a KeyboardAvoidingView would instead squeeze the whole
+      // frame. Android gets the same effect from `resize` soft-input mode.
+      automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
       contentContainerStyle={{
         paddingTop: CONTENT_TOP_PAD,
         paddingBottom,

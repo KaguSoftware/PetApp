@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import BreedField from "@/components/BreedField";
+import { Icon } from "@/components/Icons";
 import { PushedScreen } from "@/components/Screen";
 import SpeciesField from "@/components/SpeciesField";
-import { AccentButton, FieldLabel, Segmented, TextField } from "@/components/ui";
+import { DONE_ACCESSORY_ID, FieldLabel, KeyboardDoneAccessory, Segmented, TextField } from "@/components/ui";
 import { BREEDS_BY_SPECIES, cmToUnit, kgToUnit, lengthUnitLabel, OTHER_BREED, unitToCm, unitToKg, weightUnitLabel } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -73,24 +74,86 @@ export default function AddPetPage() {
   // a real positive number so it doesn't silently save as NaN/0.
   const parsedHeightUnit = heightInput.trim() ? Number(heightInput) : undefined;
   const parsedLengthUnit = lengthInput.trim() ? Number(lengthInput) : undefined;
-  const valid =
-    petName.trim().length > 0 &&
-    Number.isFinite(parsedAge) &&
-    parsedAge >= 0 &&
-    Number.isFinite(parsedWeightUnit) &&
-    parsedWeightUnit > 0 &&
-    Number.isFinite(parsedCup) &&
-    parsedCup > 0 &&
-    (parsedHeightUnit == null || (Number.isFinite(parsedHeightUnit) && parsedHeightUnit > 0)) &&
-    (parsedLengthUnit == null || (Number.isFinite(parsedLengthUnit) && parsedLengthUnit > 0));
+
+  // Per-field validity, so a failed submit can point at the exact boxes that
+  // need attention instead of just refusing to do anything.
+  //
+  // The `.trim()` guards are load-bearing: Number("") and Number(" ") are both
+  // 0, not NaN, so a blank age would otherwise pass `>= 0` and save as zero.
+  const nameOk = petName.trim().length > 0;
+  const ageOk = ageInput.trim() !== "" && Number.isFinite(parsedAge) && parsedAge >= 0;
+  const weightOk = weightInput.trim() !== "" && Number.isFinite(parsedWeightUnit) && parsedWeightUnit > 0;
+  const cupOk = cupInput.trim() !== "" && Number.isFinite(parsedCup) && parsedCup > 0;
+  const heightOk = parsedHeightUnit == null || (Number.isFinite(parsedHeightUnit) && parsedHeightUnit > 0);
+  const lengthOk = parsedLengthUnit == null || (Number.isFinite(parsedLengthUnit) && parsedLengthUnit > 0);
+  const valid = nameOk && ageOk && weightOk && cupOk && heightOk && lengthOk;
+
+  // Errors stay hidden until the first failed submit — a form that turns red
+  // while you're still filling in the first box is hostile. After that they
+  // stay live so each field clears as it's fixed.
+  const [showErrors, setShowErrors] = useState(false);
+
+  const submit = () => {
+    if (!valid) {
+      setShowErrors(true);
+      Keyboard.dismiss();
+      return;
+    }
+    addPet({
+      name: petName.trim(),
+      species,
+      breed: resolvedBreed,
+      gender: gender === "unset" ? undefined : gender,
+      ageYears: parsedAge,
+      weightKg: unitToKg(parsedWeightUnit, state.units),
+      cupGrams: Math.round(parsedCup),
+      heightCm: parsedHeightUnit != null ? unitToCm(parsedHeightUnit, state.units) : undefined,
+      lengthCm: parsedLengthUnit != null ? unitToCm(parsedLengthUnit, state.units) : undefined,
+    });
+    if (onboarding === "1") router.replace("/(onboarding)/invite");
+    else router.back();
+  };
+
+  // Submit lives in the nav bar as a confirm checkmark rather than a button at
+  // the bottom of the form. Chromeless — no pill, no fill — so it matches the
+  // other nav-bar glyphs.
+  //
+  // Deliberately NOT `disabled` when the form is incomplete: pressing it is how
+  // the user asks "what's missing?", and a disabled Pressable swallows the
+  // press, so the red borders would never appear. It dims instead, and `submit`
+  // decides whether to save or surface the errors.
+  const saveButton = (
+    <Pressable
+      onPress={submit}
+      accessibilityRole="button"
+      accessibilityLabel="Add to family"
+      hitSlop={6}
+      style={({ pressed }) => [styles.saveButton, pressed && { opacity: 0.6 }]}
+    >
+      <Icon
+        name="check"
+        size={Platform.OS === "ios" ? 25 : 21}
+        color={valid ? colors.accent : colors.label3}
+        strokeWidth={2.5}
+      />
+    </Pressable>
+  );
 
   return (
-    <PushedScreen title="Add a pet">
+    <PushedScreen title="Add a pet" trailing={saveButton}>
       <FieldLabel>Name</FieldLabel>
-      <TextField value={petName} onChangeText={setPetName} placeholder="e.g. Mochi" returnKeyType="done" />
+      <TextField
+        value={petName}
+        onChangeText={setPetName}
+        placeholder="e.g. Mochi"
+        returnKeyType="done"
+        onSubmitEditing={() => Keyboard.dismiss()}
+        invalid={showErrors && !nameOk}
+      />
 
       <FieldLabel>Species</FieldLabel>
       <SpeciesField
+        presentation="sheet"
         species={species}
         onChangeSpecies={(s) => {
           setSpecies(s);
@@ -101,7 +164,14 @@ export default function AddPetPage() {
       />
 
       <FieldLabel>Breed</FieldLabel>
-      <BreedField species={species} breed={breed} customBreed={customBreed} onChangeBreed={setBreed} onChangeCustomBreed={setCustomBreed} />
+      <BreedField
+        presentation="sheet"
+        species={species}
+        breed={breed}
+        customBreed={customBreed}
+        onChangeBreed={setBreed}
+        onChangeCustomBreed={setCustomBreed}
+      />
       <Text style={styles.breedHint}>
         {isOtherBreed
           ? "Not on the list — you'll set custom feeding/water/care targets on the Care tab."
@@ -122,16 +192,37 @@ export default function AddPetPage() {
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1 }}>
           <FieldLabel>Age (years)</FieldLabel>
-          <TextField value={ageInput} onChangeText={setAgeInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="1" />
+          <TextField
+            value={ageInput}
+            onChangeText={setAgeInput}
+            keyboardType="decimal-pad"
+            inputAccessoryViewID={DONE_ACCESSORY_ID}
+            placeholder="1"
+            invalid={showErrors && !ageOk}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
-          <TextField value={weightInput} onChangeText={setWeightInput} keyboardType="decimal-pad" returnKeyType="done" placeholder="0" />
+          <TextField
+            value={weightInput}
+            onChangeText={setWeightInput}
+            keyboardType="decimal-pad"
+            inputAccessoryViewID={DONE_ACCESSORY_ID}
+            placeholder="0"
+            invalid={showErrors && !weightOk}
+          />
         </View>
       </View>
 
       <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
-      <TextField value={cupInput} onChangeText={setCupInput} keyboardType="number-pad" returnKeyType="done" placeholder="60" />
+      <TextField
+        value={cupInput}
+        onChangeText={setCupInput}
+        keyboardType="number-pad"
+        inputAccessoryViewID={DONE_ACCESSORY_ID}
+        placeholder="60"
+        invalid={showErrors && !cupOk}
+      />
 
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1 }}>
@@ -140,8 +231,9 @@ export default function AddPetPage() {
             value={heightInput}
             onChangeText={(t) => setHeightInput(sanitizeMeasurement(t))}
             keyboardType="decimal-pad"
-            returnKeyType="done"
+            inputAccessoryViewID={DONE_ACCESSORY_ID}
             placeholder="0"
+            invalid={showErrors && !heightOk}
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -150,35 +242,17 @@ export default function AddPetPage() {
             value={lengthInput}
             onChangeText={(t) => setLengthInput(sanitizeMeasurement(t))}
             keyboardType="decimal-pad"
-            returnKeyType="done"
+            inputAccessoryViewID={DONE_ACCESSORY_ID}
             placeholder="0"
+            invalid={showErrors && !lengthOk}
           />
         </View>
       </View>
       <Text style={styles.breedHint}>Optional — helps size the care plan later.</Text>
 
-      <View style={{ marginTop: 24 }}>
-        <AccentButton
-          disabled={!valid}
-          onPress={() => {
-            addPet({
-              name: petName.trim(),
-              species,
-              breed: resolvedBreed,
-              gender: gender === "unset" ? undefined : gender,
-              ageYears: parsedAge,
-              weightKg: unitToKg(parsedWeightUnit, state.units),
-              cupGrams: Math.round(parsedCup),
-              heightCm: parsedHeightUnit != null ? unitToCm(parsedHeightUnit, state.units) : undefined,
-              lengthCm: parsedLengthUnit != null ? unitToCm(parsedLengthUnit, state.units) : undefined,
-            });
-            if (onboarding === "1") router.replace("/(onboarding)/invite");
-            else router.back();
-          }}
-        >
-          Add to family
-        </AccentButton>
-      </View>
+      {/* One toolbar for every numeric field above — they share DONE_ACCESSORY_ID,
+          and iOS attaches whichever accessory matches the focused input. */}
+      <KeyboardDoneAccessory />
     </PushedScreen>
   );
 }
@@ -186,4 +260,7 @@ export default function AddPetPage() {
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     breedHint: { fontSize: 12.5, fontFamily: font.regular, color: colors.label3, marginTop: 6, lineHeight: 17 },
+    // Chromeless 38pt glyph box — the same header metrics as the bell/gear and
+    // reminders' add button, so every nav-bar control lines up.
+    saveButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
   });
