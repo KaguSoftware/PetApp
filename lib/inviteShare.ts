@@ -30,7 +30,7 @@ export async function shareInvite(invite: Pick<HouseholdInvite, "code" | "expire
   try {
     await Share.share({
       title: "Join our PetPal household",
-      message: `Join our PetPal household. Your invite code is ${invite.code} — valid ${expiry}. Enter it in PetPal under Settings ▸ Family ▸ Join a household, or tap: ${inviteLink(invite.code)}`,
+      message: `Join our PetPal household. Your invite code is ${invite.code} — valid ${expiry}. Enter it in PetPal under Settings ▸ Household ▸ Join a household, or tap: ${inviteLink(invite.code)}`,
       url: inviteLink(invite.code),
     });
   } catch {

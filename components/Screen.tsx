@@ -1,6 +1,17 @@
 import { router, useNavigation } from "expo-router";
-import { createContext, useCallback, useContext, useLayoutEffect, useMemo } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type ScrollViewProps } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import {
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+  type ScrollViewProps,
+} from "react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icons";
@@ -85,6 +96,51 @@ function useBottomAllowance(extra: number) {
   const insets = useSafeAreaInsets();
   const insideTabs = useContext(InsideTabsContext);
   return extra + Math.max(insets.bottom, 12) + (insideTabs ? TAB_BAR_HEIGHT : 0);
+}
+
+/**
+ * The keyboard's bottom scroll inset, OWNED BY US rather than left to
+ * `automaticallyAdjustKeyboardInsets`.
+ *
+ * Why not the built-in prop: it makes UIKit compute the inset per scroll view
+ * from the keyboard's frame, and a scroll view only gets back to zero if it
+ * sees the matching "keyboard hid" frame change. Every screen in this app can
+ * have a `Sheet` opened over it, and a Sheet is a native `Modal` — its own
+ * window — so a text field inside one raises the keyboard OVER a page whose
+ * ScrollView is still mounted and still listening. Close the sheet and the
+ * keyboard goes down with the modal's window, and the page underneath can miss
+ * that frame change entirely. The inset then sticks: the page keeps a
+ * keyboard-sized band of empty, untappable space below its last row that you
+ * can scroll into, for as long as the screen stays mounted — which, for a tab,
+ * is forever. That is the "sometimes a page scrolls into nothing" bug.
+ *
+ * Doing it in JS makes the reset unconditional instead of inferred:
+ * `keyboardDidHide` is posted app-wide by UIKit no matter which window owned
+ * the input, so the inset always lands back on exactly 0 and the content ends
+ * where the content ends.
+ *
+ * iOS only — Android resizes the window instead (`softwareKeyboardLayoutMode`),
+ * so an inset there would double-count.
+ */
+function useKeyboardInset() {
+  const { height: windowH } = useWindowDimensions();
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    const onFrame = Keyboard.addListener("keyboardWillChangeFrame", (e) => {
+      // `screenY` is the keyboard's top edge; anything below it is covered.
+      // Guard on a finite value — an interactive dismiss mid-gesture can report
+      // a partially offscreen frame.
+      const overlap = windowH - e.endCoordinates.screenY;
+      setInset(Number.isFinite(overlap) ? Math.max(0, overlap) : 0);
+    });
+    const onHide = Keyboard.addListener("keyboardDidHide", () => setInset(0));
+    return () => {
+      onFrame.remove();
+      onHide.remove();
+    };
+  }, [windowH]);
+  return Platform.OS === "ios" ? inset : 0;
 }
 
 /**
@@ -270,6 +326,7 @@ export function TabScreen({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
   const paddingBottom = useBottomAllowance(contentBottomPad);
+  const keyboardInset = useKeyboardInset();
 
   // WhatsApp-style collapsing title: the big in-content title stays as the
   // page's main heading; a compact title fades into the nav bar only once the
@@ -311,8 +368,14 @@ export function TabScreen({
         contentInsetAdjustmentBehavior="never"
         // Same reasoning as PushedScreen: keyboard height becomes a scroll
         // inset so focused inputs rise above the keyboard rather than hiding
-        // behind it.
-        automaticallyAdjustKeyboardInsets
+        // behind it — measured in JS so it always returns to 0. See
+        // useKeyboardInset.
+        contentInset={{ bottom: keyboardInset }}
+        // A page whose content fits must not scroll at all. Left at the iOS
+        // default (`true`) every short page rubber-bands as if there were more
+        // below it. Pull-to-refresh needs the bounce to exist, so pages that
+        // pass a refreshControl keep it.
+        alwaysBounceVertical={scrollProps.refreshControl != null}
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -360,6 +423,7 @@ export function PushedScreen({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
   const paddingBottom = useBottomAllowance(contentBottomPad);
+  const keyboardInset = useKeyboardInset();
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -389,7 +453,11 @@ export function PushedScreen({
       // the focused field scrolls into view and every field below it stays
       // reachable — a KeyboardAvoidingView would instead squeeze the whole
       // frame. Android gets the same effect from `resize` soft-input mode.
-      automaticallyAdjustKeyboardInsets
+      // Measured in JS rather than via `automaticallyAdjustKeyboardInsets` so
+      // it can't get stuck open — see useKeyboardInset.
+      contentInset={{ bottom: keyboardInset }}
+      // See the matching note in TabScreen: short pages must not scroll.
+      alwaysBounceVertical={scrollProps.refreshControl != null}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"

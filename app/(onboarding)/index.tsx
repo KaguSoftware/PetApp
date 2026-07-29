@@ -24,6 +24,7 @@ export default function OnboardingIndex() {
   return (
     <ScrollView
       style={styles.flex}
+      alwaysBounceVertical={false}
       contentContainerStyle={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}
     >
       <View style={styles.header}>

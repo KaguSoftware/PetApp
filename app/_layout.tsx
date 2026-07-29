@@ -91,6 +91,8 @@ function RootStack() {
           <Stack.Screen name="settings/index" />
           <Stack.Screen name="settings/account" />
           <Stack.Screen name="settings/family" />
+          <Stack.Screen name="settings/household" />
+          <Stack.Screen name="settings/pets" />
           <Stack.Screen name="settings/general" />
           <Stack.Screen name="settings/accessibility" />
           <Stack.Screen name="settings/subscription" />

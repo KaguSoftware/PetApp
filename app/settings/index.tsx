@@ -2,8 +2,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import { lockFamily } from "@/components/family/lock";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import { PushedScreen } from "@/components/Screen";
@@ -19,6 +20,16 @@ export default function SettingsPage() {
   const { state, hydrated } = useStore();
   const [paywallOpen, setPaywallOpen] = useState(false);
 
+  // The three Family screens share ONE unlock (components/family/lock). Clearing
+  // it on both edges of this screen's life scopes that unlock to a single visit
+  // to Settings: arriving re-locks whatever another entry point left open, and
+  // leaving locks up behind you — while hopping Family ↔ Household ↔ Pets, which
+  // all pass back through here, asks for the password only once.
+  useEffect(() => {
+    lockFamily();
+    return lockFamily;
+  }, []);
+
   if (!hydrated) {
     return (
       <PushedScreen title="Settings">
@@ -29,6 +40,7 @@ export default function SettingsPage() {
 
   const petCount = state.pets.length;
   const memberCount = state.members.length;
+  const householdName = state.households.find((h) => h.id === state.activeHouseholdId)?.name ?? "Household";
 
   async function emailSupport() {
     const url =
@@ -81,15 +93,36 @@ export default function SettingsPage() {
         </PressableScale>
       )}
 
-      <SectionHeader>Settings</SectionHeader>
+      {/* The household's three jobs — the PEOPLE, the HOME, the PETS — are
+          three destinations of their own rather than tabs inside one screen, so
+          each is one tap from here. They share a password gate, not a route. */}
+      <SectionHeader>Family</SectionHeader>
       <Group>
         <Row
           onPress={() => router.push("/settings/family")}
           leading={<IconCircle icon="people" tint={colors.accent} bg={colors.accentSoft} />}
           title="Family"
-          subtitle={`${memberCount} member${memberCount === 1 ? "" : "s"} · ${petCount} pet${petCount === 1 ? "" : "s"}`}
+          subtitle={`${memberCount} member${memberCount === 1 ? "" : "s"} · roles & invites`}
           trailing={<Chevron />}
         />
+        <Row
+          onPress={() => router.push("/settings/household")}
+          leading={<IconCircle icon="home" tint={colors.green} bg={colors.greenSoft} />}
+          title="Household"
+          subtitle={`${householdName} · switch, rename & lock`}
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={() => router.push("/settings/pets")}
+          leading={<IconCircle icon="paw" tint={colors.orange} bg={colors.orangeSoft} />}
+          title="Pets"
+          subtitle={`${petCount} pet${petCount === 1 ? "" : "s"} · details & transfers`}
+          trailing={<Chevron />}
+        />
+      </Group>
+
+      <SectionHeader>Settings</SectionHeader>
+      <Group>
         <Row
           onPress={() => router.push("/settings/general")}
           leading={<IconCircle icon="gear" tint={colors.label2} bg={colors.fill} />}

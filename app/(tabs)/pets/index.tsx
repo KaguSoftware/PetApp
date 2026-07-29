@@ -20,13 +20,11 @@ import {
   PressableScale,
   Row,
   SectionHeader,
-  Segmented,
   SheetSubtitle,
   SheetTitle,
 } from "@/components/ui";
 import {
   cmToUnit,
-  cosmetic,
   COSMETICS,
   formatAge,
   formatLength,
@@ -49,10 +47,9 @@ import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
 
-/* One main slot gets a floating + button on the avatar's head; the rest live in "Other accessories" */
-const MAIN_SLOTS: { slot: CosmeticSlot; label: string; hint: string }[] = [{ slot: "head", label: "Hat", hint: "Hats & headwear" }];
-
-const OTHER_SLOTS: { slot: CosmeticSlot; hint: string }[] = [
+/* Every slot, head first, listed one after another in a single scrollable sheet. */
+const SLOTS: { slot: CosmeticSlot; hint: string }[] = [
+  { slot: "head", hint: "Hats & headwear" },
   { slot: "face", hint: "Glasses & eyewear" },
   { slot: "neck", hint: "Collars & scarves" },
   { slot: "body", hint: "Outfits & capes" },
@@ -161,8 +158,6 @@ export default function PetsScreen() {
   const searchParams = useLocalSearchParams<{ shop?: string }>();
   const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
   const [accessoriesOpen, setAccessoriesOpen] = useState(() => searchParams.shop === "1");
-  // Which tab the accessories sheet shows: the head/hat slot, or "other" for everything else.
-  const [accessoryTab, setAccessoryTab] = useState<CosmeticSlot | "other">("head");
   const [editingStat, setEditingStat] = useState<"weight" | "age" | "height" | "length" | null>(null);
 
   // "Coin bump" pop on the stage pet whenever a buy/equip lands.
@@ -176,11 +171,6 @@ export default function PetsScreen() {
   };
 
   const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
-  const openAccessories = (tab: CosmeticSlot | "other") => {
-    setAccessoryTab(tab);
-    setAccessoriesOpen(true);
-  };
-  const mainMeta = MAIN_SLOTS.find((s) => s.slot === accessoryTab);
 
   if (!hydrated)
     return (
@@ -278,8 +268,8 @@ export default function PetsScreen() {
             <Chip>{`${pet.owned.length} items`}</Chip>
           </View>
 
-          {/* Accessories — opens a sheet with Hats / Other tabs */}
-          <PressableScale onPress={() => openAccessories("head")} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
+          {/* Accessories — opens a sheet listing every slot in one scroll */}
+          <PressableScale onPress={() => setAccessoriesOpen(true)} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
             <View style={styles.otherButton}>
               <Icon name="bag" size={17} color={colors.label} />
               <Text style={styles.otherButtonLabel}>Accessories</Text>
@@ -299,57 +289,30 @@ export default function PetsScreen() {
         />
       </Group>
 
-      {/* Accessories sheet — one place for Hats & other accessories, toggled at the top */}
+      {/* Accessories sheet — every slot on one scrollable page, no tabs */}
       <Sheet open={accessoriesOpen} onClose={() => setAccessoriesOpen(false)}>
         <View style={styles.sheetTitleRow}>
           <SheetTitle>Accessories</SheetTitle>
           <CoinPill amount={state.coins} />
         </View>
         <SheetSubtitle>For {pet.name}</SheetSubtitle>
-        <View style={{ marginTop: 12, marginBottom: 4 }}>
-          <Segmented
-            options={[
-              { value: "head", label: "Hats" },
-              { value: "other", label: "Other accessories" },
-            ]}
-            value={accessoryTab === "other" ? "other" : "head"}
-            onChange={(v) => setAccessoryTab(v as CosmeticSlot | "other")}
-          />
-        </View>
 
-        {accessoryTab === "other" ? (
-          OTHER_SLOTS.map((s) => (
+        {SLOTS.map((s) => {
+          // Gender-restricted items drop out per pet, so a slot can end up empty —
+          // skip it rather than leaving an orphan header.
+          const items = COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictGender || c.restrictGender === pet.gender));
+          if (items.length === 0) return null;
+          return (
             <View key={s.slot}>
               <SectionHeader>{s.hint}</SectionHeader>
               <View style={styles.shopGrid}>
-                {COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictGender || c.restrictGender === pet.gender)).map((c) => (
+                {items.map((c) => (
                   <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
                 ))}
               </View>
             </View>
-          ))
-        ) : mainMeta ? (
-          <>
-            <SectionHeader>{mainMeta.hint}</SectionHeader>
-            <View style={styles.shopGrid}>
-              {COSMETICS.filter((c) => c.slot === accessoryTab && (!c.restrictGender || c.restrictGender === pet.gender)).map((c) => (
-                <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
-              ))}
-            </View>
-            {pet.equipped[accessoryTab] ? (
-              <Group style={{ marginTop: 8 }}>
-                <Row
-                  onPress={() => {
-                    const c = cosmetic(pet.equipped[accessoryTab as CosmeticSlot]!);
-                    if (c) toggle(c);
-                  }}
-                  title={`Remove ${cosmetic(pet.equipped[accessoryTab as CosmeticSlot]!)?.name}`}
-                  destructive
-                />
-              </Group>
-            ) : null}
-          </>
-        ) : null}
+          );
+        })}
       </Sheet>
 
       <EditStatSheet

@@ -125,7 +125,7 @@ export default function Sheet({
                 // zone actually occupies. Hardcoding `maxPanelH - 33` silently
                 // clipped the last rows — where every sheet's primary button is —
                 // whenever the handle's padding changed.
-                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
                   {body}
                 </ScrollView>
               ) : (

@@ -249,7 +249,9 @@ interface Store {
   /** Owner-only: hand the active household to another member (you become admin). */
   transferOwnership: (targetUserId: string) => Promise<boolean>;
   /** Redeem an invite code (XXXX-XXXX). Existing members switch immediately; new members file a pending request instead. */
-  redeemInvite: (code: string) => Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "error" }>;
+  redeemInvite: (
+    code: string
+  ) => Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "error" }>;
   /** Create an invite code for the active household (admin+; admin-role invites owner-only). */
   createInvite: (input: { role: "member" | "admin"; targetMemberId?: string; ttlHours?: number; maxUses?: number }) => Promise<HouseholdInvite | null>;
   /** The active household's live (unrevoked, unexpired) invites. */
@@ -3370,7 +3372,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!target) return false;
       const { error } = await supabase.rpc("join_household", { target });
       if (error) {
-        const notFound = (error as { code?: string }).code === "P0002" || /not found/i.test(error.message ?? "");
+        const errCode = (error as { code?: string }).code;
+        const notFound = errCode === "P0002" || /not found/i.test(error.message ?? "");
+        // Same 0033 members_write_guard block as redeemInvite — join_household
+        // always joins as 'member', so this path is broken until 0040 lands.
+        if (errCode === "42501") {
+          console.error("[petpal] join_household blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
+          toast("alert", "Joining needs the next backend update", "Apply migration 0040 — new members can't be added until then");
+          return false;
+        }
         toast(
           "alert",
           notFound ? "Couldn't find that household" : "Couldn't join household",
@@ -3672,7 +3682,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const redeemInvite = useCallback(
-    async (code: string): Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "error" }> => {
+    async (
+      code: string
+    ): Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "error" }> => {
       const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
       if (normalized.length !== 8) return { ok: false, reason: "notFound" };
       const { data, error } = await supabase.rpc("redeem_invite", { invite_code: normalized });
@@ -3684,6 +3696,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         if (errCode === "P0002") return { ok: false, reason: "notFound" };
         if (errCode === "P0003") return { ok: false, reason: "expired" };
+        // 42501 raised from INSIDE redeem_invite means the DB still carries
+        // 0033's members_write_guard, which blocks a joiner minting their own
+        // card — so MEMBER invites fail while ADMIN ones (already privileged by
+        // the membership row inserted moments earlier) go through. Migration
+        // 0040 fixes it; say so instead of "please try again".
+        if (errCode === "42501") {
+          console.error("[petpal] redeem_invite blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
+          return { ok: false, reason: "blocked" };
+        }
         console.error("[petpal] redeem_invite failed:", describeErr(error) ?? error);
         return { ok: false, reason: "error" };
       }

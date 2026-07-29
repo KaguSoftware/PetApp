@@ -38,7 +38,7 @@ export default function CreateHouseholdScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" alwaysBounceVertical={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Name your household</Text>
           <Text style={styles.subtitle}>

@@ -4,7 +4,7 @@ import type { ActionType } from "@/lib/data";
 
 export type IconName =
   | "home" | "bell" | "heart-text" | "bag" | "people"
-  | "plus" | "chevron-right" | "chevron-left" | "chevron-down" | "check" | "xmark"
+  | "plus" | "chevron-right" | "chevron-left" | "chevron-down" | "chevron-up" | "check" | "xmark"
   | "bowl" | "drop" | "broom" | "paw" | "scissors" | "pill" | "stethoscope"
   | "calendar" | "clock" | "lock" | "star" | "coin" | "sparkles" | "flame" | "arrow-up"
   | "chart" | "box" | "gear" | "cross" | "refresh" | "pin" | "cube"
@@ -60,6 +60,7 @@ const P: Record<IconName, React.ReactNode> = {
   "chevron-right": <Path d="m9 18 6-6-6-6" />,
   "chevron-left": <Path d="m15 18-6-6 6-6" />,
   "chevron-down": <Path d="m6 9 6 6 6-6" />,
+  "chevron-up": <Path d="m6 15 6-6 6 6" />,
   check: <Path d="m4 12.5 5.5 5.5L20 6.5" />,
   xmark: (
     <>

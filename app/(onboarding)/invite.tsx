@@ -34,7 +34,7 @@ export default function OnboardingInviteScreen() {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.container} alwaysBounceVertical={false}>
       <View style={styles.iconWrap}>
         <Icon name="people" size={26} color={colors.accent} />
       </View>

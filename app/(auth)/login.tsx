@@ -45,6 +45,10 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
+        // The form is centred in a flexGrow:1 container, so it fits the screen
+        // until the keyboard is up. Don't let it rubber-band as if there were
+        // more below.
+        alwaysBounceVertical={false}
       >
         <View style={styles.header}>
           <BrandMark />

@@ -31,6 +31,7 @@ export default function ForgotPasswordScreen() {
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView
+        alwaysBounceVertical={false}
         contentContainerStyle={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}
         keyboardShouldPersistTaps="handled"
       >

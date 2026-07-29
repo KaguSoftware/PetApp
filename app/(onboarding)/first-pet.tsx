@@ -15,7 +15,7 @@ export default function FirstPetScreen() {
   const next = () => router.replace("/(onboarding)/invite");
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.container} alwaysBounceVertical={false}>
       <View style={styles.iconWrap}>
         <Icon name="paw" size={26} color={colors.accent} />
       </View>

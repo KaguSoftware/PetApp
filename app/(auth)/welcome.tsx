@@ -20,6 +20,7 @@ export default function WelcomeScreen() {
   return (
     <ScrollView
       style={styles.flex}
+      alwaysBounceVertical={false}
       contentContainerStyle={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}
       keyboardShouldPersistTaps="handled"
     >

@@ -57,9 +57,9 @@ export default function RemindersScreen() {
   const [petId, setPetId] = useState("");
   const [days, setDays] = useState(1);
   const [pickDate, setPickDate] = useState(false);
-  // The exact-date branch: the native iOS date wheel (shared <DateField>) for
-  // the day, plus the 15-min-step time wheel below it. `pickTs` is a noon
-  // timestamp; the time is applied on save.
+  // The exact-date branch: the shared <DateField> calendar for the day, plus
+  // the 15-min-step time wheel below it. `pickTs` is a noon timestamp; the
+  // time is applied on save.
   const [pickTs, setPickTs] = useState<number | null>(null);
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);

@@ -12,3 +12,17 @@ broke `create_invite` until migration 0031. If a new SECURITY DEFINER function n
 in `search_path`, so it still resolves where pgcrypto sits in `public`).
 
 `gen_random_uuid()` is exempt — since PG13 it's in `pg_catalog`, always implicitly on the path.
+
+# Postgres: `auth.uid()` is NOT null inside SECURITY DEFINER
+
+SECURITY DEFINER swaps the effective **role** (`current_user`); it does not touch the request GUCs.
+`auth.uid()` reads `request.jwt.claims`, which PostgREST sets per request, so it stays populated
+inside every RPC. **Never write `if auth.uid() is null then <allow>` as an "it's a trusted RPC"
+escape hatch** — it only ever fires for `anon` and the SQL editor. That mistake in 0033's
+`members_write_guard` blocked `redeem_invite`/`join_household` from minting the joiner's card, so
+joining as a **member** failed while an **admin** invite worked (the admin's `household_members` row,
+inserted moments earlier in the same transaction, satisfied the guard). Fixed in 0040.
+
+A trigger that must tell client writes from trusted server-side ones checks `current_user not in
+('authenticated', 'anon')` and must itself be **SECURITY INVOKER** — inside a SECURITY DEFINER
+function `current_user` is the owner, so a DEFINER trigger can never see its caller.

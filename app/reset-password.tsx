@@ -43,7 +43,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" alwaysBounceVertical={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Choose a new password</Text>
           <Text style={styles.subtitle}>At least 6 characters. You{"'"}ll stay signed in on this device.</Text>

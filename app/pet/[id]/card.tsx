@@ -207,7 +207,7 @@ export default function PetCardPage() {
 
       <Footnote style={{ marginTop: 14, paddingHorizontal: 8 }}>
         {variant === "emergency"
-          ? `This is what you'd hand a sitter or post if ${pet.name} ever went missing — share it with the button up top, and keep the microchip and allergy info current in Settings ▸ Family.`
+          ? `This is what you'd hand a sitter or post if ${pet.name} ever went missing — share it with the button up top, and keep the microchip and allergy info current in Settings ▸ Pets.`
           : `${pet.name}'s intro card — share it with the button up top.`}
       </Footnote>
       <View style={{ height: 16 }} />

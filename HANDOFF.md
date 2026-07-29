@@ -446,11 +446,123 @@ Twelve owner-reported items. Owner decisions taken in planning: toasts → **top
 
 **Migrations 0031 / 0032 / 0033 — APPLIED and verified live 2026-07-26.** All 14 realtime tables are in the `supabase_realtime` publication and all 14 are at `relreplident='f'`; `coin_grants`, `grant_household_coins`, `guard_member_write` + the `members_write_guard` trigger exist. What's left is the two-phone walkthrough below and the RevenueCat dashboard (checklist step 7).
 
+### Family screen split into three SETTINGS ROWS (2026-07-29, owner request) — built, `tsc` + `eslint` clean, NEEDS device walkthrough
+
+`app/settings/family.tsx` was one ~1,200-line scroll holding five unrelated sections. It was first split
+into three tabs behind a `Segmented` control on one route; the owner then asked for the three to be
+top-level destinations instead ("3 different tabs from the initial screen, not inside the family tab").
+So Settings now opens with a **Family** section header over three rows, each its own route:
+
+| Row | Route | Section component |
+|---|---|---|
+| Family — `N members · roles & invites` | `/settings/family` | `MembersSection.tsx` |
+| Household — `<name> · switch, rename & lock` | `/settings/household` | `HouseholdSection.tsx` |
+| Pets — `N pets · details & transfers` | `/settings/pets` | `PetsSection.tsx` |
+
+- **Family** (`MembersSection.tsx`) — accounts + role badges, the manage-account sheet (edit card /
+  promote-demote / transfer ownership / remove / leave), "Invite someone" + the invite sheet with
+  `InviteCard`, pending join requests, the caregiver-terms gate.
+- **Household** (`HouseholdSection.tsx`) — the households list (switch / join / create) and, for admin+,
+  rename, Family ID share, family password, delete household. Non-managers get a one-line footnote
+  instead of a section that silently isn't there.
+- **Pets** (`PetsSection.tsx`) — the roster, the edit-pet sheet, pet transfers (moved here from the
+  Family section — they're about animals, not people), plus an **"Add a pet"** row → `/pet/new`, matching
+  "Invite someone" as the other way a household grows.
+- `shared.tsx` — `ROLE_LABEL`, `RoleBadge`, the labelled `Field`, `confirmDestructive`, `useFamilyStyles`.
+- **`FamilyScreen.tsx`** — the scaffold all three routes render into: hydration, pull-to-refresh and the
+  family-password gate, written once instead of copied three times.
+- **`lock.ts`** — the unlock is now MODULE state, not screen state. Three routes mean the gate would
+  otherwise fire on each one; `settings/index.tsx` calls `lockFamily()` on mount *and* on unmount, which
+  scopes an unlock to a single visit to Settings (hopping between the three, which all pass back through
+  the hub, asks once; leaving Settings re-locks).
+
+The old `?tab=family|household|pets` deep-link param is gone — the three routes replace it. Both new
+routes are registered in `app/_layout.tsx`'s signed-in `Stack.Protected` block. Copy that pointed at
+"Settings ▸ Family" for household switching / Family ID (`join.tsx`, `lib/inviteShare.ts`) or for
+microchip+allergy edits (`pet/[id]/card.tsx`) now names the right screen. No store or DB changes —
+every action, role check and sheet is the same code, just relocated.
+
+### Joining as a MEMBER was impossible (2026-07-29, owner report) — fix written, **NEEDS migration 0040 applied**
+
+Owner: "adding a member to a family causes an error, but when I select admin it works fine."
+
+**Root cause — 0033's `members_write_guard`, not the invite code.** Its first line,
+`if auth.uid() is null then return …` (comment: "SECURITY DEFINER RPCs run without an auth.uid()"),
+is built on a false premise: SECURITY DEFINER swaps `current_user`, it does NOT clear the request
+GUCs, and `auth.uid()` reads `request.jwt.claims` — still populated inside every RPC. So when
+`redeem_invite` (and the legacy `join_household`) mints the joiner's member card, the guard ran with
+`auth.uid()` = **the joiner**:
+- **admin invite** → `insert into household_members … role` ran a few statements earlier in the same
+  transaction, so `has_household_role()` sees `admin` → allowed → join completes;
+- **member invite** → not owner/admin, and `household_members.member_id` is only linked *after* this
+  insert, so the "your own card" branch can't match either → `42501 only the owner or an admin can
+  manage family cards` → the whole redeem transaction rolls back → "Couldn't join right now."
+
+That is the entire asymmetry. It also broke the legacy Family-ID link (`join_household` always joins
+as `member`) for the web demo as well, since 0033 landed 2026-07-26.
+
+- **`0040_member_card_write_guard_fix.sql` (NEW, NOT YET APPLIED — apply it or member joins stay
+  broken)**: `guard_member_write` becomes **SECURITY INVOKER** and authorises on `current_user` —
+  `authenticated`/`anon` are client writes and stay guarded exactly as before (owner/admin manage any
+  card; a plain member may edit only their own linked card, no cross-household move, no self-delete),
+  anything else (a SECURITY DEFINER RPC's owner, `service_role`, the SQL editor) is trusted and
+  passes. The membership read moves into a new SECURITY DEFINER `is_own_member_card(hid, target)`, so
+  the guard gains no RLS dependency by giving up DEFINER. Two behaviour changes only: RPCs are no
+  longer blocked (the point), and `anon` is now denied instead of waved through. Verify queries are
+  in the migration footer.
+- **Client honesty** (`lib/store.tsx`, `app/join.tsx`): a `42501` out of `redeem_invite` /
+  `join_household` now logs the cause and surfaces "needs the next backend update — migration 0040"
+  instead of "please try again" (new `reason: "blocked"` on `redeemInvite`).
+- **Rule added to AGENTS.md** so this can't recur: never use `auth.uid() is null` as a trusted-RPC
+  escape hatch; a guard that must know its caller checks `current_user` and must be SECURITY INVOKER.
+- `tsc --noEmit` clean, `eslint` 0 errors. **Not verifiable from here** — no DB access this session
+  (Supabase MCP denied, CLI not logged in). Needs 0040 applied + the two-phone check: member invite
+  → redeem → (approve if 0037 is applied) → lands in the household with their own card; then the
+  same with an admin invite.
+
+### Date selector is now a custom calendar, not the platform picker (2026-07-29, owner request) — built, `tsc` + `eslint` clean, NEEDS device walkthrough
+
+Owner: "turn the date selector into a custom one that matches the website."
+
+`components/DateField.tsx` — the single date input behind birth dates, vaccinations, vet visits,
+breeding and reminders — was `@react-native-community/datetimepicker`: an **iOS wheel spinner** on
+one platform and a **Material dialog behind a tappable row** on the other. The web demo (checked
+against the repo, not from memory) uses a plain `<input type="date">`, so the same field rendered as
+three different products across web/iOS/Android.
+
+It is now a **custom month-grid calendar in the web demo's own calendar language** — the one
+`StreakCalendarSheet.tsx` already draws in both repos: single-letter `S M T W T F S` headers, a
+centred "Month Year" title between two 36pt round `colors.fill` chevron buttons, round day cells.
+Selected day = accent-filled disc + white text; today = 2pt accent ring. **No platform fork left in
+the file** — one component, identical on iOS and Android.
+
+- **Three-level drill (days → months → years)**: the title is tappable and steps out to a 3×4 month
+  grid, then to a 3×4 grid of 12 years; tapping a year returns to months, a month returns to days.
+  The wheel gave year scrubbing for free and a bare calendar does not — with only a month chevron a
+  12-year-old cat's birth date is 144 taps. Reach is **100 yrs back** / 20 forward (this field also
+  takes parrot and tortoise birth dates).
+- **Range clamping preserved**: `mode="past"` can't reach past today, `mode="future"` can't reach
+  before it. Out-of-range days render dimmed and non-tappable; the chevrons and month pills disable
+  when the whole target month is out of range. `allowClear` / `showChips` and the quick-jump chip row
+  are unchanged, so **no call site changed** (5 in `app/pet/[id]/index.tsx`, 1 in `app/reminders.tsx`,
+  1 in `components/family/PetsSection.tsx`).
+- **Two layout traps worth remembering**: the grid always draws **six week rows** (`GRID_CELLS = 42`)
+  so the card doesn't change height between months and jolt the sheet; and the day cell's 44pt tap
+  target comes from an inner `dayHit` view, because `PressableScale` puts its `style` on the OUTER
+  `Animated.View` — centring there lets the inner `Pressable` shrink to the 36pt disc.
+- Month changes fade the new grid in via `FadeInView` (entering only, keyed on the month).
+  Deliberately **not** `DrillView`: its exit animation keeps the outgoing grid mounted, which stacks
+  the two vertically and jumps the card's height mid-swap.
+- `components/Icons.tsx` gained `chevron-up` (same 24×24 stroke grid as the other chevrons).
+- `@react-native-community/datetimepicker` now has **zero importers**. Left in `package.json` and in
+  `app.json`'s plugin list on purpose — pulling a config plugin is a prebuild-affecting change, not a
+  cleanup to slip into a UI pass. Remove both together if you want it gone.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/pixel/` — sprite engine + Pet3D + PixelChart.
-- `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: activity, reminders, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart.
+- `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: activity, reminders, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
 - `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 

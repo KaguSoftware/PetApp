@@ -120,10 +120,10 @@ export default function JoinPage() {
           ) : alreadyIn ? (
             <>
               <Text style={styles.title}>You&apos;re already in this household</Text>
-              <Text style={styles.body}>Switch between your households any time from Settings ▸ Family.</Text>
+              <Text style={styles.body}>Switch between your households any time from Settings ▸ Household.</Text>
               <View style={styles.cta}>
-                <AccentButton variant="tinted" onPress={() => router.push("/settings/family")}>
-                  Open family settings
+                <AccentButton variant="tinted" onPress={() => router.push("/settings/household")}>
+                  Open household settings
                 </AccentButton>
               </View>
             </>
@@ -216,7 +216,11 @@ export default function JoinPage() {
         ? "That code doesn't match any invite. Double-check it and try again."
         : result.reason === "expired"
           ? "This invite expired or was revoked — ask your family for a fresh one."
-          : "Couldn't join right now. Please try again."
+          : // 42501 from the members_write_guard: the household's backend is
+            // missing migration 0040, so joining as a member can't work yet.
+            result.reason === "blocked"
+            ? "Joining needs the next backend update — the household's database is missing migration 0040."
+            : "Couldn't join right now. Please try again."
     );
   }
 
@@ -225,7 +229,7 @@ export default function JoinPage() {
     setError(null);
     const target = familyIdInput.trim();
     if (!UUID_RE.test(target)) {
-      setError("That doesn't look like a Family ID — it's the long code from Settings ▸ Family.");
+      setError("That doesn't look like a Family ID — it's the long code from Settings ▸ Household.");
       return;
     }
     setJoining(true);
