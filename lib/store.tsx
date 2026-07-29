@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { AppState as RNAppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, PetTransfer, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
 import { colors } from "@/lib/theme";
 
@@ -199,6 +199,7 @@ interface Store {
   restockSupply: (petId: string, supplyId: string) => void;
   useSupply: (petId: string, supplyId: string) => void;
   addMed: (petId: string, name: string, dosage?: string, frequency?: string) => void;
+  editMed: (petId: string, medId: string, patch: { name: string; dosage?: string; frequency?: string }) => void;
   deleteMed: (petId: string, medId: string) => void;
   /** Create or replace a care schedule (matched by id). */
   setCareSchedule: (schedule: CareSchedule) => void;
@@ -258,6 +259,22 @@ interface Store {
   fetchJoinRequests: () => Promise<JoinRequest[]>;
   /** Approve a pending join request — adds the requester to the household. */
   approveJoinRequest: (requestId: string) => Promise<boolean>;
+  /**
+   * Offer a pet to another household by its Family ID (owner/admin). Nothing
+   * moves until that household accepts.
+   */
+  requestPetTransfer: (
+    petId: string,
+    destinationHouseholdId: string
+  ) => Promise<{ ok: boolean; reason?: "notFound" | "same" | "duplicate" | "notAllowed" | "unavailable" | "error" }>;
+  /** Pending pet transfers touching the active household, both directions (admin+). */
+  fetchPetTransfers: () => Promise<PetTransfer[]>;
+  /** Accept an incoming pet transfer — moves the pet and all its data here. */
+  acceptPetTransfer: (requestId: string) => Promise<boolean>;
+  /** Decline an incoming pet transfer. */
+  rejectPetTransfer: (requestId: string) => Promise<boolean>;
+  /** Withdraw an outgoing pet transfer you offered. */
+  cancelPetTransfer: (requestId: string) => Promise<boolean>;
   /** Reject a pending join request. */
   rejectJoinRequest: (requestId: string) => Promise<boolean>;
   setNotificationPref: (key: "notifyCareReminders" | "notifyFamilyActivity" | "notifyVetSuggestions", on: boolean) => void;
@@ -643,6 +660,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // True when household_invites (migration 0027) is missing — the invite UI
   // then falls back to the legacy share-the-Family-ID / join_household path.
   const invitesSchemaRef = useRef(false);
+  // True when pet_transfer_requests (migration 0039) is missing — the move-a-pet
+  // UI then stays inert rather than retrying a nonexistent RPC on every focus.
+  const petTransferSchemaRef = useRef(false);
   // True when user_profiles.seen_welcome (migration 0030) is missing — the
   // welcome flag then stays household-scoped like it always was.
   const welcomeProfileSchemaRef = useRef(false);
@@ -1845,6 +1865,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
+    // Pet transfers (0039). Two bindings because the filter grammar can't OR:
+    // a household is either giving a pet away or being offered one. This is the
+    // ONLY event either side gets when a transfer completes — the pets UPDATE
+    // that moves the row lands outside the source's `household_id=eq.` filter,
+    // and lands in the destination's as an UPDATE for a pet its store has never
+    // heard of. A silent reload on both sides is what actually settles it.
+    for (const column of ["to_household_id", "from_household_id"]) {
+      chHousehold = chHousehold.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "pet_transfer_requests",
+          filter: `${column}=eq.${householdId}`,
+        },
+        onOther("pet_transfer_requests")
+      );
+    }
+
     // supplies/weights/meds/vaccinations/vet_visits have no household_id — they
     // hang off pets. The filter grammar allows `in`, so one binding per table
     // still covers a whole household.
@@ -2904,6 +2943,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [supabase, persist]
   );
 
+  const editMed = useCallback(
+    (petId: string, medId: string, patch: { name: string; dosage?: string; frequency?: string }) => {
+      const before = stateRef.current.pets.find((p) => p.id === petId)?.meds.find((m) => m.id === medId);
+      if (!before) return;
+      setState((prev) => ({
+        ...prev,
+        pets: prev.pets.map((p) =>
+          p.id === petId ? { ...p, meds: p.meds.map((m) => (m.id === medId ? { ...m, ...patch } : m)) } : p
+        ),
+      }));
+      persist(
+        supabase
+          .from("meds")
+          .update({ name: patch.name, dosage: patch.dosage ?? null, frequency: patch.frequency ?? null })
+          .eq("id", medId),
+        {
+          rollback: () =>
+            setState((prev) => ({
+              ...prev,
+              pets: prev.pets.map((p) =>
+                p.id === petId ? { ...p, meds: p.meds.map((m) => (m.id === medId ? before : m)) } : p
+              ),
+            })),
+          message: `Couldn't update ${patch.name}`,
+        }
+      );
+    },
+    [supabase, persist]
+  );
+
   const deleteMed = useCallback(
     (petId: string, medId: string) => {
       const removed = stateRef.current.pets.find((p) => p.id === petId)?.meds.find((m) => m.id === medId);
@@ -3676,6 +3745,141 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [supabase, toast]
   );
 
+  const requestPetTransfer = useCallback(
+    async (petId: string, destinationHouseholdId: string) => {
+      const dest = destinationHouseholdId.trim();
+      if (!dest) return { ok: false, reason: "notFound" as const };
+      const { error } = await supabase.rpc("request_pet_transfer", { pet: petId, dest_household: dest });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (isMissingFunction(error)) {
+          petTransferSchemaRef.current = true;
+          toast("alert", "Pet transfers need the next backend update", "Apply migration 0039 to unlock this");
+          return { ok: false, reason: "unavailable" as const };
+        }
+        if (code === "P0002") {
+          toast("alert", "Couldn't find that household", "Check the Family ID and try again");
+          return { ok: false, reason: "notFound" as const };
+        }
+        if (code === "22023") {
+          toast("alert", "That pet is already there", "Pick a different household");
+          return { ok: false, reason: "same" as const };
+        }
+        if (code === "23505") {
+          toast("alert", "A transfer is already pending", "Cancel it before starting another");
+          return { ok: false, reason: "duplicate" as const };
+        }
+        if (code === "42501") {
+          toast("alert", "Not allowed", "Only the owner or an admin can move a pet");
+          return { ok: false, reason: "notAllowed" as const };
+        }
+        console.error("[petpal] request_pet_transfer failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't start that transfer", "Please try again");
+        return { ok: false, reason: "error" as const };
+      }
+      toast("check", "Transfer requested", "Waiting for the other household to accept");
+      return { ok: true };
+    },
+    [supabase, toast]
+  );
+
+  const fetchPetTransfers = useCallback(async (): Promise<PetTransfer[]> => {
+    const h = hid();
+    if (!h || petTransferSchemaRef.current) return [];
+    const { data, error } = await supabase.rpc("list_pet_transfers", { hid: h });
+    if (error) {
+      if (isMissingFunction(error)) petTransferSchemaRef.current = true;
+      // 42501 just means this account isn't an owner/admin here — not an error.
+      else if ((error as { code?: string }).code !== "42501")
+        console.error("[petpal] list_pet_transfers failed:", describeErr(error) ?? error);
+      return [];
+    }
+    return (data ?? []).map(
+      (r: {
+        id: string;
+        direction: "incoming" | "outgoing";
+        pet_id: string;
+        pet_name: string;
+        from_household_id: string;
+        from_household_name: string | null;
+        to_household_id: string;
+        to_household_name: string | null;
+        created_at: string;
+        expires_at: string;
+      }): PetTransfer => ({
+        id: r.id,
+        direction: r.direction,
+        petId: r.pet_id,
+        petName: r.pet_name,
+        fromHouseholdId: r.from_household_id,
+        fromHouseholdName: r.from_household_name,
+        toHouseholdId: r.to_household_id,
+        toHouseholdName: r.to_household_name,
+        createdAt: Date.parse(r.created_at),
+        expiresAt: Date.parse(r.expires_at),
+      })
+    );
+  }, [supabase]);
+
+  const acceptPetTransfer = useCallback(
+    async (requestId: string) => {
+      const { error } = await supabase.rpc("accept_pet_transfer", { request_id: requestId });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (isMissingFunction(error)) {
+          petTransferSchemaRef.current = true;
+          toast("alert", "Pet transfers need the next backend update", "Apply migration 0039 to unlock this");
+        } else if (code === "42501") {
+          toast("alert", "Not allowed", "Only the owner or an admin can accept a pet transfer");
+        } else if (code === "P0003") {
+          toast("alert", "That request expired", "Ask them to send it again");
+        } else if (code === "22023" || code === "P0002") {
+          toast("alert", "That transfer is no longer valid", "The pet may have already moved");
+        } else {
+          console.error("[petpal] accept_pet_transfer failed:", describeErr(error) ?? error);
+          toast("alert", "Couldn't accept that transfer", "Please try again");
+        }
+        return false;
+      }
+      toast("check", "Pet moved in", "Everything about them came along");
+      // A full re-hydrate, not a patch: the realtime channels bind the OLD pet
+      // id list and the old household filter, so nothing about the new pet —
+      // its weights, meds, history — would stream in on its own.
+      flushCounters();
+      setReloadNonce((n) => n + 1);
+      return true;
+    },
+    [supabase, toast, flushCounters]
+  );
+
+  const rejectPetTransfer = useCallback(
+    async (requestId: string) => {
+      const { error } = await supabase.rpc("reject_pet_transfer", { request_id: requestId });
+      if (error) {
+        console.error("[petpal] reject_pet_transfer failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't decline that transfer", "Please try again");
+        return false;
+      }
+      toast("check", "Transfer declined", "The pet stays where it is");
+      return true;
+    },
+    [supabase, toast]
+  );
+
+  const cancelPetTransfer = useCallback(
+    async (requestId: string) => {
+      const { error } = await supabase.rpc("cancel_pet_transfer", { request_id: requestId });
+      if (error) {
+        console.error("[petpal] cancel_pet_transfer failed:", describeErr(error) ?? error);
+        toast("alert", "Couldn't cancel that transfer", "Please try again");
+        return false;
+      }
+      toast("check", "Transfer cancelled", "Nothing moved");
+      return true;
+    },
+    [supabase, toast]
+  );
+
   const setNotificationPref = useCallback(
     (key: keyof typeof NOTIF_PREF_DB_COLUMN, on: boolean) => {
       const memberId = stateRef.current.currentMemberId;
@@ -3749,6 +3953,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         restockSupply,
         useSupply,
         addMed,
+        editMed,
         deleteMed,
         setCareSchedule,
         deleteCareSchedule,
@@ -3782,6 +3987,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         fetchJoinRequests,
         approveJoinRequest,
         rejectJoinRequest,
+        requestPetTransfer,
+        fetchPetTransfers,
+        acceptPetTransfer,
+        rejectPetTransfer,
+        cancelPetTransfer,
         setNotificationPref,
         signOut,
         refresh,

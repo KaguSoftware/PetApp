@@ -370,6 +370,24 @@ export interface JoinRequest {
   createdAt: number;
 }
 
+/**
+ * A pending offer to move a pet between households. `direction` is relative to
+ * the household that asked: "incoming" means someone wants to give you this
+ * pet, "outgoing" means you're waiting on the other side to accept.
+ */
+export interface PetTransfer {
+  id: string;
+  direction: "incoming" | "outgoing";
+  petId: string;
+  petName: string;
+  fromHouseholdId: string;
+  fromHouseholdName: string | null;
+  toHouseholdId: string;
+  toHouseholdName: string | null;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface AppState {
   currentMemberId: string;
   premium: boolean;

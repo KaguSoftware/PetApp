@@ -173,8 +173,12 @@ export default function ActivityScreen() {
               {g.items.map((a) => {
                 const m = member(a.memberId);
                 const p = petById(a.petId);
-                if (!m || !p) return null;
-                const isYou = m.id === state.currentMemberId;
+                // A pet that moved in from another household brings its history
+                // with it, but the family card that logged each entry stays
+                // behind — `members` RLS hides it, so `m` is undefined here.
+                // Requiring it would silently swallow the entire imported feed.
+                if (!p) return null;
+                const isYou = m?.id === state.currentMemberId;
                 const tile = ACTION_ICON[a.type];
                 const expanded = expandedId === a.id;
                 return (
@@ -183,7 +187,7 @@ export default function ActivityScreen() {
                       leading={<IconCircle icon={tile.icon} tint={tile.tint} bg={tile.bg} size={32} iconSize={17} />}
                       title={
                         <Text numberOfLines={expanded ? undefined : 1} style={styles.feedTitle}>
-                          <Text style={styles.feedName}>{isYou ? "You" : m.name}</Text>
+                          <Text style={styles.feedName}>{isYou ? "You" : (m?.name ?? "A previous family")}</Text>
                           <Text style={styles.feedVerb}> {ACTIONS[a.type].verb} </Text>
                           <Text style={styles.feedName}>{p.name}</Text>
                         </Text>

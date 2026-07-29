@@ -33,7 +33,7 @@ import {
   SheetTitle,
   TextField,
 } from "@/components/ui";
-import { careItemStatus, type CareItemStatus } from "@/lib/careStatus";
+import { careItemStatus, medicationSummary, type CareItemStatus } from "@/lib/careStatus";
 import { ACTIONS, type ActionType } from "@/lib/data";
 import { ALERT_VERB, useStore } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -299,6 +299,13 @@ export default function LogsScreen() {
                 ? `${reminderSummary.overdue} overdue · ${reminderSummary.open} open for ${pet.name}`
                 : `${reminderSummary.open} open for ${pet.name}`
           }
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={() => router.push({ pathname: "/medications", params: { petId: pet.id } })}
+          leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
+          title="Medication"
+          subtitle={medicationSummary(pet, state.schedules, state.activities, now).label}
           trailing={<Chevron />}
         />
         <Row
