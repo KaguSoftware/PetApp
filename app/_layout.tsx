@@ -83,6 +83,7 @@ function RootStack() {
           <Stack.Screen name="instructions" />
           <Stack.Screen name="instructions/[id]" />
           <Stack.Screen name="join" />
+          <Stack.Screen name="medications" />
           <Stack.Screen name="reminders" />
           <Stack.Screen name="pet/[id]/index" />
           <Stack.Screen name="pet/[id]/card" />

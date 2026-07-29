@@ -249,6 +249,30 @@ export function formatSlotTime(time: string): string {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * One-line state of a pet's whole medication list, for the "Medication" row on
+ * Logs and Care. Both screens read this so their subtitles can never disagree.
+ */
+export function medicationSummary(
+  pet: Pet,
+  schedules: CareSchedule[],
+  activities: Activity[],
+  now: number
+): { count: number; due: number; label: string } {
+  const count = pet.meds.length;
+  const due = pet.meds.filter((m) => {
+    const s = careItemStatus(pet, "meds", m.id, schedules, activities, now).state;
+    return s === "due" || s === "overdue";
+  }).length;
+  const label =
+    count === 0
+      ? "Track doses and dose times — tap to add one"
+      : due > 0
+        ? `${due} due now · ${count} medication${count === 1 ? "" : "s"}`
+        : `${count} medication${count === 1 ? "" : "s"} · all up to date`;
+  return { count, due, label };
+}
+
 /** Short display name for a status item — the med's name, or the action label. */
 export function careItemLabel(pet: Pet, type: ActionType, medId?: string): string {
   if (type === "meds" && medId) return pet.meds.find((m) => m.id === medId)?.name ?? ACTIONS.meds.label;

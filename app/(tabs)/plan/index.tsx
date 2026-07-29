@@ -12,6 +12,7 @@ import PetSelectorRow from "@/components/PetSelectorRow";
 import { TabScreen } from "@/components/Screen";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
 import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
+import { medicationSummary } from "@/lib/careStatus";
 import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
 import { useStore } from "@/lib/store";
@@ -186,6 +187,8 @@ function CareLinks({ petId, petName }: { petId: string; petName: string }) {
   const open = state.reminders.filter((r) => !r.done && r.petId === petId);
   const overdue = open.filter((r) => r.due < Date.now()).length;
   const forWhom = ` for ${petName}`;
+  const pet = state.pets.find((p) => p.id === petId);
+  const meds = pet ? medicationSummary(pet, state.schedules, state.activities, Date.now()) : null;
   return (
     <>
       <SectionHeader>Tasks &amp; care</SectionHeader>
@@ -203,6 +206,15 @@ function CareLinks({ petId, petName }: { petId: string; petName: string }) {
           }
           trailing={<Chevron />}
         />
+        {meds ? (
+          <Row
+            onPress={() => router.push({ pathname: "/medications", params: { petId } })}
+            leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
+            title="Medication"
+            subtitle={meds.label}
+            trailing={<Chevron />}
+          />
+        ) : null}
         <Row
           onPress={() => router.push("/vets")}
           leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}

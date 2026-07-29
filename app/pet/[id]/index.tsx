@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
 import EditStatSheet from "@/components/EditStatSheet";
@@ -28,6 +28,7 @@ import {
   SheetFooter,
   SheetSubtitle,
   SheetTitle,
+  SmallButton,
   TextField,
 } from "@/components/ui";
 import {
@@ -46,6 +47,7 @@ import {
   weightFeedingEntry,
   weightTargetRange,
   weightUnitLabel,
+  type PetTransfer,
 } from "@/lib/data";
 import { timeAgo, useStore } from "@/lib/store";
 import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
@@ -79,6 +81,9 @@ export default function PetDetailPage() {
     deleteVaccination,
     addVetVisit,
     deleteVetVisit,
+    requestPetTransfer,
+    fetchPetTransfers,
+    cancelPetTransfer,
     toast,
   } = useStore();
   const [editing, setEditing] = useState<"weight" | "age" | "height" | "length" | null>(null);
@@ -99,7 +104,24 @@ export default function PetDetailPage() {
   const [genderOpen, setGenderOpen] = useState(false);
   const [genderVal, setGenderVal] = useState<"male" | "female" | "unset">("unset");
   const [identityEditing, setIdentityEditing] = useState<"microchip" | "allergies" | "notes" | null>(null);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveTarget, setMoveTarget] = useState("");
+  const [moveBusy, setMoveBusy] = useState(false);
+  const [pendingMove, setPendingMove] = useState<PetTransfer | null>(null);
   const refreshControl = usePullToRefresh();
+
+  const canMove = state.myRole === "owner" || state.myRole === "admin";
+  // The outgoing offer for THIS pet, if one is already in flight.
+  useEffect(() => {
+    if (!canMove || !id) return;
+    let alive = true;
+    fetchPetTransfers().then((rows) => {
+      if (alive) setPendingMove(rows.find((r) => r.direction === "outgoing" && r.petId === id) ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canMove, id, fetchPetTransfers]);
 
   if (!hydrated) {
     return (
@@ -630,8 +652,43 @@ export default function PetDetailPage() {
         />
       </Group>
 
+      {/* Rehoming and deletion — the two irreversible things, kept together and
+          away from the rest of the screen. */}
+      {canMove ? (
+        <Group style={{ marginTop: 28 }}>
+          {pendingMove ? (
+            <Row
+              leading={<IconCircle icon="home" tint={colors.orange} bg={colors.orangeSoft} />}
+              title="Move pending"
+              subtitle={`Waiting for ${pendingMove.toHouseholdName ?? "the other household"} to accept`}
+              interactiveTrailing
+              trailing={
+                <SmallButton
+                  label="Cancel"
+                  tone="gray"
+                  onPress={async () => {
+                    if (await cancelPetTransfer(pendingMove.id)) setPendingMove(null);
+                  }}
+                />
+              }
+            />
+          ) : (
+            <Row
+              leading={<IconCircle icon="home" tint={colors.accent} bg={colors.accentSoft} />}
+              title="Move to another household"
+              subtitle="Hand this pet, and everything about them, to another family"
+              trailing={<Icon name="chevron-right" size={15} color={colors.label3} />}
+              onPress={() => {
+                setMoveTarget("");
+                setMoveOpen(true);
+              }}
+            />
+          )}
+        </Group>
+      ) : null}
+
       {/* Delete */}
-      <Group style={{ marginTop: 28 }}>
+      <Group style={{ marginTop: canMove ? 12 : 28 }}>
         <ConfirmRow
           label="Delete pet"
           confirmLabel={`Tap again to delete ${pet.name}`}
@@ -644,6 +701,45 @@ export default function PetDetailPage() {
         />
       </Group>
       <View style={{ height: 16 }} />
+
+      <Sheet open={moveOpen} onClose={() => setMoveOpen(false)}>
+        <SheetTitle>Move {pet.name}</SheetTitle>
+        <SheetSubtitle>
+          Paste the other household&apos;s Family ID. They&apos;ll be asked to accept before anything moves.
+        </SheetSubtitle>
+
+        <FieldLabel>Family ID</FieldLabel>
+        <TextField
+          value={moveTarget}
+          onChangeText={setMoveTarget}
+          placeholder="00000000-0000-0000-0000-000000000000"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+        />
+
+        <Footnote>
+          {pet.name} and everything about them — health records, weight history, medications, the whole activity log,
+          and every accessory they own or wear — go with them. They leave this household, and any Home shortcuts here
+          that point at them are removed.
+        </Footnote>
+
+        <SheetFooter>
+          <AccentButton
+            disabled={moveTarget.trim() === "" || moveBusy}
+            onPress={async () => {
+              setMoveBusy(true);
+              const res = await requestPetTransfer(pet.id, moveTarget.trim());
+              setMoveBusy(false);
+              if (!res.ok) return;
+              setMoveOpen(false);
+              setPendingMove((await fetchPetTransfers()).find((r) => r.direction === "outgoing" && r.petId === pet.id) ?? null);
+            }}
+          >
+            {moveBusy ? "Sending…" : "Request move"}
+          </AccentButton>
+        </SheetFooter>
+      </Sheet>
 
       <EditStatSheet
         open={editing === "weight"}

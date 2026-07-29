@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import Svg, { Circle, Ellipse, Line, Path, Rect } from "react-native-svg";
 import { StyleSheet, Text, View } from "react-native";
 import type { IconName } from "@/components/Icons";
-import { font, useColors, type Colors } from "@/lib/theme";
+import { font, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 /**
  * Shared how-to guide content. One source of truth for the guides list menu
@@ -19,7 +19,7 @@ export type Guide = {
   title: string;
   summary: string;
   minutes: number;
-  diagram?: "body" | "brush" | "nail";
+  diagram?: "body" | "brush" | "nail" | "coat" | "portion" | "vet";
   sections: GuideSection[];
   tip?: string;
 };
@@ -93,6 +93,7 @@ export const GUIDES: Guide[] = [
     title: "Brushing & grooming",
     summary: "Control shedding and stop mats before they form.",
     minutes: 5,
+    diagram: "coat",
     sections: [
       {
         heading: "Pick the tool",
@@ -152,6 +153,7 @@ export const GUIDES: Guide[] = [
     title: "Feeding & portions",
     summary: "Get portions right — the biggest lever on health.",
     minutes: 4,
+    diagram: "portion",
     sections: [
       {
         heading: "Get the amount right",
@@ -181,6 +183,7 @@ export const GUIDES: Guide[] = [
     title: "Vet visits",
     summary: "Make routine checkups count — and cheaper.",
     minutes: 3,
+    diagram: "vet",
     sections: [
       {
         heading: "Plan the visit",
@@ -209,10 +212,27 @@ export function guideById(id: string): Guide | undefined {
 
 /* ---- Inline, theme-colored diagrams (no image assets) ---- */
 
+/**
+ * Explicit dispatch, never a fallback: a guide whose `diagram` doesn't match a
+ * branch renders nothing rather than silently drawing somebody else's picture.
+ */
 export function GuideDiagram({ kind }: { kind: NonNullable<Guide["diagram"]> }) {
-  if (kind === "body") return <BodyConditionDiagram />;
-  if (kind === "brush") return <BrushAngleDiagram />;
-  return <NailQuickDiagram />;
+  switch (kind) {
+    case "body":
+      return <BodyConditionDiagram />;
+    case "brush":
+      return <BrushAngleDiagram />;
+    case "nail":
+      return <NailQuickDiagram />;
+    case "coat":
+      return <CoatTypeDiagram />;
+    case "portion":
+      return <PortionDiagram />;
+    case "vet":
+      return <VetTimelineDiagram />;
+    default:
+      return null;
+  }
 }
 
 function BodyConditionDiagram() {
@@ -273,12 +293,153 @@ function NailQuickDiagram() {
   );
 }
 
+/**
+ * Coat cross-sections: skin line at the bottom, hair drawn above it. The three
+ * differ in what actually decides the tool — strand LENGTH and whether there
+ * are two layers — so that's what's drawn, rather than three dog outlines.
+ */
+function CoatTypeDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
+
+  const Coat = ({
+    label,
+    tool,
+    tint,
+    top,
+    under,
+  }: {
+    label: string;
+    tool: string;
+    tint: string;
+    /** Length of the outer strands, in px. */
+    top: number;
+    /** Length of the dense undercoat, or 0 for a single-layer coat. */
+    under: number;
+  }) => (
+    <View style={dstyles.item}>
+      <Svg width={72} height={52} viewBox="0 0 72 52">
+        {/* Skin */}
+        <Line x1="8" y1="42" x2="64" y2="42" stroke={colors.label3} strokeWidth={2} strokeLinecap="round" />
+        {under > 0
+          ? Array.from({ length: 15 }, (_, i) => (
+              <Line
+                key={`u${i}`}
+                x1={9 + i * 3.9}
+                y1="42"
+                x2={9 + i * 3.9}
+                y2={42 - under}
+                stroke={colors.label3}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              />
+            ))
+          : null}
+        {Array.from({ length: 8 }, (_, i) => {
+          const x = 10 + i * 7.4;
+          return (
+            <Path
+              key={`t${i}`}
+              d={`M${x} 42 Q${x + 3} ${42 - top / 2} ${x + 1.5} ${42 - top}`}
+              stroke={tint}
+              strokeWidth={2}
+              strokeLinecap="round"
+              fill="none"
+            />
+          );
+        })}
+      </Svg>
+      <Text style={[dstyles.label, { color: tint }]}>{label}</Text>
+      <Text style={dstyles.sublabel}>{tool}</Text>
+    </View>
+  );
+
+  return (
+    <View style={dstyles.row}>
+      <Coat label="Short" tool="Curry / bristle" tint={colors.green} top={9} under={0} />
+      <Coat label="Double" tool="Rake, then slicker" tint={colors.orange} top={18} under={9} />
+      <Coat label="Long" tool="Slicker + comb" tint={colors.groomTint} top={28} under={0} />
+    </View>
+  );
+}
+
+/**
+ * The day's food as one bar: the whole bar is the daily allowance, split into
+ * set meals, with treats taking a bite out of the SAME bar rather than sitting
+ * beside it — the single point people get wrong.
+ */
+function PortionDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
+  return (
+    <View style={dstyles.single}>
+      <Svg width={180} height={64} viewBox="0 0 180 64">
+        {/* The daily allowance, as an outline the segments fill. */}
+        <Rect x="9" y="19" width="162" height="28" rx="9" fill={colors.fill} />
+        <Rect x="10" y="20" width="68" height="26" rx="8" fill={withAlpha(colors.accent, 0.85)} />
+        <Rect x="82" y="20" width="68" height="26" rx="8" fill={withAlpha(colors.accent, 0.5)} />
+        <Rect x="154" y="20" width="16" height="26" rx="7" fill={colors.orange} />
+        {/* Span bracket: everything above is one day's food. */}
+        <Path d="M10 13 L10 8 L170 8 L170 13" stroke={colors.label3} strokeWidth={1.5} fill="none" strokeLinecap="round" />
+      </Svg>
+      <View style={dstyles.keyRow}>
+        <View style={[dstyles.dot, { backgroundColor: colors.accent }]} />
+        <Text style={dstyles.keyText}>set meals</Text>
+        <View style={[dstyles.dot, { backgroundColor: colors.orange, marginLeft: 12 }]} />
+        <Text style={dstyles.keyText}>treats</Text>
+      </View>
+      <Text style={dstyles.caption}>One day&apos;s food. Treats come out of it — not on top.</Text>
+    </View>
+  );
+}
+
+/** A 12-month bar with the checkups marked on it. */
+function VetTimelineDiagram() {
+  const colors = useColors();
+  const dstyles = useMemo(() => makeDstyles(colors), [colors]);
+
+  const Year = ({ label, tint, visits }: { label: string; tint: string; visits: number[] }) => (
+    <View style={dstyles.item}>
+      <Svg width={108} height={38} viewBox="0 0 108 38">
+        <Line x1="10" y1="22" x2="98" y2="22" stroke={colors.label3} strokeWidth={2} strokeLinecap="round" />
+        {[0, 3, 6, 9, 12].map((m) => (
+          <Line
+            key={m}
+            x1={10 + (m / 12) * 88}
+            y1="18"
+            x2={10 + (m / 12) * 88}
+            y2="26"
+            stroke={colors.label3}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        ))}
+        {visits.map((m) => (
+          <Circle key={m} cx={10 + (m / 12) * 88} cy="22" r="6" fill={tint} stroke={colors.card} strokeWidth={2} />
+        ))}
+      </Svg>
+      <Text style={[dstyles.label, { color: tint }]}>{label}</Text>
+    </View>
+  );
+
+  return (
+    <View style={dstyles.single}>
+      <View style={dstyles.row}>
+        <Year label="Adult — once a year" tint={colors.accent} visits={[12]} />
+        <Year label="Senior — every 6 months" tint={colors.vetTint} visits={[6, 12]} />
+      </View>
+      <Text style={dstyles.caption}>Ticks are 3 months. Dots are wellness exams.</Text>
+    </View>
+  );
+}
+
 const makeDstyles = (colors: Colors) => StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-around", width: "100%" },
-  item: { alignItems: "center", gap: 4 },
-  label: { fontSize: 11, fontFamily: font.semibold },
-  single: { alignItems: "center", gap: 8 },
-  caption: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
+  item: { alignItems: "center", gap: 4, flexShrink: 1 },
+  label: { fontSize: 11, fontFamily: font.semibold, textAlign: "center" },
+  sublabel: { fontSize: 10, fontFamily: font.medium, color: colors.label3, textAlign: "center" },
+  single: { alignItems: "center", gap: 8, width: "100%" },
+  caption: { fontSize: 12, fontFamily: font.medium, color: colors.label2, textAlign: "center", paddingHorizontal: 16 },
   keyRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", justifyContent: "center" },
   dot: { width: 8, height: 8, borderRadius: 4 },
   keyText: { fontSize: 11, fontFamily: font.medium, color: colors.label2, marginLeft: 5 },

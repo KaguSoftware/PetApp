@@ -42,6 +42,7 @@ import {
   type HouseholdAccount,
   type HouseholdInvite,
   type JoinRequest,
+  type PetTransfer,
   type Member,
   type Pet,
 } from "@/lib/data";
@@ -215,6 +216,10 @@ export default function FamilySettingsPage() {
     fetchJoinRequests,
     approveJoinRequest,
     rejectJoinRequest,
+    fetchPetTransfers,
+    acceptPetTransfer,
+    rejectPetTransfer,
+    cancelPetTransfer,
     toast,
   } = useStore();
 
@@ -237,6 +242,15 @@ export default function FamilySettingsPage() {
     if (!canManage) return;
     fetchJoinRequests().then(setJoinRequests);
   }, [canManage, state.activeHouseholdId, fetchJoinRequests]);
+
+  // Pets being offered to or from this household (0039) — admin+ only. Loaded
+  // alongside join requests since they're decided in the same place.
+  const [petTransfers, setPetTransfers] = useState<PetTransfer[]>([]);
+  const [decidingTransferId, setDecidingTransferId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canManage) return;
+    fetchPetTransfers().then(setPetTransfers);
+  }, [canManage, state.activeHouseholdId, fetchPetTransfers]);
 
   const [familyPwOpen, setFamilyPwOpen] = useState(false);
   const [currentPw, setCurrentPw] = useState("");
@@ -543,6 +557,74 @@ export default function FamilySettingsPage() {
                 }
               />
             ))}
+          </Group>
+        </>
+      ) : null}
+
+      {/* Pets on the way in or out. An incoming one moves the whole animal —
+          history, health records, accessories — into this household. */}
+      {canManage && petTransfers.length > 0 ? (
+        <>
+          <SectionHeader>Pet transfers</SectionHeader>
+          <Group>
+            {petTransfers.map((t) =>
+              t.direction === "incoming" ? (
+                <Row
+                  key={t.id}
+                  leading={<IconCircle icon="paw" tint={colors.accent} bg={colors.accentSoft} />}
+                  title={t.petName}
+                  subtitle={`${t.fromHouseholdName ?? "Another household"} wants to move them here`}
+                  interactiveTrailing
+                  trailing={
+                    <View style={styles.rowActions}>
+                      <SmallButton
+                        label="Decline"
+                        tone="red"
+                        disabled={decidingTransferId === t.id}
+                        onPress={async () => {
+                          setDecidingTransferId(t.id);
+                          const ok = await rejectPetTransfer(t.id);
+                          setDecidingTransferId(null);
+                          if (ok) setPetTransfers((prev) => prev.filter((x) => x.id !== t.id));
+                        }}
+                      />
+                      <SmallButton
+                        label="Accept"
+                        tone="green"
+                        disabled={decidingTransferId === t.id}
+                        onPress={async () => {
+                          setDecidingTransferId(t.id);
+                          const ok = await acceptPetTransfer(t.id);
+                          setDecidingTransferId(null);
+                          if (ok) setPetTransfers((prev) => prev.filter((x) => x.id !== t.id));
+                        }}
+                      />
+                    </View>
+                  }
+                />
+              ) : (
+                <Row
+                  key={t.id}
+                  leading={<IconCircle icon="paw" tint={colors.orange} bg={colors.orangeSoft} />}
+                  title={t.petName}
+                  subtitle={`Waiting for ${t.toHouseholdName ?? "the other household"} to accept`}
+                  interactiveTrailing
+                  trailing={
+                    <SmallButton
+                      label="Cancel"
+                      tone="gray"
+                      disabled={decidingTransferId === t.id}
+                      onPress={async () => {
+                        setDecidingTransferId(t.id);
+                        const ok = await cancelPetTransfer(t.id);
+                        setDecidingTransferId(null);
+                        if (ok) setPetTransfers((prev) => prev.filter((x) => x.id !== t.id));
+                      }}
+                    />
+                  }
+                />
+              )
+            )}
           </Group>
         </>
       ) : null}
