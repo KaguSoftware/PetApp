@@ -506,10 +506,18 @@ export function SheetSubtitle({ children }: { children: React.ReactNode }) {
   return <Text style={primStyles.sheetSubtitle}>{children}</Text>;
 }
 
-export function FieldLabel({ children }: { children: string }) {
+export function FieldLabel({ children, required = false }: { children: string; required?: boolean }) {
   const colors = useColors();
   const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
-  return <Text style={primStyles.fieldLabel}>{children}</Text>;
+  return (
+    <Text style={primStyles.fieldLabel}>
+      {children}
+      {/* The star is decorative — `accessibilityLabel` on the Text would be
+          announced instead of the field name, so the requirement is conveyed to
+          screen readers by the input's own accessibilityHint at the call site. */}
+      {required ? <Text style={primStyles.fieldLabelStar}> *</Text> : null}
+    </Text>
+  );
 }
 
 /** The one text input. Card bg, radius.md, 48pt min height, accent focus ring. */
@@ -762,6 +770,9 @@ const makePrimStyles = (colors: Colors) => StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 4,
   },
+  // Slightly larger than the label so the star doesn't read as a speck at
+  // 11.5pt uppercase; letterSpacing reset so it sits tight to the word.
+  fieldLabelStar: { fontSize: 13, color: colors.red, letterSpacing: 0 },
   textField: {
     backgroundColor: colors.card,
     borderRadius: radius.md,
