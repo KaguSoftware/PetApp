@@ -1,14 +1,15 @@
 import * as Crypto from "expo-crypto";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { ActionSheetIOS, Platform, StyleSheet, Text, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { DrillView } from "@/components/Motion";
 import { Icon } from "@/components/Icons";
 import { Stepper } from "@/components/TimeStepper";
-import { TimeWheelPicker } from "@/components/WheelPicker";
+import { SingleWheelPicker, TimeWheelPicker } from "@/components/WheelPicker";
 import {
   AccentButton,
   FieldLabel,
+  Footnote,
   PRESS_SCALE_SMALL,
   PressableScale,
   Segmented,
@@ -17,7 +18,6 @@ import {
   SheetSubtitle,
   SheetTitle,
   SmallButton,
-  TextField,
 } from "@/components/ui";
 import { careItemLabel, describeCadence, findSchedule, formatSlotTime } from "@/lib/careStatus";
 import {
@@ -33,6 +33,18 @@ import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const MAX_SLOTS = 12;
+
+/**
+ * The early-log window, fixed at the default nearly everyone kept when it was
+ * a per-schedule stepper: a log up to this many minutes before a slot counts
+ * for it, and a ✓ un-checks this many minutes before the next slot. The value
+ * still persists per-schedule (grace_minutes) for web-demo parity — this is
+ * just no longer a knob.
+ */
+const GRACE_MINUTES = 30;
+
+/** Wheel entry meaning "this slot has no set amount". */
+const NO_AMOUNT = "No set amount";
 
 /** Sensible starting times when creating a schedule with N slots. */
 const DEFAULT_TIMES: Record<number, string[]> = {
@@ -58,18 +70,27 @@ const CADENCE_PRESETS: { days: number; label: string }[] = [
   { days: 365, label: "Yearly" },
 ];
 
-/** Next default time when appending a slot — an hour after the last one. */
+/** Floor "HH:MM" to the hour — the only times the hour-only picker can show.
+ *  Matches how the wheel itself parses (18:30 displays as 6 PM). */
+function floorToHour(time: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time);
+  return m ? `${m[1].padStart(2, "0")}:00` : time;
+}
+
+/** Next default time when appending a slot — an hour after the last one, on
+ *  the hour so a legacy minute-precision slot can't breed more of itself. */
 function nextSlotTime(slots: CareScheduleSlot[]): string {
   const last = slots[slots.length - 1]?.time ?? "08:00";
   const m = /^(\d{1,2}):(\d{2})$/.exec(last);
-  const total = m ? (Number(m[1]) * 60 + Number(m[2]) + 60) % 1440 : 9 * 60;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  const hour = m ? (Number(m[1]) + 1) % 24 : 9;
+  return `${String(hour).padStart(2, "0")}:00`;
 }
 
 /**
  * Create/edit the schedule for one care item (an action, or one medication).
- * Times, optional slot names, per-slot portions for feeding, days of week (or
- * an every-N-days cadence for grooming/vet), and the grace window.
+ * Times are hour-granularity chips that drill into a wheel; feeding slots get
+ * a serving picked from a native menu (iOS) or wheel (Android); days are
+ * "Every day" with a Custom escape that reveals the per-day pills.
  */
 export default function ScheduleEditorSheet({
   pet,
@@ -92,14 +113,15 @@ export default function ScheduleEditorSheet({
 
   const [slots, setSlots] = useState<CareScheduleSlot[]>([]);
   const [daysMask, setDaysMask] = useState(EVERY_DAY_MASK);
+  const [daysMode, setDaysMode] = useState<"everyday" | "custom">("everyday");
   const [cadence, setCadence] = useState<"weekly" | "interval">("weekly");
   const [intervalDays, setIntervalDays] = useState(30);
   // True when the cadence isn't one of the presets, so the day stepper shows.
   const [customCadence, setCustomCadence] = useState(false);
-  const [grace, setGrace] = useState(30);
-  // Index of the slot whose time is being picked — the sheet swaps to a
-  // dedicated wheel view while this is set. Null = editing the schedule form.
-  const [pickingSlot, setPickingSlot] = useState<number | null>(null);
+  // Index of the slot whose time / serving is being picked — the sheet swaps
+  // to a dedicated picker view while one is set. Both null = the form.
+  const [pickingTime, setPickingTime] = useState<number | null>(null);
+  const [pickingServing, setPickingServing] = useState<number | null>(null);
   // Direction of the last form↔picker swap, so DrillView slides the right way:
   // forward drilling into the picker, back returning to the form.
   const [drillDir, setDrillDir] = useState<"forward" | "back">("forward");
@@ -107,51 +129,100 @@ export default function ScheduleEditorSheet({
   // animate when the sheet first opens (its initial mount) — only the actual
   // form↔picker swaps do. Reset when the sheet reopens (see the seed effect).
   const [hasSwapped, setHasSwapped] = useState(false);
-  const openPicker = (i: number) => {
+  const drillTo = (set: (i: number) => void, i: number) => {
     setHasSwapped(true);
     setDrillDir("forward");
-    setPickingSlot(i);
+    set(i);
   };
   const closePicker = () => {
     setDrillDir("back");
-    setPickingSlot(null);
+    setPickingTime(null);
+    setPickingServing(null);
   };
 
   // Re-seed the form from the stored schedule each time the sheet opens.
   useEffect(() => {
     if (!open) return;
-    setPickingSlot(null);
+    setPickingTime(null);
+    setPickingServing(null);
     setHasSwapped(false);
     if (existing) {
       setSlots(existing.slots.length > 0 ? existing.slots : [{ time: "08:00" }]);
       setDaysMask(existing.daysMask);
+      setDaysMode(existing.intervalDays == null && existing.daysMask !== EVERY_DAY_MASK ? "custom" : "everyday");
       setCadence(existing.intervalDays != null ? "interval" : "weekly");
       const days = existing.intervalDays ?? 30;
       setIntervalDays(days);
       // Schedules saved before the presets existed (e.g. the old 180 default)
       // land on Custom rather than silently snapping to a different cadence.
       setCustomCadence(existing.intervalDays != null && !CADENCE_PRESETS.some((p) => p.days === days));
-      setGrace(existing.graceMinutes);
     } else {
       setSlots((DEFAULT_TIMES[type === "fed" ? 2 : 1] ?? ["08:00"]).map((time) => ({ time })));
       setDaysMask(EVERY_DAY_MASK);
+      setDaysMode("everyday");
       setCadence(canInterval ? "interval" : "weekly");
       // 182 = a real 6 months (and a preset). Was 180, which matched no preset
       // and rendered as "Every 180 days".
       setIntervalDays(type === "groomed" ? 14 : 182);
       setCustomCadence(false);
-      setGrace(30);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const label = careItemLabel(pet, type, medId);
-  // Cadences of a month or more: the "times" and grace-window controls stop
-  // being meaningful at that scale (see the Times/Grace sections below).
+  // Cadences of a month or more: per-day times stop being meaningful at that
+  // scale (see the Times section below).
   const longCadence = canInterval && cadence === "interval" && intervalDays >= 30;
 
   const updateSlot = (i: number, patch: Partial<CareScheduleSlot>) =>
     setSlots((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+
+  const gramsFor = (frac: number) => Math.round(frac * pet.cupGrams);
+  const servingLabel = (grams: number | undefined) => {
+    if (grams == null) return "Amount";
+    const p = PORTIONS.find((x) => gramsFor(x.frac) === grams);
+    return p ? p.label : `${grams} g`;
+  };
+
+  // The picker view must show EXACTLY what Done keeps, so opening it first
+  // snaps a legacy minute-precision time (saved by the old 5-minute wheel) to
+  // the hour the wheel is about to display — otherwise "6:30 PM" rendered as
+  // "6 PM", Done was a silent no-op, and 6:00 itself was unreachable (a wheel
+  // parked on 6 never fires onChange).
+  const openTime = (i: number) => {
+    const t = slots[i]?.time;
+    if (t != null && t !== floorToHour(t)) updateSlot(i, { time: floorToHour(t) });
+    drillTo(setPickingTime, i);
+  };
+
+  // Serving is a short fixed list, so it gets the platform's own menu: the
+  // native action sheet on iOS, a wheel drill-in (same pattern as times) on
+  // Android, where there is no system equivalent this close.
+  const openServing = (i: number) => {
+    if (Platform.OS === "ios") {
+      const options = [...PORTIONS.map((p) => p.label), NO_AMOUNT, "Cancel"];
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: `Serving · ${pet.name}`, options, cancelButtonIndex: options.length - 1 },
+        (idx) => {
+          if (idx == null || idx >= options.length - 1) return;
+          updateSlot(i, { grams: idx < PORTIONS.length ? gramsFor(PORTIONS[idx].frac) : undefined });
+        },
+      );
+    } else {
+      // Same show-what-you-keep rule as openTime: an amount saved under an old
+      // cup size no longer reverse-maps to any portion, and the wheel would
+      // park on "No set amount" while the slot still carried grams. Snap it to
+      // the closest portion under the CURRENT cup size first.
+      const grams = slots[i]?.grams;
+      if (grams != null && !PORTIONS.some((p) => gramsFor(p.frac) === grams)) {
+        const closest = PORTIONS.reduce((best, p) =>
+          Math.abs(gramsFor(p.frac) - grams) < Math.abs(gramsFor(best.frac) - grams) ? p : best,
+        );
+        updateSlot(i, { grams: gramsFor(closest.frac) });
+      }
+      drillTo(setPickingServing, i);
+    }
+  };
 
   const save = () => {
     if (slots.length === 0) return;
@@ -164,14 +235,13 @@ export default function ScheduleEditorSheet({
       type,
       medId,
       slots: [...slots].sort((a, b) => a.time.localeCompare(b.time)),
-      daysMask: interval ? EVERY_DAY_MASK : daysMask || EVERY_DAY_MASK,
+      daysMask: interval || daysMode === "everyday" ? EVERY_DAY_MASK : daysMask || EVERY_DAY_MASK,
       intervalDays: interval ? Math.max(1, intervalDays) : undefined,
       anchorTs: interval ? (existing?.anchorTs ?? startOfToday.getTime()) : undefined,
-      // Long cadences hide the grace stepper, so persist the maximum rather than
-      // whatever minute value happened to be in state — that keeps the ✓ up
-      // instead of expiring 30 min before a 6-month slot. 720 is the ceiling the
-      // 0017 migration's check constraint allows; a larger value is rejected.
-      graceMinutes: longCadence ? 720 : grace,
+      // Long cadences persist the maximum rather than the fixed 30 — that
+      // keeps the ✓ up instead of expiring 30 min before a 6-month slot. 720
+      // is the ceiling the 0017 migration's check constraint allows.
+      graceMinutes: longCadence ? 720 : GRACE_MINUTES,
     });
     toast("clock", `${label} schedule saved`, `${pet.name} · everyone's reminders updated`);
     onClose();
@@ -235,7 +305,7 @@ export default function ScheduleEditorSheet({
               />
             </View>
           ) : null}
-          <Text style={styles.graceHint}>
+          <Text style={styles.hint}>
             {intervalDays >= 60
               ? `We'll remind everyone when it's due — about ${describeCadence(intervalDays).toLowerCase()}.`
               : `Repeats ${describeCadence(intervalDays).toLowerCase()}, starting today.`}
@@ -244,42 +314,81 @@ export default function ScheduleEditorSheet({
       ) : (
         <>
           <FieldLabel>Days</FieldLabel>
-          <View style={styles.daysRow}>
-            {DAY_LETTERS.map((letter, day) => (
-              <SelectableChip
-                key={day}
-                label={letter}
-                selected={maskHasDay(daysMask, day)}
-                onPress={() => setDaysMask((m) => m ^ (1 << day))}
-              />
-            ))}
-          </View>
+          <Segmented
+            options={[
+              { value: "everyday", label: "Every day" },
+              { value: "custom", label: "Custom days" },
+            ]}
+            value={daysMode}
+            onChange={setDaysMode}
+          />
+          {daysMode === "custom" ? (
+            <View style={styles.daysRow}>
+              {DAY_LETTERS.map((letter, day) => (
+                <SelectableChip
+                  key={day}
+                  label={letter}
+                  selected={maskHasDay(daysMask, day)}
+                  onPress={() => setDaysMask((m) => m ^ (1 << day))}
+                />
+              ))}
+            </View>
+          ) : null}
         </>
       )}
     </>
   );
 
-  const picking = pickingSlot != null && slots[pickingSlot] != null;
+  const pickingTimeActive = pickingTime != null && slots[pickingTime] != null;
+  const pickingServingActive = pickingServing != null && slots[pickingServing] != null;
+  const picking = pickingTimeActive || pickingServingActive;
 
-  // Time picking takes over the whole sheet instead of expanding a wheel inline
+  // Picking takes over the whole sheet instead of expanding a wheel inline
   // (which stretched the sheet and pushed the form around) and instead of a
   // nested Sheet (two stacked RN Modals is a known-fragile pattern here). It
   // cross-slides in over the form via DrillView.
-  const pickerBody =
-    pickingSlot != null && slots[pickingSlot] ? (
-      <>
-        <SheetTitle>{slots[pickingSlot].label?.trim() ? slots[pickingSlot].label : `Time ${pickingSlot + 1}`}</SheetTitle>
-        <SheetSubtitle>
-          {label} · {pet.name}
-        </SheetSubtitle>
-        <View style={styles.pickerBody}>
-          <TimeWheelPicker value={slots[pickingSlot].time} onChange={(time) => updateSlot(pickingSlot, { time })} />
-        </View>
-        <SheetFooter>
-          <AccentButton onPress={closePicker}>Done</AccentButton>
-        </SheetFooter>
-      </>
-    ) : null;
+  const timePickerBody = pickingTimeActive ? (
+    <>
+      <SheetTitle>{slots.length > 1 ? `Time ${pickingTime! + 1}` : "Time"}</SheetTitle>
+      <SheetSubtitle>
+        {label} · {pet.name}
+      </SheetSubtitle>
+      <View style={styles.pickerBody}>
+        <TimeWheelPicker hourOnly value={slots[pickingTime!].time} onChange={(time) => updateSlot(pickingTime!, { time })} />
+      </View>
+      <SheetFooter>
+        <AccentButton onPress={closePicker}>Done</AccentButton>
+      </SheetFooter>
+    </>
+  ) : null;
+
+  // Android's serving picker (iOS uses the native action sheet, no drill).
+  const servingPickerBody = pickingServingActive ? (
+    <>
+      <SheetTitle>Serving</SheetTitle>
+      <SheetSubtitle>
+        {label} · {pet.name}
+      </SheetSubtitle>
+      <View style={styles.pickerBody}>
+        <SingleWheelPicker
+          values={[NO_AMOUNT, ...PORTIONS.map((p) => p.label)]}
+          value={(() => {
+            const grams = slots[pickingServing!].grams;
+            const p = grams != null ? PORTIONS.find((x) => gramsFor(x.frac) === grams) : undefined;
+            return p ? p.label : NO_AMOUNT;
+          })()}
+          onChange={(v) => {
+            const p = PORTIONS.find((x) => x.label === v);
+            updateSlot(pickingServing!, { grams: p ? gramsFor(p.frac) : undefined });
+          }}
+          width={220}
+        />
+      </View>
+      <SheetFooter>
+        <AccentButton onPress={closePicker}>Done</AccentButton>
+      </SheetFooter>
+    </>
+  ) : null;
 
   const formBody = (
     <>
@@ -298,56 +407,48 @@ export default function ScheduleEditorSheet({
       <FieldLabel>{longCadence ? "Remind at" : "Times"}</FieldLabel>
       <View style={styles.slotList}>
         {slots.map((slot, i) => (
-          <View key={i} style={styles.slotBlock}>
-            <View style={styles.slotRow}>
-              {/* Tapping the time drills into the wheel picker (DrillView slide
-                  below) rather than expanding inline — an inline wheel grew this
-                  sheet's height and shoved the rest of the form around. */}
+          <View key={i} style={styles.slotRow}>
+            {/* Tapping the time drills into the wheel picker (DrillView slide
+                below) rather than expanding inline — an inline wheel grew this
+                sheet's height and shoved the rest of the form around. */}
+            <PressableScale
+              style={styles.chipFlex}
+              onPress={() => openTime(i)}
+              accessibilityRole="button"
+              accessibilityLabel={`Time ${i + 1}: ${formatSlotTime(slot.time)}. Tap to change`}
+            >
+              <View style={styles.valueChip}>
+                <Text style={styles.valueChipLabel}>{formatSlotTime(slot.time)}</Text>
+                <Icon name="chevron-down" size={13} color={colors.label3} />
+              </View>
+            </PressableScale>
+            {type === "fed" ? (
               <PressableScale
-                onPress={() => openPicker(i)}
+                style={styles.chipFlex}
+                onPress={() => openServing(i)}
                 accessibilityRole="button"
-                accessibilityLabel={`Time ${i + 1}: ${formatSlotTime(slot.time)}. Tap to change`}
+                accessibilityLabel={`Serving for time ${i + 1}: ${servingLabel(slot.grams)}. Tap to change`}
               >
-                <View style={styles.timeChip}>
-                  <Text style={styles.timeChipLabel}>{formatSlotTime(slot.time)}</Text>
+                <View style={styles.valueChip}>
+                  <Text style={[styles.valueChipLabel, slot.grams == null && styles.valueChipEmpty]}>
+                    {servingLabel(slot.grams)}
+                  </Text>
                   <Icon name="chevron-down" size={13} color={colors.label3} />
                 </View>
               </PressableScale>
-              <TextField
-                value={slot.label ?? ""}
-                onChangeText={(t) => updateSlot(i, { label: t || undefined })}
-                placeholder={type === "fed" ? "Breakfast…" : "Name (optional)"}
-                style={styles.slotName}
-              />
-              {slots.length > 1 ? (
-                <PressableScale
-                  scaleTo={PRESS_SCALE_SMALL}
-                  onPress={() => setSlots((prev) => prev.filter((_, idx) => idx !== i))}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove time ${i + 1}`}
-                  hitSlop={8}
-                >
-                  <View style={styles.removeSlot}>
-                    <Icon name="xmark" size={15} color={colors.label3} />
-                  </View>
-                </PressableScale>
-              ) : null}
-            </View>
-            {type === "fed" ? (
-              <View style={styles.portionRow}>
-                {PORTIONS.map((p) => {
-                  const grams = Math.round(p.frac * pet.cupGrams);
-                  const selected = slot.grams === grams;
-                  return (
-                    <SelectableChip
-                      key={p.value}
-                      label={p.label}
-                      selected={selected}
-                      onPress={() => updateSlot(i, { grams: selected ? undefined : grams })}
-                    />
-                  );
-                })}
-              </View>
+            ) : null}
+            {slots.length > 1 ? (
+              <PressableScale
+                scaleTo={PRESS_SCALE_SMALL}
+                onPress={() => setSlots((prev) => prev.filter((_, idx) => idx !== i))}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove time ${i + 1}`}
+                hitSlop={8}
+              >
+                <View style={styles.removeSlot}>
+                  <Icon name="xmark" size={15} color={colors.label3} />
+                </View>
+              </PressableScale>
             ) : null}
           </View>
         ))}
@@ -364,31 +465,23 @@ export default function ScheduleEditorSheet({
       {/* Already rendered above the times when the cadence is long. */}
       {longCadence ? null : cadenceSection}
 
-      {/* A minute-level grace window only means something for items that recur
-          within a day or two. On a 6-monthly vet visit "stays checked until 30
-          min before the next time" is nonsense — the checkmark should simply
-          hold until the next visit is due. */}
+      {/* The old per-schedule "grace window" stepper, folded into a fixed
+          30 minutes (GRACE_MINUTES) — the note keeps the behavior discoverable
+          without the knob. Meaningless at long cadences, where the ✓ simply
+          holds until the next visit is due. */}
       {longCadence ? null : (
-        <>
-          <FieldLabel>Grace window</FieldLabel>
-          <View style={styles.intervalRow}>
-            <Stepper
-              label={grace === 0 ? "Off" : `${grace} min`}
-              onDec={() => setGrace((g) => Math.max(0, g - 15))}
-              onInc={() => setGrace((g) => Math.min(720, g + 15))}
-              decDisabled={grace <= 0}
-              accessibilityLabel="Grace window in minutes"
-            />
-          </View>
-          <Text style={styles.graceHint}>
-            After logging, this stays checked until {grace === 0 ? "the next time arrives" : `${grace} min before the next time`}.
-          </Text>
-        </>
+        <Footnote style={styles.note}>
+          A little wiggle room is built in: logging up to 30 minutes before a time still counts, and a ✓ stays
+          until 30 minutes before the next one.
+        </Footnote>
       )}
 
       <SheetFooter>
         <View style={{ gap: 10 }}>
-          <AccentButton disabled={slots.length === 0 || (daysMask === 0 && cadence === "weekly")} onPress={save}>
+          <AccentButton
+            disabled={slots.length === 0 || (cadence === "weekly" && daysMode === "custom" && daysMask === 0)}
+            onPress={save}
+          >
             {existing ? "Save schedule" : "Set schedule"}
           </AccentButton>
           {existing ? (
@@ -416,7 +509,7 @@ export default function ScheduleEditorSheet({
       <View style={styles.drillClip}>
         {picking ? (
           <DrillView key="picker" direction={drillDir}>
-            {pickerBody}
+            {pickingTimeActive ? timePickerBody : servingPickerBody}
           </DrillView>
         ) : (
           <DrillView key="form" direction={drillDir} animate={hasSwapped}>
@@ -434,12 +527,9 @@ const makeStyles = (colors: Colors) =>
     // edges mid-transition.
     drillClip: { overflow: "hidden" },
     slotList: { gap: 12 },
-    slotBlock: { gap: 8 },
     slotRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    timeChip: {
-      minWidth: 96,
-      // Matches TextField's 48pt min height so the time chip and the name field
-      // share one baseline across the slot row.
+    chipFlex: { flex: 1 },
+    valueChip: {
       minHeight: 48,
       paddingHorizontal: 14,
       borderRadius: radius.md,
@@ -451,19 +541,19 @@ const makeStyles = (colors: Colors) =>
       justifyContent: "center",
       gap: 6,
     },
-    timeChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
-    // The drilled-in wheel sits in an inset card (same surface as the slot's time
-    // chip) so it reads as that slot's own editing surface, not a floating
+    valueChipLabel: { fontSize: 16, fontFamily: font.semibold, color: colors.label },
+    valueChipEmpty: { color: colors.label2 },
+    // The drilled-in wheel sits in an inset card (same surface as the slot's
+    // chips) so it reads as that slot's own editing surface, not a floating
     // control. Card bg keeps the wheel's fill selection band visible.
     pickerBody: { marginTop: 16, borderRadius: radius.md, backgroundColor: colors.card, paddingVertical: 8, ...cardShadow },
-    slotName: { flex: 1, marginTop: 0 },
     removeSlot: { width: 32, height: 44, alignItems: "center", justifyContent: "center" },
-    portionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingLeft: 2 },
     addTime: { marginTop: 12, alignSelf: "flex-start" },
-    daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
     intervalRow: { flexDirection: "row" },
     cadenceWrap: { gap: 12 },
     cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-    graceHint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
+    hint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
+    note: { marginTop: 16, paddingHorizontal: 2 },
     removeLabel: { fontSize: 17, fontFamily: font.semibold, color: colors.red },
   });

@@ -82,6 +82,10 @@ export default function PetsSection() {
   const [editPetBirth, setEditPetBirth] = useState<number | null>(null);
   const [editPetChip, setEditPetChip] = useState("");
   const [editPetAllergies, setEditPetAllergies] = useState("");
+  // Microchip / allergies / cup size live behind "More details" — rarely
+  // edited, and each has a safe fallback on save. Auto-expanded when the pet
+  // already has one filled in, so existing values are never invisibly edited.
+  const [editMoreOpen, setEditMoreOpen] = useState(false);
 
   const openEditPet = (p: Pet) => {
     setEditingPet(p);
@@ -100,6 +104,7 @@ export default function PetsSection() {
     setEditPetBirth(p.birthDate != null ? atNoon(new Date(p.birthDate)) : null);
     setEditPetChip(p.microchip ?? "");
     setEditPetAllergies(p.allergies ?? "");
+    setEditMoreOpen(Boolean(p.microchip || p.allergies));
   };
 
   const resolvedEditBreed =
@@ -223,7 +228,11 @@ export default function PetsSection() {
             />
 
             <View style={styles.twoCol}>
-              <Field style={{ flex: 1 }} label="Age (years)" value={editPetAge} onChangeText={setEditPetAge} keyboardType="decimal-pad" />
+              {/* With a birth date set, age is derived — a typed age would just
+                  be overridden, so the field only shows when there's no date. */}
+              {editPetBirth == null ? (
+                <Field style={{ flex: 1 }} label="Age (years)" value={editPetAge} onChangeText={setEditPetAge} keyboardType="decimal-pad" />
+              ) : null}
               <Field
                 style={{ flex: 1 }}
                 label={`Weight (${weightUnitLabel(state.units)})`}
@@ -251,27 +260,36 @@ export default function PetsSection() {
               <Text style={shared.fieldHint}>With a birth date set, age is calculated automatically.</Text>
             ) : null}
 
-            <Field
-              label="Microchip number (optional)"
-              value={editPetChip}
-              onChangeText={setEditPetChip}
-              placeholder="e.g. 985112003456789"
-              autoCapitalize="none"
-            />
+            {editMoreOpen ? (
+              <>
+                <Field
+                  label="Microchip number (optional)"
+                  value={editPetChip}
+                  onChangeText={setEditPetChip}
+                  placeholder="e.g. 985112003456789"
+                  autoCapitalize="none"
+                />
 
-            <Field
-              label="Allergies & alerts (optional)"
-              value={editPetAllergies}
-              onChangeText={setEditPetAllergies}
-              placeholder="e.g. Chicken allergy, sensitive stomach"
-            />
+                <Field
+                  label="Allergies & alerts (optional)"
+                  value={editPetAllergies}
+                  onChangeText={setEditPetAllergies}
+                  placeholder="e.g. Chicken allergy, sensitive stomach"
+                />
 
-            <Field
-              label="Cup size (grams of food per cup)"
-              value={editPetCup}
-              onChangeText={setEditPetCup}
-              keyboardType="number-pad"
-            />
+                <Field
+                  label="Cup size (grams of food per cup)"
+                  value={editPetCup}
+                  onChangeText={setEditPetCup}
+                  keyboardType="number-pad"
+                />
+              </>
+            ) : (
+              <View style={{ marginTop: 16, alignItems: "flex-start" }}>
+                <SmallButton label="More details…" onPress={() => setEditMoreOpen(true)} />
+                <Text style={shared.fieldHint}>Microchip, allergies, and cup size.</Text>
+              </View>
+            )}
 
             <View style={{ marginTop: 28 }}>
               <AccentButton

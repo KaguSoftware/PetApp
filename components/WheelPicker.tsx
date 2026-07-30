@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
+import { SheetPanContext } from "@/components/Sheet";
 import { hapticsEnabled } from "@/lib/a11y";
 import { font, useColors, type Colors } from "@/lib/theme";
 
@@ -117,13 +118,14 @@ function WheelColumn<T>({
     [values, value, onChange],
   );
 
+  // The sheet's whole-panel drag-to-close pan would otherwise answer the same
+  // downward drag that's meant to spin this column — blocking it makes the
+  // wheel's own scroll win, and the sheet only drags from outside the wheels.
+  const sheetPan = useContext(SheetPanContext);
+  const columnGesture = sheetPan ? Gesture.Native().blocksExternalGesture(sheetPan) : Gesture.Native();
+
   return (
-    // A wheel is often rendered inside a Sheet's own vertical ScrollView, where
-    // both scrollers answer the same pan — on iOS the outer one usually wins and
-    // the wheel refuses to turn. `blocksExternalGesture` makes the ancestor
-    // scroll wait on this column, so the wheel gets the drag. (nestedScrollEnabled
-    // below only covers the Android side of the same problem.)
-    <GestureDetector gesture={Gesture.Native().blocksExternalGesture()}>
+    <GestureDetector gesture={columnGesture}>
       <ScrollView
         ref={ref}
         style={{ width, height: ITEM_HEIGHT * VISIBLE }}
@@ -259,15 +261,19 @@ export function TimeWheelPicker({
   value,
   onChange,
   minuteStep = 5,
+  hourOnly = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   /** Minute granularity — 5 by default; pass 1 for exact times. */
   minuteStep?: number;
+  /** Hour + AM/PM only; any change snaps the minutes to :00. */
+  hourOnly?: boolean;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { hour12, minute, pm } = parseTime(value);
+  const { hour12, minute: parsedMinute, pm } = parseTime(value);
+  const minute = hourOnly ? 0 : parsedMinute;
   const minutes = useMemo(
     () => Array.from({ length: Math.ceil(60 / minuteStep) }, (_, i) => i * minuteStep),
     [minuteStep],
@@ -287,15 +293,19 @@ export function TimeWheelPicker({
           width={58}
           findIndex={closestIndex}
         />
-        <Text style={styles.colon}>:</Text>
-        <WheelColumn
-          values={minutes}
-          value={minute}
-          onChange={(mi) => onChange(toTimeString(hour12, mi, pm))}
-          format={pad2}
-          width={58}
-          findIndex={closestIndex}
-        />
+        {hourOnly ? null : (
+          <>
+            <Text style={styles.colon}>:</Text>
+            <WheelColumn
+              values={minutes}
+              value={minute}
+              onChange={(mi) => onChange(toTimeString(hour12, mi, pm))}
+              format={pad2}
+              width={58}
+              findIndex={closestIndex}
+            />
+          </>
+        )}
         <WheelColumn
           values={MERIDIEM}
           value={pm ? "PM" : "AM"}

@@ -269,9 +269,11 @@ export default function LogsScreen() {
             setRetroDay("today");
             // Seed the wheel at the current time — the common case is "I did
             // this a little while ago", so the user spins back rather than
-            // starting blank.
+            // starting blank. Floored to the wheel's 5-minute grid so the row
+            // it parks on IS the value that gets logged (and stays in the past).
             const d = new Date();
-            setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+            const m5 = d.getMinutes() - (d.getMinutes() % 5);
+            setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(m5).padStart(2, "0")}`);
             setRetroOpen(true);
           }}
           leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} />}
@@ -422,7 +424,9 @@ export default function LogsScreen() {
           value={retroDay}
           onChange={setRetroDay}
         />
-        <TimeWheelPicker value={retroTime} onChange={setRetroTime} minuteStep={1} />
+        {/* 5-minute steps (the picker's default): backfilling doesn't need
+            minute precision, and it cuts the minute wheel from 60 rows to 12. */}
+        <TimeWheelPicker value={retroTime} onChange={setRetroTime} />
         {retroTimeIsFuture ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
 
         <SheetFooter>

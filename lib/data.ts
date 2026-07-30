@@ -459,8 +459,14 @@ export function shortcutTileLabel(shortcut: Shortcut, pets: Pet[]): string {
     if (med) return med.name;
   }
   const base = ACTIONS[shortcut.type].label;
-  if (pets.length > 1 && covered.length === pets.length) return `${base} all`;
-  return base;
+  let label = pets.length > 1 && covered.length === pets.length ? `${base} all` : base;
+  // The builder no longer asks for a custom label, so two feed shortcuts that
+  // differ only in their baked-in portion must tell themselves apart here.
+  if (shortcut.type === "fed" && shortcut.portionFrac != null) {
+    const portion = PORTIONS.find((p) => p.frac === shortcut.portionFrac);
+    if (portion) label = `${label} · ${portion.label}`;
+  }
+  return label;
 }
 
 export const COSMETICS: Cosmetic[] = [

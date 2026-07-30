@@ -1,10 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector, GestureHandlerRootView, type PanGesture } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useA11yPrefs, useReduceMotion } from "@/lib/a11y";
 import { radius, useColors, type Colors } from "@/lib/theme";
+
+/**
+ * The pan that lets a downward drag ANYWHERE on the sheet dismiss it. Inner
+ * vertical scrollables (wheel columns, embedded lists) must block it — via
+ * `Gesture.Native().blocksExternalGesture(thisPan)` or the `SheetScrollable`
+ * wrapper below — or a drag meant to spin/scroll them drags the sheet instead.
+ */
+export const SheetPanContext = createContext<PanGesture | null>(null);
+
+/** Wrap an inner scrollable so its own drag beats the sheet's drag-to-close. */
+export function SheetScrollable({ children }: { children: React.ReactElement }) {
+  const pan = useContext(SheetPanContext);
+  if (!pan) return children;
+  return <GestureDetector gesture={Gesture.Native().blocksExternalGesture(pan)}>{children}</GestureDetector>;
+}
 
 /**
  * Bottom sheet, matching the web demo's Sheet: backdrop tap or swipe-down to
@@ -34,9 +57,29 @@ export default function Sheet({
   const [mounted, setMounted] = useState(open);
   const progress = useSharedValue(0); // 0 hidden → 1 shown
 
+  const dragY = useSharedValue(0);
+  // Offset of the sheet's inner ScrollView. Stays 0 for non-scrollable sheets,
+  // so the same pan logic covers both modes.
+  const scrollY = useSharedValue(0);
+  const engaged = useSharedValue(false);
+  const dragStart = useSharedValue(0);
+
   useEffect(() => {
     if (open) {
       setMounted(true);
+      closeFired.current = false;
+      // The component survives close/reopen (only the Modal unmounts). On a
+      // FRESH mount the new ScrollView never reports its initial 0 offset and
+      // the panel re-measures via onLayout — so reset both. On a rapid reopen
+      // mid-close-animation the old views survive, and their live offset and
+      // measured height are still the truth: resetting then would let the
+      // content pan engage mid-list and break the entrance travel.
+      if (!mounted) {
+        scrollY.value = 0;
+        setPanelH(0);
+      }
+      dragY.value = 0;
+      engaged.value = false;
       // Spring entrance (high damping — settles fast, no visible overshoot);
       // reduce-motion gets a quick fade-adjacent timing instead of a slide feel.
       progress.value = reduceMotion
@@ -47,36 +90,93 @@ export default function Sheet({
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [open, mounted, progress, reduceMotion]);
+  }, [open, mounted, progress, reduceMotion, dragY, scrollY, engaged]);
 
-  const dragY = useSharedValue(0);
-  const pan = Gesture.Pan()
-    // Claim downward drags immediately so the handle reliably drags the sheet
-    // (rather than the gesture never activating), but bail on upward drags so
-    // they fall through to the content's own scrolling.
-    .activeOffsetY(6)
-    .failOffsetY(-10)
-    .onUpdate((e) => {
-      dragY.value = Math.max(0, e.translationY);
-    })
-    .onEnd((e) => {
-      if (e.translationY > 70 || e.velocityY > 600) {
-        runOnJS(onClose)();
+  // The gestures are memoized because their IDENTITY matters: inner scrollables
+  // hold a block relation against contentPan via SheetPanContext, and a fresh
+  // object per render would silently sever it. onClose is reached through a ref
+  // so the worklets never need re-creating.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // Guarded: a drag that starts on the grabber activates BOTH pans (they're
+  // mutually simultaneous), so each one's onEnd crosses the dismiss threshold —
+  // unguarded, onClose fired twice per handle-swipe. Re-armed on reopen.
+  const closeFired = useRef(false);
+  const requestClose = useCallback(() => {
+    if (closeFired.current) return;
+    closeFired.current = true;
+    closeRef.current();
+  }, []);
+
+  const { handlePan, contentPan, scrollNative } = useMemo(() => {
+    const finishDrag = (velocityY: number) => {
+      "worklet";
+      if (dragY.value > 70 || (velocityY > 600 && dragY.value > 8)) {
+        runOnJS(requestClose)();
         dragY.value = withTiming(0, { duration: 250 });
       } else {
         dragY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) });
       }
-    });
+    };
+
+    const scrollNative = Gesture.Native();
+
+    // The grabber keeps its own UNGATED pan: with the content scrolled partway
+    // down, the content pan below refuses to engage — but a drag that starts on
+    // the handle should always move the sheet.
+    const handlePan = Gesture.Pan()
+      .activeOffsetY(6)
+      .failOffsetY(-10)
+      .onUpdate((e) => {
+        dragY.value = Math.max(0, e.translationY);
+      })
+      .onEnd((e) => finishDrag(e.velocityY));
+
+    // Whole-panel drag-to-close. Runs simultaneously with the inner ScrollView
+    // and only "engages" (starts moving the sheet) while that scroll sits at its
+    // top — mid-list, the same finger movement is scrolling, not dismissing. The
+    // baseline (dragStart) is wherever the finger was when the scroll ran out,
+    // so the sheet takes over without a jump; if the finger heads back up and
+    // the content starts scrolling again, it hands the gesture back.
+    const contentPan = Gesture.Pan()
+      .activeOffsetY(6)
+      .failOffsetY(-10)
+      .onUpdate((e) => {
+        if (!engaged.value) {
+          if (scrollY.value > 1) return;
+          engaged.value = true;
+          dragStart.value = e.translationY;
+        } else if (scrollY.value > 1 && dragY.value === 0) {
+          engaged.value = false;
+          return;
+        }
+        dragY.value = Math.max(0, e.translationY - dragStart.value);
+      })
+      .onEnd((e) => finishDrag(e.velocityY))
+      .onFinalize(() => {
+        engaged.value = false;
+      });
+
+    contentPan.simultaneousWithExternalGesture(scrollNative, handlePan);
+    handlePan.simultaneousWithExternalGesture(contentPan);
+    return { handlePan, contentPan, scrollNative };
+  }, [dragY, scrollY, engaged, dragStart, requestClose]);
+
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
   // The panel is height-driven by its content and slides up from below; animate
   // it in by its own measured height so short sheets rise just enough and tall
   // ones don't overshoot. Falls back to half-screen until measured.
   //
-  // Measured ONCE per open: content that grows while the sheet is open (the
-  // BreedField wheel expanding, EditStatSheet swapping wheel↔TextField) would
-  // otherwise re-run this mid-animation and make the panel jump — or, on close,
-  // leave a half-visible strip that swallows taps meant for the screen behind.
+  // Measured ONCE per mount (the open-effect resets it whenever the Modal
+  // freshly mounts, so every real open re-measures): content that grows while
+  // the sheet is open (the BreedField wheel expanding, EditStatSheet swapping
+  // wheel↔TextField) would otherwise re-run this mid-animation and make the
+  // panel jump — or, on close, leave a half-visible strip that swallows taps
+  // meant for the screen behind.
   const [panelH, setPanelH] = useState(0);
   const panelStyle = useAnimatedStyle(() => {
     const travel = panelH || SCREEN_H * 0.5;
@@ -107,31 +207,47 @@ export default function Sheet({
             <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
           </Animated.View>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.kav} pointerEvents="box-none">
-            <Animated.View
-              style={[styles.panel, { maxHeight: maxPanelH }, panelStyle]}
-              onLayout={(e) => {
-                const h = e.nativeEvent.layout.height;
-                setPanelH((prev) => (prev === 0 ? h : prev));
-              }}
-            >
-              <GestureDetector gesture={pan}>
-                <View style={styles.handleZone}>
-                  <View style={styles.handle} />
-                </View>
-              </GestureDetector>
-              {scrollable ? (
-                // No maxHeight here: the panel's own maxHeight plus flexShrink
-                // lets flexbox derive the scroll height from whatever the handle
-                // zone actually occupies. Hardcoding `maxPanelH - 33` silently
-                // clipped the last rows — where every sheet's primary button is —
-                // whenever the handle's padding changed.
-                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
-                  {body}
-                </ScrollView>
-              ) : (
-                body
-              )}
-            </Animated.View>
+            <GestureDetector gesture={contentPan}>
+              <Animated.View
+                style={[styles.panel, { maxHeight: maxPanelH }, panelStyle]}
+                onLayout={(e) => {
+                  const h = e.nativeEvent.layout.height;
+                  setPanelH((prev) => (prev === 0 ? h : prev));
+                }}
+              >
+                <SheetPanContext.Provider value={contentPan}>
+                  <GestureDetector gesture={handlePan}>
+                    <View style={styles.handleZone}>
+                      <View style={styles.handle} />
+                    </View>
+                  </GestureDetector>
+                  {scrollable ? (
+                    // No maxHeight here: the panel's own maxHeight plus flexShrink
+                    // lets flexbox derive the scroll height from whatever the handle
+                    // zone actually occupies. Hardcoding `maxPanelH - 33` silently
+                    // clipped the last rows — where every sheet's primary button is —
+                    // whenever the handle's padding changed.
+                    //
+                    // bounces={false} is part of drag-to-close: at the top, a
+                    // downward drag must move the SHEET, not rubber-band the list.
+                    <GestureDetector gesture={scrollNative}>
+                      <Animated.ScrollView
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                        bounces={false}
+                        overScrollMode="never"
+                        onScroll={onScroll}
+                        scrollEventThrottle={16}
+                      >
+                        {body}
+                      </Animated.ScrollView>
+                    </GestureDetector>
+                  ) : (
+                    body
+                  )}
+                </SheetPanContext.Provider>
+              </Animated.View>
+            </GestureDetector>
           </KeyboardAvoidingView>
         </View>
       </GestureHandlerRootView>
@@ -160,9 +276,6 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
     shadowOffset: { width: 0, height: -8 },
     elevation: 16,
   },
-  // Constrained to the grabber itself (alignSelf, not a full-width row) so the
-  // pan only claims the handle — a full-width zone made the top 33pt of every
-  // sheet drag-only, swallowing taps aimed at the content beneath it.
   handleZone: { alignSelf: "center", alignItems: "center", paddingTop: 10, paddingBottom: 12, paddingHorizontal: 28 },
   handle: { width: 36, height: 4, borderRadius: 999, backgroundColor: "rgba(25, 25, 32, 0.16)" },
 });

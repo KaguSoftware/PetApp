@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Sheet from "@/components/Sheet";
 import { Icon, ACTION_ICON } from "@/components/Icons";
-import { AccentButton, FieldLabel, Segmented, SelectableChip, SheetFooter, SheetSubtitle, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, FieldLabel, Segmented, SelectableChip, SheetFooter, SheetSubtitle, SheetTitle } from "@/components/ui";
 import { ACTION_TYPES, ACTIONS, REMINDER_TAGS } from "@/lib/data";
 import type { ListFilter, TimeRange } from "@/lib/useListFilter";
 import type { Pet } from "@/lib/data";
@@ -40,8 +40,6 @@ export default function FilterSheet({
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(), []);
-  const [customTagOpen, setCustomTagOpen] = useState(false);
-  const [customTag, setCustomTag] = useState("");
 
   const tagOptions = useMemo(() => {
     const preset = new Set<string>(REMINDER_TAGS);
@@ -93,30 +91,13 @@ export default function FilterSheet({
       {showTags ? (
         <>
           <FieldLabel>Tag</FieldLabel>
+          {/* No free-typed tag here on purpose: extraTags already carries every
+              tag actually in use, so a typed one could only ever match nothing. */}
           <View style={styles.chipRow}>
             {tagOptions.map((tag) => (
               <SelectableChip key={tag} label={tag} selected={filter.tags.has(tag)} onPress={() => filter.toggleTag(tag)} />
             ))}
-            <SelectableChip label="+" selected={customTagOpen} onPress={() => setCustomTagOpen((v) => !v)} />
           </View>
-          {customTagOpen ? (
-            <View style={styles.customTagRow}>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  value={customTag}
-                  onChangeText={setCustomTag}
-                  placeholder="Custom tag"
-                  returnKeyType="done"
-                  onSubmitEditing={() => {
-                    const t = customTag.trim();
-                    if (t) filter.toggleTag(t);
-                    setCustomTag("");
-                    setCustomTagOpen(false);
-                  }}
-                />
-              </View>
-            </View>
-          ) : null}
         </>
       ) : null}
 
@@ -132,5 +113,4 @@ export default function FilterSheet({
 const makeStyles = () =>
   StyleSheet.create({
     chipRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-    customTagRow: { marginTop: 10 },
   });

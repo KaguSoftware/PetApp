@@ -67,7 +67,7 @@ export default function VetBookingSheet({ vet, onClose }: { vet: Vet | null; onC
             <Row
               leading={<IconCircle icon="calendar" tint={colors.accent} bg={colors.accentSoft} />}
               title="Next Tuesday, 10:30"
-              subtitle="Suggested time · can be changed"
+              subtitle="Suggested time"
             />
           </Group>
           <View style={{ marginTop: 24 }}>

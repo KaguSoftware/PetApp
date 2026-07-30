@@ -126,8 +126,11 @@ export default function RemindersScreen() {
 
   // Default to the first pet until the user explicitly picks one — the raw
   // useState initializer ran while the store was still empty, so petId can't
-  // seed itself from state.pets.
-  const activePetId = petId || state.pets[0]?.id || "";
+  // seed itself from state.pets. Validated against the live roster: pets are
+  // realtime-synced, so a selection can be deleted out from under this sheet
+  // mid-session — and with a single pet the chip row isn't even rendered to
+  // correct it by hand.
+  const activePetId = (petId && state.pets.some((p) => p.id === petId) ? petId : state.pets[0]?.id) || "";
   const petOf = (id: string) => state.pets.find((p) => p.id === id);
   const matchesFilter = (r: Reminder) =>
     (filter.petId == null || r.petId === filter.petId) && (filter.tags.size === 0 || (r.tag != null && filter.tags.has(r.tag)));
@@ -279,12 +282,18 @@ export default function RemindersScreen() {
         <FieldLabel>Task</FieldLabel>
         <TextField value={title} onChangeText={setTitle} placeholder="e.g. Buy litter, flea treatment…" />
 
-        <FieldLabel>Pet</FieldLabel>
-        <View style={styles.chipRow}>
-          {state.pets.map((p) => (
-            <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
-          ))}
-        </View>
+        {/* One pet = one pre-selected chip that can't be deselected — skip the
+            whole row; activePetId already falls back to the only pet. */}
+        {state.pets.length > 1 ? (
+          <>
+            <FieldLabel>Pet</FieldLabel>
+            <View style={styles.chipRow}>
+              {state.pets.map((p) => (
+                <SelectableChip key={p.id} label={p.name} selected={activePetId === p.id} onPress={() => setPetId(p.id)} />
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <FieldLabel>Tag</FieldLabel>
         <View style={styles.chipRow}>
@@ -357,7 +366,9 @@ export default function RemindersScreen() {
         </View>
         {pickDate ? (
           <View style={styles.pickerRow}>
-            <DateField value={pickTs} onChange={setPickTs} mode="future" />
+            {/* showChips off: the calendar's quick-jump chips would duplicate
+                the Due presets right above it. */}
+            <DateField value={pickTs} onChange={setPickTs} mode="future" showChips={false} />
           </View>
         ) : null}
         {pickDate ? (

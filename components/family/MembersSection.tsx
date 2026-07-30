@@ -7,6 +7,7 @@ import {
   AccentButton,
   Chevron,
   FieldLabel,
+  Footnote,
   Group,
   IconCircle,
   Row,
@@ -155,6 +156,9 @@ export default function MembersSection() {
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member");
   const [inviteExpiry, setInviteExpiry] = useState<24 | 168>(168);
   const [inviteUses, setInviteUses] = useState<"multi" | "single">("multi");
+  // The role/expiry/uses rows stay hidden behind "Customize" — the defaults
+  // (member · 7 days · whole family) are what nearly every invite wants.
+  const [inviteCustomOpen, setInviteCustomOpen] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [activeInvites, setActiveInvites] = useState<HouseholdInvite[]>([]);
 
@@ -162,6 +166,7 @@ export default function MembersSection() {
     setInviteRole("member");
     setInviteExpiry(168);
     setInviteUses("multi");
+    setInviteCustomOpen(false);
     setInviteOpen(true);
     fetchInvites().then(setActiveInvites);
   };
@@ -448,27 +453,36 @@ export default function MembersSection() {
         <SheetTitle>Invite family</SheetTitle>
         <SheetSubtitle>Share one code with the whole family, or lock it to a single use.</SheetSubtitle>
 
-        {myRole === "owner" ? (
+        {inviteCustomOpen ? (
           <>
-            <FieldLabel>Role</FieldLabel>
+            {myRole === "owner" ? (
+              <>
+                <FieldLabel>Role</FieldLabel>
+                <View style={shared.chipRow}>
+                  <SelectableChip label="Member" selected={inviteRole === "member"} onPress={() => setInviteRole("member")} />
+                  <SelectableChip label="Admin" selected={inviteRole === "admin"} onPress={() => setInviteRole("admin")} />
+                </View>
+              </>
+            ) : null}
+
+            <FieldLabel>Expires</FieldLabel>
             <View style={shared.chipRow}>
-              <SelectableChip label="Member" selected={inviteRole === "member"} onPress={() => setInviteRole("member")} />
-              <SelectableChip label="Admin" selected={inviteRole === "admin"} onPress={() => setInviteRole("admin")} />
+              <SelectableChip label="7 days" selected={inviteExpiry === 168} onPress={() => setInviteExpiry(168)} />
+              <SelectableChip label="24 hours" selected={inviteExpiry === 24} onPress={() => setInviteExpiry(24)} />
+            </View>
+
+            <FieldLabel>Uses</FieldLabel>
+            <View style={shared.chipRow}>
+              <SelectableChip label="Whole family" selected={inviteUses === "multi"} onPress={() => setInviteUses("multi")} />
+              <SelectableChip label="One person" selected={inviteUses === "single"} onPress={() => setInviteUses("single")} />
             </View>
           </>
-        ) : null}
-
-        <FieldLabel>Expires</FieldLabel>
-        <View style={shared.chipRow}>
-          <SelectableChip label="7 days" selected={inviteExpiry === 168} onPress={() => setInviteExpiry(168)} />
-          <SelectableChip label="24 hours" selected={inviteExpiry === 24} onPress={() => setInviteExpiry(24)} />
-        </View>
-
-        <FieldLabel>Uses</FieldLabel>
-        <View style={shared.chipRow}>
-          <SelectableChip label="Whole family" selected={inviteUses === "multi"} onPress={() => setInviteUses("multi")} />
-          <SelectableChip label="One person" selected={inviteUses === "single"} onPress={() => setInviteUses("single")} />
-        </View>
+        ) : (
+          <View style={{ marginTop: 12, gap: 12, alignItems: "flex-start" }}>
+            <Footnote>The code joins people as members, works for the whole family, and lasts 7 days.</Footnote>
+            <SmallButton label="Customize" onPress={() => setInviteCustomOpen(true)} />
+          </View>
+        )}
 
         {activeInvites.length > 0 ? (
           <>

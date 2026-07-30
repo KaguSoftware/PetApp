@@ -558,6 +558,51 @@ the file** — one component, identical on iOS and Android.
   `app.json`'s plugin list on purpose — pulling a config plugin is a prebuild-affecting change, not a
   cleanup to slip into a UI pass. Remove both together if you want it gone.
 
+### App-wide drawer cleanup + drag-anywhere-to-close (2026-07-30, owner request) — built, `tsc` + `eslint` clean, both bundles compile, NEEDS device walkthrough
+
+Owner asked for two things: every bottom sheet should dismiss by dragging **anywhere** (not just the
+grabber), and the drawers should stop being "more complex than they need to be", with the Logs
+schedule form as the canonical example. Adversarially reviewed by a 2-phase agent workflow
+(4 review dimensions → per-finding refuters); all 9 confirmed findings are FIXED as shipped.
+
+- **`components/Sheet.tsx` — drag-to-close from anywhere.** A whole-panel `contentPan` runs
+  simultaneously with the inner `Animated.ScrollView` (`Gesture.Native()`) and only ENGAGES while
+  `scrollY <= 1`, baselining at the finger position where the scroll ran out (no jump); it hands
+  back if the content scrolls again. The grabber keeps a dedicated ungated pan (works while
+  scrolled). The inner scroll is `bounces={false}`/`overScrollMode="never"` so an at-top drag moves
+  the sheet, not a rubber band. **`SheetPanContext` + `SheetScrollable`**: any inner vertical
+  scrollable must block the pan — `WheelPicker`'s columns consume the context and call
+  `Gesture.Native().blocksExternalGesture(pan)`, which the drawer inventory confirmed covers every
+  inner scrollable in the app (they are ALL wheel columns; chip rows are flexWrap, not rails).
+  Review fixes: `onClose` double-fire on grabber drags (both pans' `onEnd` crossed the threshold —
+  now a `closeFired` ref, re-armed on reopen), and `scrollY`/`panelH` now reset only on a FRESH
+  Modal mount (a rapid reopen mid-close keeps the surviving ScrollView's real offset/height; this
+  also fixed the pre-existing stale-`panelH` entrance travel).
+- **`components/ScheduleEditorSheet.tsx` — the owner's example, rebuilt.** Times are hour-only
+  chips (new `hourOnly` prop on `TimeWheelPicker`; slot-name TextField deleted); tapping a time
+  FLOORS a legacy `18:30` slot to `18:00` first so the wheel shows exactly what Done keeps (and
+  `nextSlotTime` appends on-the-hour). Feeding servings are a per-slot chip → **native
+  `ActionSheetIOS` menu on iOS, `SingleWheelPicker` drill-in on Android** (stale grams that no
+  longer reverse-map through the current `cupGrams` snap to the closest portion on open). Days are
+  a **"Every day / Custom days" Segmented** — pills only under Custom. The **grace-window stepper
+  is GONE**: fixed `GRACE_MINUTES = 30` (long cadences still persist 720; `grace_minutes` column
+  unchanged for web parity) with a plain-language footnote in its place ("logging up to 30 minutes
+  before a time still counts, and a ✓ stays until 30 minutes before the next one").
+- **Simplification sweep, same philosophy everywhere**: FilterSheet lost the custom-tag "+" input
+  (extraTags already lists every tag in use); ShortcutBuilderSheet lost the 20-icon grid and the
+  label field (both derived now — and `shortcutTileLabel` appends "· ½ cup" so portion-variant
+  tiles stay distinguishable) and hides the Pets row for single-pet homes; the invite sheet's
+  role/expiry/uses chips collapsed behind a **Customize** disclosure over the defaults; reminders
+  hides the Pet row with one pet (with `activePetId` now validated against the live roster — a
+  realtime-deleted pet can no longer be silently saved) and passes `showChips={false}` to its
+  DateField; retro-log wheel back to 5-minute steps with the seed floored onto that grid; pet
+  detail's gender sheet commits on tap (Save footer gone); vaccination/vet-visit dates default to
+  **noon today** (DateField's contract) with end-of-today future guards — the old raw `Date.now()`
+  guards called "today" futuristic all morning; edit-pet hides Age when a birth date is set and
+  folds microchip/allergies/cup size behind "More details…" (auto-expanded when filled).
+- Walkthrough focus: sheet drag-from-content vs wheels/inner scrolling on BOTH platforms, the
+  schedule form end-to-end (legacy minute-precision slots included), Android serving drill-in.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.

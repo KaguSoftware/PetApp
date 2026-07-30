@@ -432,7 +432,11 @@ export default function PetDetailPage() {
             scaleTo={PRESS_SCALE_SMALL}
             onPress={() => {
               setVaccName("");
-              setVaccGiven(null);
+              // "Just got the shot" is the main case — start on today so Save
+              // only waits for the name. Noon, per DateField's value contract.
+              const noon = new Date();
+              noon.setHours(12, 0, 0, 0);
+              setVaccGiven(noon.getTime());
               setVaccNext(null);
               setVaccOpen(true);
             }}
@@ -494,7 +498,11 @@ export default function PetDetailPage() {
           <PressableScale
             scaleTo={PRESS_SCALE_SMALL}
             onPress={() => {
-              setVisitDate(null);
+              // "Just got back from the vet" is the main case — start on today
+              // so Save starts enabled. Noon, per DateField's value contract.
+              const noon = new Date();
+              noon.setHours(12, 0, 0, 0);
+              setVisitDate(noon.getTime());
               setVisitVet("");
               setVisitReason("");
               setVisitOpen(true);
@@ -846,7 +854,9 @@ export default function PetDetailPage() {
       <Sheet open={genderOpen} onClose={() => setGenderOpen(false)}>
         <SheetTitle>{pet.name}&apos;s gender</SheetTitle>
         <SheetSubtitle>Used for the age-and-gender-specific weight &amp; feeding guide</SheetSubtitle>
-        <View style={{ marginTop: 20 }}>
+        {/* Three options, one tap — a Save step on top of that doubled the
+            interaction for zero safety, so picking commits and closes. */}
+        <View style={{ marginTop: 20, marginBottom: 8 }}>
           <Segmented
             options={[
               { value: "male", label: "Male" },
@@ -854,20 +864,14 @@ export default function PetDetailPage() {
               { value: "unset", label: "Not set" },
             ]}
             value={genderVal}
-            onChange={setGenderVal}
-          />
-        </View>
-        <SheetFooter>
-          <AccentButton
-            onPress={() => {
-              editPet(pet.id, { ...basePatch, gender: genderVal === "unset" ? null : genderVal });
+            onChange={(v) => {
+              setGenderVal(v);
+              editPet(pet.id, { ...basePatch, gender: v === "unset" ? null : v });
               setGenderOpen(false);
               toast("paw", `${pet.name} updated`, "");
             }}
-          >
-            Save
-          </AccentButton>
-        </SheetFooter>
+          />
+        </View>
       </Sheet>
 
       <Sheet open={vaccOpen} onClose={() => setVaccOpen(false)}>
@@ -889,7 +893,11 @@ export default function PetDetailPage() {
             disabled={!vaccName.trim() || vaccGiven == null}
             onPress={() => {
               if (vaccGiven == null) return;
-              if (vaccGiven > Date.now()) {
+              // DateField days are NOON timestamps — a raw Date.now() compare
+              // would call "today" futuristic all morning.
+              const endOfToday = new Date();
+              endOfToday.setHours(23, 59, 59, 999);
+              if (vaccGiven > endOfToday.getTime()) {
                 toast("alert", "That date is in the future", "Pick today or an earlier date");
                 return;
               }
@@ -932,7 +940,10 @@ export default function PetDetailPage() {
             disabled={visitDate == null}
             onPress={() => {
               if (visitDate == null) return;
-              if (visitDate > Date.now()) {
+              // Same noon-timestamp contract as the vaccination guard above.
+              const endOfToday = new Date();
+              endOfToday.setHours(23, 59, 59, 999);
+              if (visitDate > endOfToday.getTime()) {
                 toast("alert", "That date is in the future", "Pick today or an earlier date");
                 return;
               }

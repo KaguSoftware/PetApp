@@ -2,28 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PetAvatar from "@/components/PetAvatar";
 import Sheet from "@/components/Sheet";
-import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
+import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
   FieldLabel,
-  PressableScale,
-  PRESS_SCALE_SMALL,
   SelectableChip,
   SheetFooter,
   SheetSubtitle,
   SheetTitle,
-  TextField,
 } from "@/components/ui";
 import { ACTIONS, PORTIONS, shortcutTileLabel, type ActionType, type Pet } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { font, radius, useColors, type Colors } from "@/lib/theme";
-
-/** Glyphs offered in the icon picker — the "you pick the icon" part of a shortcut. */
-const ICON_CHOICES: IconName[] = [
-  "bowl", "drop", "broom", "paw", "scissors", "pill", "stethoscope", "star",
-  "heart-text", "bell", "clock", "gift", "sparkles", "flame", "bag", "box",
-  "syringe", "cross", "calendar", "chart",
-];
+import { font, useColors, type Colors } from "@/lib/theme";
 
 /** "ask" = open the portion picker on tap (single pet only); the rest bake a portion in. */
 type Portion = (typeof PORTIONS)[number]["value"] | "ask";
@@ -52,9 +42,6 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
   const [type, setType] = useState<ActionType>("fed");
   const [medId, setMedId] = useState<string | null>(null);
   const [portion, setPortion] = useState<Portion>("1");
-  const [icon, setIcon] = useState<IconName>("bowl");
-  const [iconTouched, setIconTouched] = useState(false);
-  const [label, setLabel] = useState("");
 
   // Reset the whole form each time the sheet opens.
   useEffect(() => {
@@ -64,9 +51,6 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
     setType("fed");
     setMedId(first?.meds[0]?.id ?? null);
     setPortion("1");
-    setIcon("bowl");
-    setIconTouched(false);
-    setLabel("");
   }, [open, pets]);
 
   const selected = useMemo(() => pets.filter((p) => petIds.includes(p.id)), [pets, petIds]);
@@ -80,10 +64,9 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [petIds]);
 
-  // The icon tracks the action's default until the user picks one deliberately.
-  useEffect(() => {
-    if (!iconTouched) setIcon(ACTION_ICON[type].icon);
-  }, [type, iconTouched]);
+  // The icon and the tile label are derived, not asked for — the old picker
+  // grid and name field almost always ended on exactly these defaults.
+  const icon = ACTION_ICON[type].icon;
 
   if (pets.length === 0) return null;
 
@@ -98,9 +81,9 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
   const isAsk = type === "fed" && portion === "ask" && canAsk;
   const chosenFrac = portion === "ask" ? 1 : PORTIONS.find((p) => p.value === portion)?.frac ?? 1;
 
-  // Live preview mirrors the tile.
+  // Live preview mirrors the tile — including the portion suffix baked ones get.
   const previewLabel = shortcutTileLabel(
-    { id: "", petIds, type, medId: activeMedId, icon, label: label.trim() || undefined, portionFrac: undefined, sort: 0 },
+    { id: "", petIds, type, medId: activeMedId, icon, label: undefined, portionFrac: type === "fed" && !isAsk ? chosenFrac : undefined, sort: 0 },
     pets
   );
 
@@ -111,7 +94,7 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
       type,
       medId: type === "meds" ? activeMedId : undefined,
       icon,
-      label: label.trim() || undefined,
+      label: undefined,
       portionFrac: type === "fed" && !isAsk ? chosenFrac : undefined,
     });
     const who = selected.length === 1 ? selected[0].name : allSelected ? "all pets" : `${selected.length} pets`;
@@ -130,20 +113,26 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
       <SheetTitle>New shortcut</SheetTitle>
       <SheetSubtitle>One tap on Home logs it for the family.</SheetSubtitle>
 
-      <FieldLabel>Pets</FieldLabel>
-      <View style={styles.chips}>
-        {pets.length > 1 ? <SelectableChip label="All pets" selected={allSelected} onPress={toggleAll} /> : null}
-        {pets.map((p) => (
-          <SelectableChip
-            key={p.id}
-            label={p.name}
-            selected={petIds.includes(p.id)}
-            onPress={() => togglePet(p.id)}
-            leading={<PetAvatar pet={p} size="xs" showCosmetics={false} />}
-          />
-        ))}
-      </View>
-      {selected.length > 1 ? <Text style={styles.hint}>One tap logs this for all {selected.length} selected pets.</Text> : null}
+      {/* A single-pet household would see one pre-selected, un-deselectable
+          chip here — pure noise, so the whole section only exists with 2+. */}
+      {pets.length > 1 ? (
+        <>
+          <FieldLabel>Pets</FieldLabel>
+          <View style={styles.chips}>
+            <SelectableChip label="All pets" selected={allSelected} onPress={toggleAll} />
+            {pets.map((p) => (
+              <SelectableChip
+                key={p.id}
+                label={p.name}
+                selected={petIds.includes(p.id)}
+                onPress={() => togglePet(p.id)}
+                leading={<PetAvatar pet={p} size="xs" showCosmetics={false} />}
+              />
+            ))}
+          </View>
+          {selected.length > 1 ? <Text style={styles.hint}>One tap logs this for all {selected.length} selected pets.</Text> : null}
+        </>
+      ) : null}
 
       <FieldLabel>Action</FieldLabel>
       <View style={styles.chips}>
@@ -182,33 +171,7 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
         </>
       ) : null}
 
-      <FieldLabel>Icon</FieldLabel>
-      <View style={styles.iconGrid}>
-        {ICON_CHOICES.map((name) => {
-          const selectedIcon = icon === name;
-          return (
-            <PressableScale
-              key={name}
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => {
-                setIcon(name);
-                setIconTouched(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`${name} icon`}
-              accessibilityState={{ selected: selectedIcon }}
-              hitSlop={4}
-            >
-              <View style={[styles.iconCell, selectedIcon && styles.iconCellSelected]}>
-                <Icon name={name} size={20} color={selectedIcon ? colors.white : colors.label2} />
-              </View>
-            </PressableScale>
-          );
-        })}
-      </View>
-
-      <FieldLabel>Label</FieldLabel>
-      <TextField value={label} onChangeText={setLabel} placeholder={previewLabel} maxLength={20} returnKeyType="done" />
+      <Text style={styles.hint}>Appears on Home as “{previewLabel}”.</Text>
 
       <SheetFooter>
         <AccentButton disabled={selected.length === 0} onPress={save}>
@@ -222,17 +185,4 @@ export default function ShortcutBuilderSheet({ open, onClose }: { open: boolean;
 const makeStyles = (colors: Colors) => StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hint: { marginTop: 8, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-  // Same 8pt gap as the chip rows above so every selection group shares one
-  // rhythm; the selected state is the flat accent fill SelectableChip uses —
-  // no extra ring.
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  iconCell: {
-    width: 46,
-    height: 46,
-    borderRadius: radius.md,
-    backgroundColor: colors.fill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconCellSelected: { backgroundColor: colors.accent },
 });
