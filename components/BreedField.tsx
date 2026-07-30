@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Keyboard, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
+import { DrillView } from "@/components/Motion";
 import Sheet from "@/components/Sheet";
-import { AccentButton, FieldLabel, PressableScale, PRESS_SCALE_SMALL, SheetFooter, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, PressableScale, PRESS_SCALE_SMALL, SheetFooter, SheetTitle, TextField } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { breedWheelOptions, OTHER_BREED } from "@/lib/data";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
@@ -43,6 +44,37 @@ export default function BreedField({
   const [draftCustom, setDraftCustom] = useState(customBreed);
   const draftIsOther = draftBreed === OTHER_BREED;
 
+  // Which page of the sheet is up. Picking "Other" drills to a dedicated
+  // custom-name page instead of growing a field under the wheel.
+  const [page, setPage] = useState<"wheel" | "custom">("wheel");
+  const [drillDir, setDrillDir] = useState<"forward" | "back">("forward");
+  // False until the first in-sheet drill, so the WHEEL page doesn't slide in
+  // when the sheet merely opens — only real page swaps animate.
+  const [hasDrilled, setHasDrilled] = useState(false);
+
+  const drillToCustom = () => {
+    setHasDrilled(true);
+    setDrillDir("forward");
+    setPage("custom");
+  };
+
+  const drillBack = () => {
+    // The custom page owns a text field; releasing focus before the swap keeps
+    // the keyboard from lingering over the wheel we're returning to.
+    Keyboard.dismiss();
+    setHasDrilled(true);
+    setDrillDir("back");
+    setPage("wheel");
+  };
+
+  // The wheel only ever updates the draft. Drilling to the custom page is
+  // deliberately NOT done here: this fires the moment the wheel settles on a
+  // row, so scrolling THROUGH "Other" to reach a breed below it would rip the
+  // page away mid-scroll. The user confirms with Save instead (see wheelSave).
+  const handleDraftBreed = (b: string) => {
+    setDraftBreed(b);
+  };
+
   // Landing on "Other" closes the wheel and hands off straight to the
   // custom-name field below, rather than leaving the wheel open on its last row.
   const handleChange = (b: string) => {
@@ -58,6 +90,10 @@ export default function BreedField({
     Keyboard.dismiss();
     setDraftBreed(breed);
     setDraftCustom(customBreed);
+    // Reopen on the page that matches the current value, with no entrance
+    // animation — a sheet that opens mid-slide reads as a glitch.
+    setPage(breed === OTHER_BREED ? "custom" : "wheel");
+    setHasDrilled(false);
     setOpen(true);
   };
 
@@ -73,6 +109,14 @@ export default function BreedField({
     onChangeBreed(draftBreed);
     onChangeCustomBreed(draftIsOther ? draftCustom : "");
     closeSheet();
+  };
+
+  // Save on the WHEEL page. Confirming "Other" isn't a finished answer yet — it
+  // advances to the custom-name page rather than committing the literal string
+  // "Other" as the breed. Any real breed saves and closes as usual.
+  const wheelSave = () => {
+    if (draftIsOther) drillToCustom();
+    else save();
   };
 
   // The row shows the typed custom name once there is one — "Other" on its own
@@ -116,26 +160,60 @@ export default function BreedField({
         // scrollable={false}: the wheel's columns are ScrollViews, and nesting
         // them in the sheet's own vertical ScrollView means both answer the same
         // pan — on iOS the outer one wins and the wheel won't turn.
+        // One Sheet for both pages so the drill happens INSIDE a single modal —
+        // an expo-router push would slide in BEHIND this Modal's native window.
+        // drillClip hides the horizontal slide's overflow.
         <Sheet open={open} onClose={closeSheet} scrollable={false}>
-          <SheetTitle>Breed</SheetTitle>
-          <FieldLabel>BREED</FieldLabel>
-          <SingleWheelPicker values={breedWheelOptions(species)} value={draftBreed} onChange={setDraftBreed} />
-
-          {draftIsOther ? (
-            <TextField
-              value={draftCustom}
-              onChangeText={setDraftCustom}
-              placeholder="Type your pet's breed"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={save}
-              style={{ marginTop: 10 }}
-            />
-          ) : null}
-
-          <SheetFooter>
-            <AccentButton onPress={save}>Save</AccentButton>
-          </SheetFooter>
+          <View style={styles.drillClip}>
+            {page === "custom" ? (
+              <DrillView key="custom" direction={drillDir} animate={hasDrilled}>
+                <View style={styles.pageHeader}>
+                  <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={drillBack}>
+                    <View style={styles.backButton}>
+                      <Icon name="chevron-left" size={18} color={colors.accent} />
+                      <Text style={styles.backLabel}>Breed</Text>
+                    </View>
+                  </PressableScale>
+                </View>
+                <SheetTitle>Your pet&apos;s breed</SheetTitle>
+                <Text style={styles.pageHint}>
+                  Not on the list — type it in and we&apos;ll set custom care targets.
+                </Text>
+                {/* No autoFocus — the keyboard opens only when the user taps the
+                    field, so arriving on this page doesn't shove the sheet up. */}
+                <TextField
+                  value={draftCustom}
+                  onChangeText={setDraftCustom}
+                  placeholder="e.g. Anatolian Shepherd"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={save}
+                  style={{ marginTop: 14 }}
+                />
+                <SheetFooter>
+                  <AccentButton onPress={save}>Save</AccentButton>
+                </SheetFooter>
+              </DrillView>
+            ) : (
+              <DrillView key="wheel" direction={drillDir} animate={hasDrilled}>
+                <SheetTitle>Breed</SheetTitle>
+                {/* SheetTitle has no bottom margin — the removed FieldLabel used
+                    to supply this gap, so the wheel needs its own. */}
+                <View style={{ marginTop: 18 }}>
+                  <SingleWheelPicker
+                    values={breedWheelOptions(species)}
+                    value={draftBreed}
+                    onChange={handleDraftBreed}
+                  />
+                </View>
+                <SheetFooter>
+                  {/* "Next" on Other — the button advances to the name page
+                      rather than saving, so the label shouldn't promise a save. */}
+                  <AccentButton onPress={wheelSave}>{draftIsOther ? "Next" : "Save"}</AccentButton>
+                </SheetFooter>
+              </DrillView>
+            )}
+          </View>
         </Sheet>
       )}
     </View>
@@ -155,4 +233,12 @@ const makeStyles = (colors: Colors) =>
       paddingVertical: 12,
     },
     value: { fontSize: 16, fontFamily: font.medium, color: colors.label },
+    // Contains the horizontal slide so the outgoing page isn't visible beyond
+    // the sheet's padding while it animates out.
+    drillClip: { overflow: "hidden" },
+    // iOS back affordance: chevron + the previous page's title, accent-colored.
+    pageHeader: { marginBottom: 6 },
+    backButton: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start", paddingVertical: 4, paddingRight: 8 },
+    backLabel: { fontSize: 16, fontFamily: font.medium, color: colors.accent },
+    pageHint: { fontSize: 13, fontFamily: font.regular, color: colors.label3, lineHeight: 18, marginTop: 6, paddingHorizontal: 4 },
   });

@@ -20,6 +20,13 @@ function sanitizeMeasurement(text: string): string {
   return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
 }
 
+/** "Name", "Name and Age", "Name, Age and Weight" — a readable field list for
+ *  the validation toast. */
+function listAnd(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 /* Sensible starting weight (kg) / cup size (g) / height & length (cm) per species for the prefilled inputs. */
 const SPECIES_DEFAULTS: Record<"cat" | "dog", { weightKg: number; cupGrams: number; heightCm: number; lengthCm: number }> = {
   cat: { weightKg: 4, cupGrams: 60, heightCm: 25, lengthCm: 46 },
@@ -36,7 +43,7 @@ export default function AddPetPage() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
-  const { state, addPet } = useStore();
+  const { state, addPet, toast } = useStore();
   const [petName, setPetName] = useState("");
   const [species, setSpecies] = useState<"cat" | "dog">("cat");
   const [breed, setBreed] = useState(BREEDS_BY_SPECIES.cat[0]);
@@ -97,6 +104,17 @@ export default function AddPetPage() {
     if (!valid) {
       setShowErrors(true);
       Keyboard.dismiss();
+      // Name the offending fields rather than a bare "form invalid" — the red
+      // border may be scrolled out of view when the checkmark is pressed.
+      const missing = [
+        !nameOk && "Name",
+        !ageOk && "Age",
+        !weightOk && "Weight",
+        !cupOk && "Cup size",
+        !heightOk && "Height",
+        !lengthOk && "Length",
+      ].filter((f): f is string => typeof f === "string");
+      toast("alert", "Fill in the required fields", `Check ${listAnd(missing)}`);
       return;
     }
     addPet({
@@ -141,7 +159,7 @@ export default function AddPetPage() {
 
   return (
     <PushedScreen title="Add a pet" trailing={saveButton}>
-      <FieldLabel>Name</FieldLabel>
+      <FieldLabel required>Name</FieldLabel>
       <TextField
         value={petName}
         onChangeText={setPetName}
@@ -191,7 +209,7 @@ export default function AddPetPage() {
 
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View style={{ flex: 1 }}>
-          <FieldLabel>Age (years)</FieldLabel>
+          <FieldLabel required>Age (years)</FieldLabel>
           <TextField
             value={ageInput}
             onChangeText={setAgeInput}
@@ -202,7 +220,7 @@ export default function AddPetPage() {
           />
         </View>
         <View style={{ flex: 1 }}>
-          <FieldLabel>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
+          <FieldLabel required>{`Weight (${weightUnitLabel(state.units)})`}</FieldLabel>
           <TextField
             value={weightInput}
             onChangeText={setWeightInput}
@@ -214,7 +232,7 @@ export default function AddPetPage() {
         </View>
       </View>
 
-      <FieldLabel>Cup size (grams of food per cup)</FieldLabel>
+      <FieldLabel required>Cup size (grams of food per cup)</FieldLabel>
       <TextField
         value={cupInput}
         onChangeText={setCupInput}

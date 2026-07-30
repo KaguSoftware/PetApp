@@ -1,6 +1,6 @@
 import { Icon } from "@/components/Icons";
 import Sheet from "@/components/Sheet";
-import { AccentButton, PRESS_SCALE_SMALL, PressableScale, SheetFooter, SheetTitle, FieldLabel } from "@/components/ui";
+import { AccentButton, PRESS_SCALE_SMALL, PressableScale, SheetFooter, SheetTitle } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
 import { useMemo, useState } from "react";
@@ -80,12 +80,15 @@ export default function SpeciesField({
         // pan — on iOS the outer one wins and the wheel won't turn.
         <Sheet open={open} onClose={() => setOpen(false)} scrollable={false}>
           <SheetTitle>Species</SheetTitle>
-          <FieldLabel>SPECIES</FieldLabel>
-          <SingleWheelPicker
-            values={["Cat", "Dog"]}
-            value={SPECIES_LABELS[draft]}
-            onChange={(v) => setDraft(SPECIES_VALUES[v])}
-          />
+          {/* SheetTitle has no bottom margin — the removed FieldLabel used to
+              supply this gap, so the wheel needs its own. */}
+          <View style={{ marginTop: 18 }}>
+            <SingleWheelPicker
+              values={["Cat", "Dog"]}
+              value={SPECIES_LABELS[draft]}
+              onChange={(v) => setDraft(SPECIES_VALUES[v])}
+            />
+          </View>
           <SheetFooter>
             <AccentButton onPress={save}>Save</AccentButton>
           </SheetFooter>

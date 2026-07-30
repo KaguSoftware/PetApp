@@ -1,6 +1,13 @@
 import type React from "react";
 import type { StyleProp, ViewStyle } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  SlideInLeft,
+  SlideInRight,
+  SlideOutLeft,
+  SlideOutRight,
+} from "react-native-reanimated";
 import { useReduceMotion } from "@/lib/a11y";
 
 /**
@@ -56,24 +63,28 @@ export function FadeInView({
 /**
  * One "page" of a swap flow within a fixed container (e.g. swapping the schedule
  * form for the time-wheel picker inside a Sheet). Give each swapped-in view a
- * stable key, and reanimated CROSS-FADES them — the outgoing view fades out
- * while the incoming one fades in, no directional movement. `direction` is
- * accepted for call-site symmetry but doesn't affect a fade. Reduce Motion — or
- * `animate={false}` — drops the animation and the view just swaps. The caller
- * uses `animate={false}` on a page's FIRST appearance (e.g. the form when the
- * sheet first opens) so only in-place swaps animate, not the initial mount.
+ * stable key and reanimated SLIDES them horizontally, mirroring a native stack
+ * push/pop: drilling `forward` brings the new page in from the right while the
+ * old one leaves to the left; going `back` reverses it.
+ *
+ * Reduce Motion — or `animate={false}` — drops the animation and the view just
+ * swaps. The caller uses `animate={false}` on a page's FIRST appearance (e.g.
+ * the form when the sheet first opens) so only in-place swaps animate, not the
+ * initial mount.
  *
  * The parent must key this on the current page so React mounts/unmounts them —
- * that mount/unmount is what triggers the entering/exiting animations.
+ * that mount/unmount is what triggers the entering/exiting animations. The
+ * parent should also clip overflow, or the sliding pages are visible outside it.
  */
 export function DrillView({
   children,
+  direction = "forward",
   animate = true,
   style,
   duration = 220,
 }: {
   children: React.ReactNode;
-  /** Accepted for call-site symmetry; a cross-fade has no direction. */
+  /** `forward` drills in (new page from the right); `back` returns to the previous one. */
   direction?: "forward" | "back";
   animate?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -81,8 +92,13 @@ export function DrillView({
 }) {
   const reduceMotion = useReduceMotion();
   if (reduceMotion || !animate) return <Animated.View style={style}>{children}</Animated.View>;
+  const forward = direction === "forward";
   return (
-    <Animated.View style={style} entering={FadeIn.duration(duration)} exiting={FadeOut.duration(duration)}>
+    <Animated.View
+      style={style}
+      entering={(forward ? SlideInRight : SlideInLeft).duration(duration)}
+      exiting={(forward ? SlideOutLeft : SlideOutRight).duration(duration)}
+    >
       {children}
     </Animated.View>
   );

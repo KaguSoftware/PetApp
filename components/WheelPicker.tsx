@@ -360,12 +360,18 @@ export function SingleWheelPicker({
 const makeStyles = (colors: Colors) => StyleSheet.create({
   wrap: { alignSelf: "center", justifyContent: "center", alignItems: "center", height: ITEM_HEIGHT * VISIBLE },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "center", alignSelf: "center" },
+  // The selected row reads as a raised card against the sheet's gray bg:
+  // near-white fill (colors.card, NOT a literal white — in dark mode a true
+  // white band would glare against the dark panel) plus a hairline border to
+  // define the edge.
   band: {
     position: "absolute",
     top: ITEM_HEIGHT * PAD,
     height: ITEM_HEIGHT,
     borderRadius: 12,
-    backgroundColor: colors.fill,
+    backgroundColor: colors.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.sep,
   },
   item: { height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
   itemText: { fontSize: 22, fontFamily: font.medium, color: colors.label3 },
