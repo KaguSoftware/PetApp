@@ -108,6 +108,10 @@ function RootStack() {
         <Stack.Screen name="verify" />
         <Stack.Screen name="reset-password" />
         <Stack.Screen name="auth-callback" options={{ headerShown: false }} />
+        {/* Also deliberately unguarded: the Terms/Privacy screen must open from
+            the SIGNED-OUT consent footnote on welcome/signup as well as from
+            Settings › Legal while signed in. */}
+        <Stack.Screen name="legal/[doc]" />
       </Stack>
     </ThemeProvider>
   );

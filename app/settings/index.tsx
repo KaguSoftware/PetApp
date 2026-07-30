@@ -171,6 +171,24 @@ export default function SettingsPage() {
         />
       </Group>
 
+      <SectionHeader>Legal</SectionHeader>
+      <Group>
+        <Row
+          onPress={() => router.push({ pathname: "/legal/[doc]", params: { doc: "terms" } })}
+          leading={<IconCircle icon="list" tint={colors.label2} bg={colors.fill} />}
+          title="Terms of Service"
+          subtitle="The rules for using PetPal"
+          trailing={<Chevron />}
+        />
+        <Row
+          onPress={() => router.push({ pathname: "/legal/[doc]", params: { doc: "privacy" } })}
+          leading={<IconCircle icon="shield" tint={colors.label2} bg={colors.fill} />}
+          title="Privacy Policy"
+          subtitle="What we collect & how it's used"
+          trailing={<Chevron />}
+        />
+      </Group>
+
       <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </PushedScreen>
   );
