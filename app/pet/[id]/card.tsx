@@ -1,13 +1,17 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
+import PetShareCard from "@/components/PetShareCard";
+import ShareStyleSheet from "@/components/ShareStyleSheet";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Footnote, PRESS_SCALE_SMALL, PressableScale, Segmented } from "@/components/ui";
 import { VET, VETS, formatAge, formatWeight, nextAnniversary, nextBirthday } from "@/lib/data";
+import { capturePetCard, petCaption, sharePetCardImage } from "@/lib/petShare";
+import { PET_THEME_ID, type InkTone } from "@/lib/shareTheme";
 import { useStore } from "@/lib/store";
 import { floatShadow, font, radius, withAlpha, useColors, type Colors } from "@/lib/theme";
 
@@ -51,8 +55,15 @@ export default function PetCardPage() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { state, hydrated } = useStore();
+  const { state, hydrated, toast } = useStore();
   const [variant, setVariant] = useState<Variant>("emergency");
+  // The off-screen template we rasterise on share. Hooks stay above the early
+  // returns below.
+  const shareCardRef = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [themeId, setThemeId] = useState<string>(PET_THEME_ID);
+  const [ink, setInk] = useState<InkTone>("light");
 
   if (!hydrated) {
     return (
@@ -82,7 +93,17 @@ export default function PetCardPage() {
   const managerCardIds = new Set(
     state.accounts.filter((a) => a.role === "owner" || a.role === "admin").map((a) => a.memberId)
   );
-  const contact = state.members.find((m) => managerCardIds.has(m.id)) ?? state.members[0];
+  // Signing up without typing a name stores the literal placeholder "You"
+  // (lib/auth.ts). That reads fine in the activity feed, where "You" means the
+  // reader — but this card gets handed to a sitter or posted when a pet goes
+  // missing, and "Family contact: You" tells a stranger nothing. Prefer any
+  // household manager with a real name; fall back to any member with one.
+  const named = (m: { name: string } | undefined) => !!m && m.name.trim() !== "" && m.name.trim().toLowerCase() !== "you";
+  const managers = state.members.filter((m) => managerCardIds.has(m.id));
+  const contact = managers.find(named) ?? state.members.find(named) ?? managers[0] ?? state.members[0];
+  // If even the fallback is the placeholder, the row is omitted below rather
+  // than printing a name that isn't one.
+  const contactName = named(contact) ? contact.name : null;
   const vet = VETS.find((v) => state.bookedVetIds.includes(v.id)) ?? VET;
   const genderLabel = pet.gender === "male" ? "Male" : pet.gender === "female" ? "Female" : null;
   const speciesLabel = pet.species === "cat" ? "Cat" : "Dog";
@@ -102,7 +123,7 @@ export default function PetCardPage() {
     ...(pet.meds.length > 0
       ? [{ label: "Medication", value: pet.meds.map((m) => [m.name, m.dosage].filter(Boolean).join(" ")).join(", ") }]
       : []),
-    ...(contact ? [{ label: "Family contact", value: contact.name }] : []),
+    ...(contactName ? [{ label: "Family contact", value: contactName }] : []),
     { label: "Vet", value: `${vet.name} · ${vet.clinic}` },
     { label: "Vet phone", value: vet.phone, mono: true },
   ];
@@ -118,20 +139,50 @@ export default function PetCardPage() {
   ];
 
   const fields = variant === "emergency" ? emergencyFields : profileFields;
+  // One subtitle, used by the preview, the exported poster and the share text.
+  const subtitle = `${speciesLabel} · ${pet.breed}${genderLabel ? ` · ${genderLabel}` : ""}`;
 
+  // What the user pastes with the post. The poster carries the facts; this is
+  // the words around it — see petCaption.
+  const caption = petCaption(pet, variant, subtitle);
+
+  // Text-only fallback for when there's no image to share at all. Stays a plain
+  // data dump on purpose: without the poster, the details ARE the message.
   const shareText = [
     variant === "profile" ? `Meet ${pet.name}!` : `${pet.name} — emergency & ID card`,
-    `${speciesLabel} · ${pet.breed}${genderLabel ? ` · ${genderLabel}` : ""}`,
+    subtitle,
     ...(variant === "emergency" && pet.allergies ? [`⚠ Allergies/alerts: ${pet.allergies}`] : []),
     ...fields.map((f) => `${f.label}: ${f.value}`),
     "— shared from PetPal",
   ].join("\n");
 
   const share = async () => {
+    if (sharing) return;
+    setSharing(true);
     try {
-      await Share.share({ title: `${pet.name} — PetPal card`, message: shareText });
+      const uri = await capturePetCard(shareCardRef);
+      // Close the style sheet BEFORE the OS share sheet: two modals competing
+      // for presentation leaves the share sheet stuck behind ours on iOS.
+      setStyleOpen(false);
+      await new Promise((r) => setTimeout(r, 280));
+      await sharePetCardImage(uri, {
+        dialogTitle: `${pet.name} — PetPal card`,
+        caption,
+        // The clipboard write is invisible otherwise, and the caption is only
+        // useful if the user knows it's there to paste.
+        onCaptionCopied: () => toast("check", "Caption copied", "Paste it with your post"),
+      });
     } catch {
-      // User dismissed the share sheet — nothing to do.
+      // Capture can fail on an offscreen view (old Androids, low memory). The
+      // text card is still worth sharing, so fall back rather than fail.
+      try {
+        setStyleOpen(false);
+        await Share.share({ title: `${pet.name} — PetPal card`, message: shareText });
+      } catch {
+        // User dismissed the share sheet — nothing to do.
+      }
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -143,14 +194,16 @@ export default function PetCardPage() {
         // NotificationBell): a scale transform inside the UIBarButtonItem
         // clips against the bar's bounds. 38pt pill + hitSlop → 50pt target.
         <Pressable
-          onPress={share}
+          onPress={() => setStyleOpen(true)}
+          disabled={sharing}
           accessibilityRole="button"
           accessibilityLabel="Share card"
+          accessibilityState={{ busy: sharing }}
           hitSlop={6}
           style={({ pressed }) => [styles.shareButton, pressed && { opacity: 0.6 }]}
         >
           <ShareGlass>
-            <Icon name="share" size={20} color={colors.accent} />
+            {sharing ? <ActivityIndicator size="small" color={colors.accent} /> : <Icon name="share" size={20} color={colors.accent} />}
           </ShareGlass>
         </Pressable>
       }
@@ -211,6 +264,37 @@ export default function PetCardPage() {
           : `${pet.name}'s intro card — share it with the button up top.`}
       </Footnote>
       <View style={{ height: 16 }} />
+
+      {/* The share template. It has to be really laid out for captureRef to see
+          it — `display: none` / zero opacity capture blank — so it is parked
+          off-screen and made untouchable instead. */}
+      <View style={styles.shareCardHost} pointerEvents="none" aria-hidden accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <View ref={shareCardRef} collapsable={false}>
+          <PetShareCard
+            pet={pet}
+            variant={variant}
+            subtitle={subtitle}
+            fields={fields}
+            themeId={themeId}
+            ink={ink}
+          />
+        </View>
+      </View>
+
+      <ShareStyleSheet
+        open={styleOpen}
+        onClose={() => setStyleOpen(false)}
+        onShare={share}
+        sharing={sharing}
+        pet={pet}
+        variant={variant}
+        subtitle={subtitle}
+        fields={fields}
+        themeId={themeId}
+        onThemeChange={setThemeId}
+        ink={ink}
+        onInkChange={setInk}
+      />
     </PushedScreen>
   );
 }
@@ -223,6 +307,10 @@ const makeStyles = (colors: Colors) => StyleSheet.create({
   shareButton: { width: 38, height: 38, borderRadius: 19, overflow: "hidden" },
   shareGlass: { flex: 1, alignSelf: "stretch", borderRadius: 19, alignItems: "center", justifyContent: "center" },
   shareGlassAndroid: { backgroundColor: colors.accentSoft },
+  // Parked far off-screen: laid out (so it can be captured) but never seen.
+  // No `opacity: 0` here — captureRef rasterises the view's own alpha, so a
+  // transparent host yields a blank PNG on Android.
+  shareCardHost: { position: "absolute", left: -9999, top: 0 },
   card: { marginTop: 14, borderRadius: radius.lg, backgroundColor: colors.card, overflow: "hidden", ...floatShadow },
   cardHero: { alignItems: "center", paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20 },
   heroName: { marginTop: 12, fontSize: 26, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label },
