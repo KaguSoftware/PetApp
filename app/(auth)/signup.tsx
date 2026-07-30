@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthProviderButtons from "@/components/AuthProviderButtons";
+import LegalFootnote from "@/components/LegalFootnote";
 import { AccentButton, TextField } from "@/components/ui";
 import { signUpWithEmail } from "@/lib/auth";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -99,6 +100,7 @@ export default function SignupScreen() {
             Log in
           </Link>
         </View>
+        <LegalFootnote />
       </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthProviderButtons from "@/components/AuthProviderButtons";
 import BrandMark from "@/components/BrandMark";
+import LegalFootnote from "@/components/LegalFootnote";
 import { AccentButton } from "@/components/ui";
 import { font, useColors, type Colors } from "@/lib/theme";
 
@@ -44,6 +45,7 @@ export default function WelcomeScreen() {
           Create an account
         </Link>
       </View>
+      <LegalFootnote />
     </ScrollView>
   );
 }
