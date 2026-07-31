@@ -58,6 +58,9 @@ export default function Sheet({
   const progress = useSharedValue(0); // 0 hidden → 1 shown
 
   const dragY = useSharedValue(0);
+  // Panel heights — semantics documented at panelStyle below.
+  const travelH = useSharedValue(0);
+  const liveH = useSharedValue(0);
   // Offset of the sheet's inner ScrollView. Stays 0 for non-scrollable sheets,
   // so the same pan logic covers both modes.
   const scrollY = useSharedValue(0);
@@ -76,7 +79,8 @@ export default function Sheet({
       // content pan engage mid-list and break the entrance travel.
       if (!mounted) {
         scrollY.value = 0;
-        setPanelH(0);
+        travelH.value = 0;
+        liveH.value = 0;
       }
       dragY.value = 0;
       engaged.value = false;
@@ -86,11 +90,18 @@ export default function Sheet({
         ? withTiming(1, { duration: 120 })
         : withSpring(1, { damping: 26, stiffness: 300, mass: 0.9 });
     } else if (mounted) {
-      progress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) }, (done) => {
+      // Slide down by the panel's CURRENT height — content that grew since the
+      // entrance measure (expanding chips, drill views) made the frozen travel
+      // too short, so the close left a strip on screen that snapped away when
+      // the Modal unmounted. Syncing here is jump-free: at progress 1 the
+      // travel term contributes 0. Fast-start ease (no slow ramp) so a close
+      // that continues a drag doesn't hitch at the finger's release point.
+      if (liveH.value > travelH.value) travelH.value = liveH.value;
+      progress.value = withTiming(0, { duration: 240, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
     }
-  }, [open, mounted, progress, reduceMotion, dragY, scrollY, engaged]);
+  }, [open, mounted, progress, reduceMotion, dragY, scrollY, engaged, travelH, liveH]);
 
   // The gestures are memoized because their IDENTITY matters: inner scrollables
   // hold a block relation against contentPan via SheetPanContext, and a fresh
@@ -112,8 +123,10 @@ export default function Sheet({
     const finishDrag = (velocityY: number) => {
       "worklet";
       if (dragY.value > 70 || (velocityY > 600 && dragY.value > 8)) {
+        // Hold dragY where the finger left it — the close animation continues
+        // the slide from there. Animating dragY back to 0 here fought the
+        // close's downward travel, hopping the sheet UP before it fell.
         runOnJS(requestClose)();
-        dragY.value = withTiming(0, { duration: 250 });
       } else {
         dragY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.quad) });
       }
@@ -171,15 +184,16 @@ export default function Sheet({
   // it in by its own measured height so short sheets rise just enough and tall
   // ones don't overshoot. Falls back to half-screen until measured.
   //
-  // Measured ONCE per mount (the open-effect resets it whenever the Modal
-  // freshly mounts, so every real open re-measures): content that grows while
-  // the sheet is open (the BreedField wheel expanding, EditStatSheet swapping
-  // wheel↔TextField) would otherwise re-run this mid-animation and make the
-  // panel jump — or, on close, leave a half-visible strip that swallows taps
-  // meant for the screen behind.
-  const [panelH, setPanelH] = useState(0);
+  // travelH is frozen at the FIRST measure per mount (the open-effect resets it
+  // whenever the Modal freshly mounts, so every real open re-measures): content
+  // that grows while the sheet is open (the BreedField wheel expanding,
+  // EditStatSheet swapping wheel↔TextField) would otherwise re-run the style
+  // mid-entrance and make the panel jump. liveH tracks EVERY layout so the
+  // close-effect can sync the travel to the panel's real, current height —
+  // otherwise a since-grown sheet slid down by the stale measure, left a
+  // half-visible strip that swallowed taps, then snapped away on unmount.
   const panelStyle = useAnimatedStyle(() => {
-    const travel = panelH || SCREEN_H * 0.5;
+    const travel = travelH.value || SCREEN_H * 0.5;
     return { transform: [{ translateY: (1 - progress.value) * travel + dragY.value }] };
   });
 
@@ -212,7 +226,8 @@ export default function Sheet({
                 style={[styles.panel, { maxHeight: maxPanelH }, panelStyle]}
                 onLayout={(e) => {
                   const h = e.nativeEvent.layout.height;
-                  setPanelH((prev) => (prev === 0 ? h : prev));
+                  liveH.value = h;
+                  if (travelH.value === 0) travelH.value = h;
                 }}
               >
                 <SheetPanContext.Provider value={contentPan}>
