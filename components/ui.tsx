@@ -571,12 +571,21 @@ export const DONE_ACCESSORY_ID = "done-accessory";
  * Android's software keyboard already provides its own dismiss affordance in
  * the system nav bar. Renders null there rather than faking a bar.
  */
-export function KeyboardDoneAccessory({ label = "Done" }: { label?: string }) {
+export function KeyboardDoneAccessory({
+  label = "Done",
+  nativeID = DONE_ACCESSORY_ID,
+}: {
+  label?: string;
+  /** Override when a Modal needs its OWN bar: a RN Modal is a separate native
+   *  window, so it can't reach the screen's accessory, and two views sharing a
+   *  nativeID is ambiguous. Pass a distinct id and use it on that Modal's fields. */
+  nativeID?: string;
+}) {
   const colors = useColors();
   const primStyles = useMemo(() => makePrimStyles(colors), [colors]);
   if (Platform.OS !== "ios") return null;
   return (
-    <InputAccessoryView nativeID={DONE_ACCESSORY_ID}>
+    <InputAccessoryView nativeID={nativeID}>
       <View style={primStyles.doneBar}>
         <Pressable
           onPress={() => Keyboard.dismiss()}
@@ -784,6 +793,17 @@ const makePrimStyles = (colors: Colors) => StyleSheet.create({
     color: colors.label,
     borderWidth: 1,
     borderColor: withAlpha(colors.label, 0.1),
+    // Pin the field left-aligned. Left to itself, iOS infers direction from the
+    // KEYBOARD language, so switching to Farsi/Arabic flips the placeholder and
+    // the caret to the right edge — inconsistent with this app, whose layout is
+    // LTR everywhere. `writingDirection: "ltr"` keeps the caret and text origin
+    // on the left; `textAlign` alone only moves the glyphs.
+    //
+    // This pins the FIELD's direction, not the text: RTL characters still shape
+    // and render correctly (Arabic still reads right-to-left within the line) —
+    // the line itself just starts at the left edge, like every other field.
+    textAlign: "left",
+    writingDirection: "ltr",
   },
   textFieldFocused: {
     borderColor: colors.accent,

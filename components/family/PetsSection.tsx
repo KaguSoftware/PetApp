@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import BreedField from "@/components/BreedField";
 import DateField from "@/components/DateField";
 import PetAvatar from "@/components/PetAvatar";
@@ -8,7 +8,6 @@ import Sheet from "@/components/Sheet";
 import {
   AccentButton,
   Chevron,
-  ConfirmRow,
   FieldLabel,
   Group,
   IconCircle,
@@ -321,14 +320,28 @@ export default function PetsSection() {
             </View>
 
             <Group style={{ marginTop: 12 }}>
-              <ConfirmRow
-                label="Delete pet"
-                confirmLabel={`Tap again — deletes ${editingPet.name} and all history`}
-                onConfirm={() => {
-                  const name = editingPet.name;
-                  deletePet(editingPet.id);
+              <Row
+                destructive
+                title="Delete pet"
+                onPress={() => {
+                  const { id, name } = editingPet;
+                  // The sheet is a native Modal in its own window, so an alert
+                  // raised while it's up can land behind it — close first, then
+                  // ask on the next tick.
                   setEditingPet(null);
-                  toast("person", `${name} was removed`, "");
+                  setTimeout(() => {
+                    Alert.alert(`Delete ${name}?`, "This removes them and all their history. This can't be undone.", [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Delete",
+                        style: "destructive",
+                        onPress: () => {
+                          deletePet(id);
+                          toast("person", `${name} was removed`, "");
+                        },
+                      },
+                    ]);
+                  }, 0);
                 }}
               />
             </Group>

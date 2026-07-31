@@ -3,10 +3,13 @@ import { Keyboard, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { DrillView } from "@/components/Motion";
 import Sheet from "@/components/Sheet";
-import { AccentButton, PressableScale, PRESS_SCALE_SMALL, SheetFooter, SheetTitle, TextField } from "@/components/ui";
+import { AccentButton, KeyboardDoneAccessory, PressableScale, PRESS_SCALE_SMALL, SheetFooter, SheetTitle, TextField } from "@/components/ui";
 import { SingleWheelPicker } from "@/components/WheelPicker";
 import { breedWheelOptions, OTHER_BREED } from "@/lib/data";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
+
+/** Distinct from the host screen's bar — see KeyboardDoneAccessory's nativeID. */
+const BREED_ACCESSORY_ID = "breed-custom-accessory";
 
 /**
  * A single tappable row showing the current breed. `presentation` picks how the
@@ -188,8 +191,12 @@ export default function BreedField({
                   autoCorrect={false}
                   returnKeyType="done"
                   onSubmitEditing={save}
+                  inputAccessoryViewID={BREED_ACCESSORY_ID}
                   style={{ marginTop: 14 }}
                 />
+                {/* This Sheet is its own native Modal window, so it can't reach
+                    the host screen's accessory — it needs a bar of its own. */}
+                <KeyboardDoneAccessory nativeID={BREED_ACCESSORY_ID} />
                 <SheetFooter>
                   <AccentButton onPress={save}>Save</AccentButton>
                 </SheetFooter>

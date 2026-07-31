@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
 import EditStatSheet from "@/components/EditStatSheet";
 import EditTextSheet from "@/components/EditTextSheet";
@@ -15,7 +15,6 @@ import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
   Chip,
-  ConfirmRow,
   FieldLabel,
   Footnote,
   Group,
@@ -697,14 +696,23 @@ export default function PetDetailPage() {
 
       {/* Delete */}
       <Group style={{ marginTop: canMove ? 12 : 28 }}>
-        <ConfirmRow
-          label="Delete pet"
-          confirmLabel={`Tap again to delete ${pet.name}`}
-          onConfirm={() => {
+        <Row
+          destructive
+          title="Delete pet"
+          onPress={() => {
             const name = pet.name;
-            deletePet(pet.id);
-            router.back();
-            toast("person", `${name} was removed`, "");
+            Alert.alert(`Delete ${name}?`, "This removes them and all their history. This can't be undone.", [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => {
+                  deletePet(pet.id);
+                  router.back();
+                  toast("person", `${name} was removed`, "");
+                },
+              },
+            ]);
           }}
         />
       </Group>

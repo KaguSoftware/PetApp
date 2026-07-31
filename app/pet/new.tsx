@@ -160,12 +160,15 @@ export default function AddPetPage() {
   return (
     <PushedScreen title="Add a pet" trailing={saveButton}>
       <FieldLabel required>Name</FieldLabel>
+      {/* The text keyboard has its own return key, but the Done bar rides above
+          it too so every field on the form dismisses the same way. */}
       <TextField
         value={petName}
         onChangeText={setPetName}
         placeholder="e.g. Mochi"
         returnKeyType="done"
         onSubmitEditing={() => Keyboard.dismiss()}
+        inputAccessoryViewID={DONE_ACCESSORY_ID}
         invalid={showErrors && !nameOk}
       />
 
