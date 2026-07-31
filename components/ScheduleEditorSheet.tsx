@@ -551,7 +551,9 @@ const makeStyles = (colors: Colors) =>
     addTime: { marginTop: 12, alignSelf: "flex-start" },
     daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
     intervalRow: { flexDirection: "row" },
-    cadenceWrap: { gap: 12 },
+    // marginTop matches daysRow — without it the preset pills sat flush
+    // against the Repeats segmented control.
+    cadenceWrap: { gap: 12, marginTop: 12 },
     cadenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     hint: { marginTop: 8, paddingHorizontal: 2, fontSize: 12, fontFamily: font.regular, color: colors.label2, lineHeight: 17 },
     note: { marginTop: 16, paddingHorizontal: 2 },
