@@ -603,6 +603,35 @@ schedule form as the canonical example. Adversarially reviewed by a 2-phase agen
 - Walkthrough focus: sheet drag-from-content vs wheels/inner scrolling on BOTH platforms, the
   schedule form end-to-end (legacy minute-precision slots included), Android serving drill-in.
 
+### Community moderation: report / block / content filter (2026-08-01, owner request — App Store UGC guideline 1.2) — built, `tsc` + `eslint` clean, **NEEDS migration 0041 applied**
+
+The three UGC requirements Apple checks for apps with user content, added to the Community chat:
+
+- **DB — `0041_chat_moderation.sql` (NOT YET APPLIED — CLI not logged in on this machine, same
+  blocker as 0040):** `chat_blocks` (PK `(user_id, blocked_user_id)`, name snapshot for the manage
+  list, no self-block) and `chat_reports` (reason enum spam/harassment/hate/inappropriate/other,
+  full message snapshot — body/author/room — with `message_id … on delete SET NULL` so a report
+  outlives the message; partial unique index = one report per user per message). Both strictly
+  own-rows RLS; reports have no client update/delete (immutable log, review via dashboard/service
+  role). Purely additive.
+- **`lib/moderation.ts`** — the client API (`fetchBlockedUsers`/`blockUser`/`unblockUser`/
+  `reportMessage`, all idempotent on 23505) + the content filter: `censorText()` masks a
+  word-boundary-matched profanity/slur wordlist as "f***", applied at render time to EVERY bubble
+  (incoming and own) so stored data is untouched and the list can evolve without a backfill.
+  `isModerationUnavailable()` = 42P01 probe, same honest-toast degradation pattern as elsewhere.
+- **Community tab** — long-press any OTHER user's bubble → Sheet with a quoted (censored) preview →
+  "Report message" (reason list, toast promises 24-hour review — the Apple-required promise) or
+  "Block {name}" (destructive, `Alert.alert` confirm). Blocked authors are filtered out of the feed
+  AND realtime inserts; a reported message hides immediately for the reporter (session-local
+  `hiddenIds`). Block list refetches on every tab focus so Settings unblocks apply on return.
+- **Settings ▸ Account ▸ "Blocked users"** (App group, under Country) — sheet listing blocked
+  people (name snapshot + blocked date) with per-row Unblock.
+- Pre-0041 behavior: chat works exactly as before; report/block surface "goes live with the next
+  backend update" toasts; the content filter works regardless (client-only).
+- **Walkthrough focus:** long-press opens the sheet on Android (bubble Pressable inside the
+  ScrollView), report → toast + message disappears, block → author's history vanishes, unblock in
+  Settings → messages return on next Community focus, censored words render masked in both themes.
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.

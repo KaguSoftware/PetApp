@@ -21,6 +21,7 @@ import {
 } from "@/components/ui";
 import { getConnectedIdentities, linkGoogle, unlinkIdentity } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/authErrors";
+import { fetchBlockedUsers, isModerationUnavailable, unblockUser, type BlockedUser } from "@/lib/moderation";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -36,6 +37,8 @@ export default function AccountSettingsPage() {
   const [streakOpen, setStreakOpen] = useState(false);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countryQuery, setCountryQuery] = useState("");
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const [blocked, setBlocked] = useState<BlockedUser[] | null>(null);
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -144,6 +147,27 @@ export default function AccountSettingsPage() {
         },
       },
     ]);
+  }
+
+  function openBlocked() {
+    setBlocked(null);
+    setBlockedOpen(true);
+    fetchBlockedUsers()
+      .then(setBlocked)
+      .catch((e) => {
+        setBlocked([]);
+        if (isModerationUnavailable(e)) toast("alert", "Blocking isn't live yet", "It arrives with the next backend update");
+      });
+  }
+
+  async function handleUnblock(user: BlockedUser) {
+    try {
+      await unblockUser(user.userId);
+      setBlocked((prev) => prev?.filter((b) => b.userId !== user.userId) ?? prev);
+      toast("check", `Unblocked ${user.memberName ?? "pet owner"}`, "You'll see their messages again");
+    } catch {
+      toast("alert", "Couldn't unblock", "Please try again");
+    }
   }
 
   function confirmSignOut() {
@@ -287,6 +311,13 @@ export default function AccountSettingsPage() {
           }
         />
         <Row
+          onPress={openBlocked}
+          leading={<IconCircle icon="shield" tint={colors.label2} bg={colors.fill} />}
+          title="Blocked users"
+          subtitle="People hidden from Community chat"
+          trailing={<Chevron />}
+        />
+        <Row
           leading={<IconCircle icon="flame" tint={colors.orange} bg={colors.orangeSoft} />}
           title="Day streak"
           subtitle={state.streak === 1 ? "1 day" : `${state.streak} days`}
@@ -358,6 +389,31 @@ export default function AccountSettingsPage() {
         </View>
       </Sheet>
       <StreakCalendarSheet open={streakOpen} onClose={() => setStreakOpen(false)} />
+
+      <Sheet open={blockedOpen} onClose={() => setBlockedOpen(false)}>
+        <SheetTitle>Blocked users</SheetTitle>
+        <SheetSubtitle>
+          {blocked === null
+            ? "Loading…"
+            : blocked.length === 0
+              ? "No one is blocked. Long-press a message in Community to block its author."
+              : "Blocked people can't reach you in Community chat."}
+        </SheetSubtitle>
+        {blocked && blocked.length > 0 ? (
+          <Group style={{ marginTop: 16 }}>
+            {blocked.map((b) => (
+              <Row
+                key={b.userId}
+                leading={<IconCircle icon="person" tint={colors.label2} bg={colors.fill} />}
+                title={b.memberName ?? "Pet owner"}
+                subtitle={`Blocked ${new Date(b.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+                interactiveTrailing
+                trailing={<SmallButton label="Unblock" tone="gray" onPress={() => handleUnblock(b)} />}
+              />
+            ))}
+          </Group>
+        ) : null}
+      </Sheet>
 
       <Sheet open={countryOpen} onClose={() => setCountryOpen(false)}>
         <SheetTitle>Country</SheetTitle>
