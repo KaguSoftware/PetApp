@@ -296,6 +296,9 @@ function HeaderTrailing({ children }: { children: React.ReactNode }) {
   return <View style={styles.headerTrailing}>{children}</View>;
 }
 
+/** Instance type of TabScreen's scroll view — what a `scrollRef` receives. */
+export type TabScrollHandle = React.ComponentRef<typeof Animated.ScrollView>;
+
 /**
  * Top-level tab page scaffold: the native bar carries the trailing accessories
  * (coins + bell + gear) and the compact title that fades in on scroll, while
@@ -310,6 +313,7 @@ export function TabScreen({
   children,
   overlay,
   contentBottomPad = 16,
+  scrollRef,
   ...scrollProps
 }: {
   title: string;
@@ -321,6 +325,8 @@ export function TabScreen({
   overlay?: React.ReactNode;
   /** Extra bottom breathing room, on top of the tab-bar + safe-area allowance. */
   contentBottomPad?: number;
+  /** Imperative handle to the page's scroll view (scrollToEnd etc.). */
+  scrollRef?: React.RefObject<TabScrollHandle | null>;
 } & ScrollViewProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -358,6 +364,7 @@ export function TabScreen({
   return (
     <View style={styles.root}>
       <Animated.ScrollView
+        ref={scrollRef}
         style={styles.root}
         // `never` on every scroll view in the app: the opaque header already
         // lays content out beneath itself (react-native-screens sets
