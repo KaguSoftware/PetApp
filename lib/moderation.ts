@@ -115,11 +115,27 @@ const BLOCKED_TERMS = [
 
 const FILTER_RE = new RegExp(`\\b(?:${BLOCKED_TERMS.join("|")})\\b`, "gi");
 
+/** "fuuuuucckkk" → "fuck": collapse letter runs so elongated spellings still match. */
+function collapseRepeats(text: string): string {
+  return text.replace(/([a-z])\1+/gi, "$1");
+}
+
+/**
+ * Gate for outgoing messages: true when the text contains a blocked term,
+ * either spelled plainly or stretched with repeated letters. The send flow
+ * rejects such messages outright with an error instead of storing them.
+ */
+export function containsProhibitedContent(text: string): boolean {
+  FILTER_RE.lastIndex = 0;
+  if (FILTER_RE.test(text)) return true;
+  FILTER_RE.lastIndex = 0;
+  return FILTER_RE.test(collapseRepeats(text));
+}
+
 /**
  * Masks objectionable words ("f***"), leaving the first letter so the sentence
- * still scans. Applied at render time to every chat message — incoming and the
- * user's own — so the stored data is untouched and the filter can evolve
- * without a backfill.
+ * still scans. Kept as a render-time safety net for messages that predate the
+ * send-time gate or arrive from older clients — the stored data is untouched.
  */
 export function censorText(text: string): string {
   return text.replace(FILTER_RE, (match) => match[0] + "*".repeat(match.length - 1));

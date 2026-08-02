@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
 import { Icon } from "@/components/Icons";
-import { TabScreen, TAB_BAR_HEIGHT } from "@/components/Screen";
+import { TabScreen, TAB_BAR_HEIGHT, type TabScrollHandle } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
 import { Chevron, Group, IconCircle, PressableScale, Row, Segmented, SheetSubtitle, SheetTitle, TextField } from "@/components/ui";
 import { countryByCode } from "@/lib/countries";
@@ -22,6 +22,7 @@ import {
 import {
   blockUser,
   censorText,
+  containsProhibitedContent,
   fetchBlockedUsers,
   isModerationUnavailable,
   reportMessage,
@@ -132,6 +133,11 @@ export default function Community() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const scrollRef = useRef<TabScrollHandle | null>(null);
+  // Set when a send lands; consumed by onContentSizeChange so the scroll fires
+  // only after the new bubble has actually laid out (scrolling immediately
+  // would target the OLD content height and stop one message short).
+  const scrollPendingRef = useRef(false);
   const composerBottom = insets.bottom + INPUT_BOTTOM;
   const composerLift = useComposerLift(composerBottom);
 
@@ -261,11 +267,26 @@ export default function Community() {
   const submit = async () => {
     const body = draft.trim();
     if (!body || !room || !state.familyId || sending) return;
+    if (containsProhibitedContent(body)) {
+      toast("alert", "Message not sent", "This message contains language that isn't permitted in the community. Please revise it and try again.");
+      return;
+    }
     setSending(true);
     setDraft("");
     try {
       const message = await sendMessage({ roomId: room.id, householdId: state.familyId, memberName: currentMember?.name ?? null, body });
       setMessages((prev) => (prev && !prev.some((p) => p.id === message.id) ? [...prev, message] : prev));
+      scrollPendingRef.current = true;
+      // Consumed by onContentSizeChange once the new bubble lays out. Fallback
+      // for when the realtime echo already delivered the message (dedup → no
+      // size change fires): by then the list is at full height, so a late
+      // scrollToEnd is correct.
+      setTimeout(() => {
+        if (scrollPendingRef.current) {
+          scrollPendingRef.current = false;
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      }, 150);
     } catch (e) {
       console.error("[petpal] chat send failed:", e);
       toast("alert", "Couldn't send", "That message didn't go through");
@@ -286,6 +307,16 @@ export default function Community() {
       subtitle="Chat with pet owners everywhere"
       trailing={<HeaderActions />}
       contentBottomPad={88}
+      scrollRef={scrollRef}
+      // Fires whenever the feed grows — including the just-sent bubble landing.
+      // Scrolling here (not right after setMessages) waits for the new content
+      // height, so scrollToEnd actually reaches the new message.
+      onContentSizeChange={() => {
+        if (scrollPendingRef.current) {
+          scrollPendingRef.current = false;
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      }}
       // The composer tracks the keyboard itself (useComposerLift), so a
       // drag-to-dismiss that only lands at the end of the gesture keeps the two
       // in step — `interactive` would slide the keyboard out from under a bar
