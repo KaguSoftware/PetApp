@@ -225,7 +225,7 @@ export default function AccountSettingsPage() {
         ) : null}
         {currentMember ? (
           <Row
-            leading={<InitialAvatar name={currentMember.name} gradient={currentMember.gradient} size={36} />}
+            leading={<InitialAvatar name={currentMember.name} gradient={currentMember.gradient} size={36} emoji={currentMember.emoji} />}
             title={currentMember.name}
             subtitle="Your family card — edit it in Family"
           />

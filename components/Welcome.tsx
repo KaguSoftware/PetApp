@@ -103,7 +103,7 @@ export default function Welcome() {
               <View style={styles.memberGrid}>
                 {state.members.map((m) => (
                   <View key={m.id} style={styles.memberCard}>
-                    <InitialAvatar name={m.name} gradient={m.gradient} size={36} />
+                    <InitialAvatar name={m.name} gradient={m.gradient} size={36} emoji={m.emoji} />
                     <View style={styles.memberText}>
                       <Text numberOfLines={1} style={styles.memberName}>
                         {m.name}

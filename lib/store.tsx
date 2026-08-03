@@ -4,8 +4,9 @@ import * as Crypto from "expo-crypto";
 import { AppState as RNAppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
-import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, PetTransfer, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, nextRepeatDue } from "./data";
+import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, PetTransfer, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, firstName, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
+import { DEFAULT_MEMBER_EMOJI, MEMBER_GRADIENTS } from "@/lib/memberCard";
 import { colors } from "@/lib/theme";
 
 // Guards against LinearGradient's native crash ("Cannot set prop 'colors'" /
@@ -192,7 +193,7 @@ interface Store {
   addWeight: (petId: string, kg: number, ts?: number) => void;
   deleteWeight: (petId: string, weightId: string) => void;
   addMember: (name: string, role: string) => void;
-  editMember: (memberId: string, patch: { name: string; role: string }) => void;
+  editMember: (memberId: string, patch: { name: string; role: string; emoji?: string; gradient?: [string, string] }) => void;
   removeMember: (memberId: string) => void;
   bookVetById: (vetId: string) => void;
   unbookVetById: (vetId: string) => void;
@@ -324,15 +325,6 @@ const NOTIF_PREF_DB_COLUMN = {
   notifyFamilyActivity: "notify_family_activity",
   notifyVetSuggestions: "notify_vet_suggestions",
 } as const;
-
-const MEMBER_GRADIENTS: [string, string][] = [
-  ["#4385e4", "#544ec5"],
-  ["#db6ea5", "#c43e49"],
-  ["#24ab7e", "#00848c"],
-  ["#cd9c1f", "#cf630d"],
-  ["#00969f", "#00649e"],
-  ["#40a35c", "#007a5f"],
-];
 
 function describeErr(e: { code?: string; message?: string; details?: string; hint?: string } | null | undefined) {
   if (!e) return null;
@@ -571,6 +563,53 @@ function writeShortcutsLocal(householdId: string, list: Shortcut[]) {
   );
 }
 
+// --- Cold-start snapshot -----------------------------------------------------
+// The household load is one round trip, but it's still a round trip: for the
+// second or two it takes, the app knew NOTHING about the signed-in account —
+// not even whether it has a household — so Home sat on "Loading your
+// household…" and the first-run onboarding screen was one routing accident away
+// from painting instead. The last loaded state is mirrored to AsyncStorage per
+// user so the very first frame after splash is the real household, and the
+// fetch below just reconciles it.
+//
+// Deliberately a snapshot, not a cache: it is never consulted after the first
+// paint, never merged, and always overwritten wholesale by the server load.
+const SNAPSHOT_VERSION = 1;
+const snapshotKey = (userId: string) => `petpal.snapshot.${userId}`;
+/** Newest activities kept in a snapshot. The full list is unbounded (a busy
+ *  household accumulates thousands) and an AsyncStorage entry that big is slow
+ *  to write on every change and can hit Android's per-entry limit. Everything
+ *  on the first screen reads the recent end, and the real load lands moments
+ *  later with the rest. */
+const SNAPSHOT_ACTIVITY_LIMIT = 400;
+
+function writeSnapshot(userId: string, snapshot: AppState) {
+  // activities are held newest-first everywhere (load() sorts descending, the
+  // realtime merge inserts by ts), so the head is the recent end.
+  const trimmed =
+    snapshot.activities.length > SNAPSHOT_ACTIVITY_LIMIT
+      ? { ...snapshot, activities: snapshot.activities.slice(0, SNAPSHOT_ACTIVITY_LIMIT) }
+      : snapshot;
+  AsyncStorage.setItem(snapshotKey(userId), JSON.stringify({ v: SNAPSHOT_VERSION, state: trimmed })).catch((e) =>
+    console.error("[petpal] snapshot write failed:", e)
+  );
+}
+
+async function readSnapshot(userId: string): Promise<AppState | null> {
+  try {
+    const raw = await AsyncStorage.getItem(snapshotKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { v?: number; state?: AppState } | null;
+    if (parsed?.v !== SNAPSHOT_VERSION || !parsed.state?.activeHouseholdId) return null;
+    // Spread onto EMPTY_STATE: an app update can add a state field the stored
+    // snapshot predates, and every screen would then read it as undefined.
+    return { ...EMPTY_STATE, ...parsed.state };
+  } catch (e) {
+    console.error("[petpal] snapshot read failed:", e);
+    return null;
+  }
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(EMPTY_STATE);
   // Bumped to force a full re-hydration (the native stand-in for the web's
@@ -607,6 +646,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+  // Whether the cold-start snapshot has already had its one shot this session.
+  // Reset on sign-out so the NEXT account (or the same one signing back in)
+  // gets its own instant first paint; never true→restore twice, or a household
+  // switch would briefly repaint the previous household over the new one.
+  const snapshotRestoredRef = useRef(false);
+  const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // True when user_profiles.theme_mode (migration 0025) is missing — appearance
   // then falls back to an on-device cache keyed by user id instead of syncing,
   // so it still follows THIS account on THIS device, just not across devices.
@@ -880,9 +925,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
       if (silentReloadTimerRef.current) clearTimeout(silentReloadTimerRef.current);
       if (realtimeRetryTimerRef.current) clearTimeout(realtimeRetryTimerRef.current);
+      if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
     },
     []
   );
+
+  // Mirror the loaded household to disk so the NEXT cold start paints it
+  // immediately (see the snapshot helpers above). Debounced because `state`
+  // changes on every optimistic write and serialising the whole household on
+  // each keystroke-speed edit would be wasteful — losing the last second of
+  // changes to a hard kill costs nothing, since the server is the source of
+  // truth and the snapshot is only ever a first frame.
+  useEffect(() => {
+    if (!hydrated || !userId) return;
+    // No active household (signed in but membership-less, or they just left
+    // their last one) — drop the stale snapshot rather than replay a household
+    // this account is no longer in on the next launch.
+    if (!state.activeHouseholdId) {
+      AsyncStorage.removeItem(snapshotKey(userId)).catch(() => {});
+      return;
+    }
+    if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
+    snapshotTimerRef.current = setTimeout(() => {
+      snapshotTimerRef.current = null;
+      writeSnapshot(userId, stateRef.current);
+    }, 1000);
+  }, [state, hydrated, userId]);
 
   /**
    * Re-hydrate the household quietly, because something changed server-side
@@ -979,7 +1047,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           pendingNotificationTimeoutsRef.current.delete(timeoutId);
           const recipient = stateRef.current.members.find((mm) => mm.id === forMemberId);
           if (recipient?.notifyFamilyActivity ?? true) {
-            toast(ACTION_ICON[a.type].icon, `${member.name} ${action.verb} ${pet.name}`, `${time} · ${timeAgo(a.ts)}`);
+            toast(ACTION_ICON[a.type].icon, `${firstName(member.name)} ${action.verb} ${pet.name}`, `${time} · ${timeAgo(a.ts)}`);
           }
         }, i * NOTIFY_STAGGER_MS);
         pendingNotificationTimeoutsRef.current.add(timeoutId);
@@ -1157,6 +1225,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         lastLoadedKey = null;
         inFlightUserId = null;
         userIdRef.current = null;
+        // Whoever signs in next gets their own instant first paint.
+        snapshotRestoredRef.current = false;
         if (!cancelled) {
           setUserEmail(null);
           setUserId(null);
@@ -1185,6 +1255,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       inFlightUserId = user.id;
+
+      // FIRST PAINT: put the last-known household on screen now, before the
+      // network work below. Awaited rather than raced — a snapshot that landed
+      // after the real load would paint stale data over fresh. One shot per
+      // sign-in (snapshotRestoredRef), so a household switch or an hourly
+      // TOKEN_REFRESHED can never repaint an old household over the live one.
+      if (!snapshotRestoredRef.current) {
+        snapshotRestoredRef.current = true;
+        const snapshot = await readSnapshot(user.id);
+        if (cancelled) return;
+        if (snapshot) {
+          householdIdRef.current = snapshot.activeHouseholdId;
+          // Coins are written as an absolute value on a debounce, so seed the
+          // authoritative total too — otherwise a log tapped in the second
+          // before the fetch lands would compute its new total from 0.
+          // lastStreakBonus stays null (milestone bonuses hold off until the
+          // server's real marker arrives; a stale one could double-pay).
+          rewardsRef.current = { coins: snapshot.coins, lastStreakBonus: null };
+          setState(snapshot);
+          setHydrated(true);
+        }
+      }
 
       // Appearance is per-account, not per-household: show the cached value
       // for THIS user immediately (instant, no flash of the wrong theme while
@@ -2765,7 +2857,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const id = Crypto.randomUUID();
-      const emoji = "🧑";
+      const emoji = DEFAULT_MEMBER_EMOJI;
       const gradient = MEMBER_GRADIENTS[stateRef.current.members.length % MEMBER_GRADIENTS.length];
       setState((prev) => ({
         ...prev,
@@ -2791,13 +2883,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const editMember = useCallback(
-    (memberId: string, patch: { name: string; role: string }) => {
+    (memberId: string, patch: { name: string; role: string; emoji?: string; gradient?: [string, string] }) => {
       const prev = stateRef.current.members.find((m) => m.id === memberId);
+      // Built key by key rather than spread: an absent `emoji`/`gradient` means
+      // "leave it alone", and spreading the patch would blank the column with
+      // undefined instead.
+      const local: Partial<Member> = { name: patch.name, role: patch.role };
+      const row: Record<string, unknown> = { name: patch.name, role: patch.role };
+      if (patch.emoji !== undefined) {
+        local.emoji = patch.emoji;
+        row.emoji = patch.emoji;
+      }
+      if (patch.gradient !== undefined) {
+        local.gradient = patch.gradient;
+        row.gradient_from = patch.gradient[0];
+        row.gradient_to = patch.gradient[1];
+      }
       setState((s) => ({
         ...s,
-        members: s.members.map((m) => (m.id === memberId ? { ...m, ...patch } : m)),
+        members: s.members.map((m) => (m.id === memberId ? { ...m, ...local } : m)),
       }));
-      persist(supabase.from("members").update({ name: patch.name, role: patch.role }).eq("id", memberId), {
+      persist(supabase.from("members").update(row).eq("id", memberId), {
         rollback: () => prev && setState((s) => ({ ...s, members: s.members.map((m) => (m.id === memberId ? prev : m)) })),
         message: "Couldn't save member changes",
       });

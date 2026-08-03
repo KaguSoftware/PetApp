@@ -5,7 +5,7 @@ import { FadeInItem } from "@/components/Motion";
 import { InitialAvatar } from "@/components/PetAvatar";
 import { ACTION_ICON } from "@/components/Icons";
 import { AccentButton, IconCircle, Row } from "@/components/ui";
-import { ACTIONS, type Activity, type Member, type Pet } from "@/lib/data";
+import { ACTIONS, firstName, type Activity, type Member, type Pet } from "@/lib/data";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
@@ -42,12 +42,12 @@ export default function ActivityRow({
       <Row
         leading={
           member ? (
-            <InitialAvatar name={member.name} gradient={member.gradient} size={36} />
+            <InitialAvatar name={member.name} gradient={member.gradient} size={36} emoji={member.emoji} />
           ) : (
             <IconCircle icon={ACTION_ICON[activity.type].icon} tint={ACTION_ICON[activity.type].tint} bg={ACTION_ICON[activity.type].bg} />
           )
         }
-        title={`${member?.name ?? "Someone"} ${ACTIONS[activity.type].verb} ${pet.name}`}
+        title={`${member ? firstName(member.name) : "Someone"} ${ACTIONS[activity.type].verb} ${pet.name}`}
         subtitle={[medName, gramsNote, durationNote].filter(Boolean).join(" · ") || undefined}
         trailing={
           <Text style={styles.timelineTime}>{new Date(activity.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Text>

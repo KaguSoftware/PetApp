@@ -10,6 +10,7 @@ import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import PetSelectorRow from "@/components/PetSelectorRow";
 import { TabScreen } from "@/components/Screen";
+import NutritionCard from "@/components/nutrition/NutritionCard";
 import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
 import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
 import { medicationSummary } from "@/lib/careStatus";
@@ -296,6 +297,10 @@ export default function PlanPage() {
   if (!state.premium) {
     return (
       <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
+        <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
+        {/* Above the wall on purpose: nutrition is free, and the never-feed list
+            inside it is a safety notice that must never sit behind a paywall. */}
+        <NutritionCard pet={pet} />
         <View style={styles.lockedWrap}>
           <View style={styles.lockCircle}>
             <Icon name="lock" size={34} color={colors.accent} />
@@ -335,6 +340,8 @@ export default function PlanPage() {
       {/* Same avatar-row selector as the Logs tab — one tap to switch pets,
           no "name + chevron → sheet" detour. */}
       <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
+
+      <NutritionCard pet={pet} />
 
       <CareGuides />
 

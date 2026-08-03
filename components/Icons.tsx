@@ -1,6 +1,7 @@
 import type React from "react";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import type { ActionType } from "@/lib/data";
+import type { Colors } from "@/lib/theme";
 
 export type IconName =
   | "home" | "bell" | "heart-text" | "bag" | "people"
@@ -10,6 +11,7 @@ export type IconName =
   | "chart" | "box" | "gear" | "cross" | "refresh" | "pin" | "cube"
   | "list" | "eye" | "person"
   | "yarn" | "clipper" | "shield" | "door"
+  | "leaf" | "bone" | "fish"
   | "syringe" | "repeat" | "share" | "gift"
   | "alert" | "trash" | "scale" | "sun" | "moon" | "filter";
 
@@ -239,6 +241,26 @@ const P: Record<IconName, React.ReactNode> = {
   shield: (
     <Path d="M12 2.5 19.5 5v6c0 4.8-3.2 8.9-7.5 10.5C7.7 19.9 4.5 15.8 4.5 11V5Z" />
   ),
+  // Food-domain trio for the nutrition guide: plant matter / fibre, meat
+  // protein, and oily fish (omega-3). Same 24×24 stroke grid as the rest.
+  leaf: (
+    <>
+      <Path d="M4 20c0-8 4.5-13 16-13 0 9-4.5 13.5-11 13.5A5 5 0 0 1 4 20Z" />
+      <Path d="M9.5 17c1-4 3.5-6.8 7-8.5" />
+    </>
+  ),
+  bone: (
+    <>
+      <Path d="M6.6 10.4a2.6 2.6 0 1 1 1.8-4.4 2.6 2.6 0 1 1 3.2 3.1l3.3 3.3a2.6 2.6 0 1 1 3.1 3.2 2.6 2.6 0 1 1-4.4 1.8 2.6 2.6 0 0 1-.6-1.8l-3.3-3.3a2.6 2.6 0 0 1-3.1-1.9Z" />
+    </>
+  ),
+  fish: (
+    <>
+      <Path d="M3 12c3.2-4 6.5-6 9.8-6 3.4 0 6.2 2 8.2 6-2 4-4.8 6-8.2 6-3.3 0-6.6-2-9.8-6Z" />
+      <Path d="M3 12c1.6-1 2.9-2.4 3.8-4.2M3 12c1.6 1 2.9 2.4 3.8 4.2" />
+      <Circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   door: (
     <>
       <Path d="M3 21h18" />
@@ -373,3 +395,25 @@ export const ACTION_ICON: Record<ActionType, { icon: IconName; tint: string; bg:
   meds: { icon: "pill", tint: "#dc2626", bg: "rgba(220,38,38,0.10)" },
   vet: { icon: "stethoscope", tint: "#0e7490", bg: "rgba(14,116,144,0.10)" },
 };
+
+/**
+ * The same per-action identity as `ACTION_ICON`, but drawn from live theme
+ * tokens instead of the web demo's fixed hexes. Surfaces where the action's
+ * color carries real weight (the Logs dashboard tiles, where it IS the
+ * wayfinding) need a tint that stays legible in dark mode; a 12pt icon inside a
+ * list row does not, so `ACTION_ICON` stays as it is for those.
+ *
+ * Every tint here is a hex token, so `withAlpha()` can derive washes from it.
+ */
+export function actionTone(colors: Colors, type: ActionType): { icon: IconName; tint: string; bg: string } {
+  const tone: Record<ActionType, { tint: string; bg: string }> = {
+    fed: { tint: colors.orange, bg: colors.orangeSoft },
+    water: { tint: colors.accent, bg: colors.accentSoft },
+    litter: { tint: colors.label2, bg: colors.fill },
+    walk: { tint: colors.green, bg: colors.greenSoft },
+    groomed: { tint: colors.groomTint, bg: colors.groomBg },
+    meds: { tint: colors.red, bg: colors.redSoft },
+    vet: { tint: colors.vetTint, bg: colors.vetBg },
+  };
+  return { icon: ACTION_ICON[type].icon, ...tone[type] };
+}

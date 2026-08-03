@@ -1,7 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
+import { Icon } from "@/components/Icons";
 import PixelPet from "@/components/pixel/PixelPet";
 import type { Pet } from "@/lib/data";
+import { memberIconFor } from "@/lib/memberCard";
 import { font } from "@/lib/theme";
 
 const SIZES = {
@@ -45,8 +47,23 @@ export default function PetAvatar({
  * Member avatar: a clean iOS-style gradient circle with the initial in Inter —
  * distinct from the round pixel pet sprites (people are not part of the pixel
  * pet world).
+ *
+ * `emoji` is the raw `members.emoji` column. When it matches one of the icons
+ * offered in the edit-card sheet it replaces the initial with that stroke icon;
+ * anything else (including the glyphs the join RPCs seed) keeps the initial.
  */
-export function InitialAvatar({ name, gradient, size = 40 }: { name: string; gradient: [string, string]; size?: number }) {
+export function InitialAvatar({
+  name,
+  gradient,
+  size = 40,
+  emoji,
+}: {
+  name: string;
+  gradient: [string, string];
+  size?: number;
+  emoji?: string | null;
+}) {
+  const icon = memberIconFor(emoji);
   return (
     <LinearGradient
       colors={[gradient[0], gradient[1]]}
@@ -54,7 +71,11 @@ export function InitialAvatar({ name, gradient, size = 40 }: { name: string; gra
       end={{ x: 0.8, y: 1 }}
       style={[styles.center, { width: size, height: size, borderRadius: size / 2 }]}
     >
-      <Text style={{ fontSize: size * 0.42, fontFamily: font.semibold, color: "#fff" }}>{name.charAt(0).toUpperCase()}</Text>
+      {icon ? (
+        <Icon name={icon} size={Math.round(size * 0.52)} color="#fff" strokeWidth={2.1} />
+      ) : (
+        <Text style={{ fontSize: size * 0.42, fontFamily: font.semibold, color: "#fff" }}>{name.charAt(0).toUpperCase()}</Text>
+      )}
     </LinearGradient>
   );
 }
