@@ -632,13 +632,164 @@ The three UGC requirements Apple checks for apps with user content, added to the
   ScrollView), report → toast + message disappears, block → author's history vanishes, unblock in
   Settings → messages return on next Community focus, censored words render masked in both themes.
 
+### Edit-card fix + member icons (2026-08-03, owner report) — built, `tsc` + `eslint` clean, iOS + Android bundle (10.4 MB), no migration needed
+
+**The reported bug: Family ▸ tap a member ▸ "Edit card" did nothing.** Not a styling or permission
+problem — **two stacked `Modal`s**. `Sheet` renders a native RN `Modal`, and the manage-account
+sheet stays mounted for the 240 ms of its close animation. Tapping "Edit card" ran
+`setManaging(null); openEditMember(card)` in one commit, so the edit sheet's `Modal` tried to
+present while the manage sheet's was still presented. `RCTModalHostViewManager` calls
+`presentViewController:` unconditionally, UIKit refuses a second presentation, and RN sets
+`_isPresented = YES` anyway — so the sheet was permanently "presented" and invisible until unmount.
+- **RULE: never open a `Sheet` from inside another `Sheet`.** Make it a VIEW of the same sheet —
+  which is exactly what the caregiver-terms drill in this file already did. The manage sheet now
+  has `managingView: "manage" | "edit" | "terms"` and one `<Sheet>`; `closeManaging()` resets it.
+  Swept the rest of the app — this was the only stacked-modal site.
+- The edit view also lost its stale `editingMemberAccount` lookup (the role badge reads
+  `managing.role` directly now) and gained a "Back" button next to Save.
+
+**Personal icons + colors on the family card** (`components/MemberAvatarField.tsx`,
+`lib/memberCard.ts`, both new): the edit view now picks the avatar icon and gradient, not just the
+name. Every swatch renders through the real `InitialAvatar`, so the grid IS the preview.
+- **No migration**: both live in columns the shared backend already has (`members.emoji`,
+  `gradient_from`/`gradient_to`). `editMember` gained optional `emoji`/`gradient` — built key by
+  key, since an absent key must mean "leave it alone", not "write undefined".
+- **The icon is stored as an EMOJI GLYPH, not as our icon name**, because the web demo renders that
+  column as plain text — `"paw"` would literally print "paw" on the web card. `memberIconFor()`
+  maps the glyph back to the app's stroke icon set (emoji stays out of UI chrome on mobile).
+- The RPC-seeded `🧑` / `🧑‍💻` are deliberately NOT in `MEMBER_ICONS`: "never chosen" renders the
+  person's initial, which tells a household of five apart better than five identical person glyphs.
+- `MEMBER_GRADIENTS` moved out of `store.tsx` into `lib/memberCard.ts` (+2 colors). Cards minted by
+  the join/create RPCs carry `oklch(...)` gradients that `safeGradient` can't parse, so they arrive
+  as the fallback accent pair — the picker keeps that starting color as its own swatch rather than
+  showing an unselected row, and picking a real color is now the fix for it.
+- `InitialAvatar` takes `emoji`; passed at every member call site (members list, activity feed, pet
+  detail, Welcome, Settings ▸ Account) so a chosen icon shows everywhere. Vet call sites unchanged.
+
+**Device-verify:** tap a member → "Edit card" opens (this is THE regression), change name + icon +
+color → Save → the members list, Logs "Today" timeline and pet-detail activity rows all show it;
+Back returns to the manage view; the caregiver toggle still routes through the terms view; a plain
+member can edit their own card but not someone else's (0040 guard).
+
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart.
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below).
 - `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: activity, reminders, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
 - `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
+
+### Care › Nutrition (2026-08-03)
+Entered from a **`NutritionCard`** on the Care tab — one saturated brand-violet panel with live stat
+pills, sitting above `CareGuides` on both the premium and locked paths (`PetSelectorRow` now renders
+on the locked path too, so the pet can be changed there). Nutrition is **free on purpose**: its
+never-feed list is a safety notice and its cost calculator is a plain utility, so gating either was
+off the table; the paywall stays on the plan.
+
+**Hub, then detail screens — never one long scroll.** `/nutrition` orients you (breed thesis, three
+numbers) and is otherwise a menu of five rows, each with a blurb and a live value.
+`/nutrition/[section]` renders one subject full screen. The first build put all five end to end and
+it read as a wall; the hub exists so nothing on it can expand and grow back into one. Both routes are
+registered in `app/_layout.tsx`'s `Stack.Protected` block — **new root routes ship unguarded
+otherwise**.
+
+- `lib/nutrition.ts` — profiles for all 16 picklist breeds (macros as % **dry matter**, meal pattern,
+  ranked food formats, favour/limit lists, curated recipe ids), species-wide never-feed lists, 7
+  scalable recipes, `NUTRITION_SECTIONS` (the menu, shared by hub and detail route), and the
+  portion/cost maths.
+- `lib/foodPricing.ts` — device-local prices per pet per format + currency, same
+  AsyncStorage/`useSyncExternalStore` shape as `lib/a11y.tsx`. **Not** Supabase: a price is what one
+  person pays at their shop in their currency, so two members abroad would overwrite each other.
+- `components/nutrition/` — `NutritionCard` (the Care-tab entry), `sections.tsx` (the four content
+  sections + `NutritionSectionBody` switch + `VetDisclaimer`), `CostEngine` (the fifth section),
+  `RecipeSheet`, `atoms.tsx` (`useInk` inverted panel, `AnimatedNumber`, `RangeBar`, `Reveal`).
+
+**The rule that governs every number here: calories are the invariant, grams are not.** The same dog
+needs ~460 g of kibble or ~2,000 g of wet food for the same energy, so `portionGrams()` derives
+consumption per format from `energyBasis()` and never carries one gram figure across formats. The one
+exception is dry food with no owner-supplied density, which comes straight off
+`WEIGHT_FEEDING_GUIDES`' kibble range so this tab and the Plan tab's feeding guide can't print two
+figures a few per cent apart. `energyBasis()` falls back guide → the family's own gram target → the
+vet RER formula (70 × kg^0.75 × activity), so the calculator still works for an off-list breed, and
+the source it used is printed on screen.
+
+`AnimatedNumber` drives text through `useAnimatedProps` on a `TextInput`. It follows the worklet rules
+below to the letter — every changing value (prefix, suffix, decimals, locale separators) is mirrored
+into a shared value, and its formatting helpers are `"worklet"`-marked and use only language
+primitives (no `Number.isFinite`, no `toLocaleString`).
+
+### Logs is a household DASHBOARD now, not a per-pet list (2026-08-03, owner request) — built, `tsc` + `eslint` clean, iOS + Android bundle (10.6 MB), no migration needed
+
+The owner's brief: *"more like a dashboard rather than a list · each lever a simple explanatory
+color/icon/design · the button itself logs, with an overlayed calendar button to schedule · unify the
+page for all pets so we lose the pet picker at the top, by adding a pick-pet step when logging that's
+just the pet icon at a reasonable size."* All four landed together, because they are one change: the
+page can only stop being per-pet if the pet moves into the action.
+
+- **`lib/careDashboard.ts` (new, pure)** — the household roll-up that `careStatus.ts` deliberately
+  doesn't do. `summarizeLever(type, pets, …)` runs the existing per-pet state machine over every pet
+  the lever applies to (`leverApplies`: litter = cats, walk = dogs, meds = pets with meds) and
+  collapses it to a `LeverSummary`: per-pet tones, counts, soonest `next`, latest `last`, summed
+  count targets. Tone is the five-value dashboard vocabulary — `overdue > due > open > idle > done`,
+  where `open` is the count-target case with work left and `idle` means nothing is being asked. The
+  loudest tone present wins the tile (`TONE_RANK`). Also owns every string the tiles show
+  (`leverStatusLine`, `petStateLine`, `clockLabel`, `sinceLabel`) and `petDayProgress`, which powers
+  the summary card and the "all caught up" toast. **Vet is excluded from day progress on purpose** —
+  a yearly checkup would put "caught up" permanently out of reach.
+- **`components/logs/CareTile.tsx`** — one lever, whole household. The tile body IS the log button
+  (47% × 142pt, not a 60pt pill on the right of a row); the schedule chip is **a sibling of the
+  pressable, absolutely positioned**, never a child — a nested pressable loses its taps to the parent
+  on Android, and this sidesteps the responder question entirely instead of patching it. The chip is
+  accent-tinted when a schedule exists, neutral when not, so "has times set" is readable at a glance.
+  Color does the wayfinding: `actionTone()` fills a 40pt icon chip and washes the tile in the same
+  hue via a `LinearGradient`, and **state overrides that hue only for `overdue` (red) and `done`
+  (green, faded almost to the card)** so the tiles still asking for something own the grid. A pip bar
+  pinned to the tile floor with `marginTop: "auto"` carries one segment per pet — identity arrives on
+  tap, not in 4px.
+  - **Parked variant — "the icon IS the button background".** The owner asked for the chip to be
+    replaced by one oversized glyph (104pt, `strokeWidth` 1.5, ~55% alpha of the action tint, bled
+    off the bottom-right corner, swapping to a check when done), then asked to see the chip version
+    again to compare. Both are one small block in `CareTile`; the glyph version's only awkwardness
+    was that a two-line status ("Next tomorrow 8:00 AM · Luna") reads across the stroke unless the
+    glyph is pushed down to `bottom: -32`, which crops it on two edges.
+- **`components/Icons.tsx` → `actionTone(colors, type)` (new)** — `ACTION_ICON`'s fixed web-demo hexes
+  are fine inside a 19pt list-row circle but not when the color IS the interface: `#c2410c` on the
+  dark card is nearly unreadable. `actionTone` returns the same icons against **live theme tokens**
+  (`orange` / `accent` / `label2` / `green` / `groomTint` / `red` / `vetTint`), all hex so
+  `withAlpha()` can derive the washes. `ACTION_ICON` is untouched — every other call site keeps its
+  current look.
+- **`components/logs/PetChoice.tsx`** — the pet step. `PetChoiceRow` is a row of 56pt avatars with
+  name + state caption, in two modes: radio (given `selectedId`, used by the retro-log sheet) or
+  commit-on-tap (the dashboard). `PetChoicePanel` opens it **inline underneath the tile's grid row**
+  with a caret pointing back at the tile — deliberately **not** a sheet, since a modal would cover the
+  grid you are acting on, and it keeps the flow one level deep. Bulk logging rides here too: water,
+  litter and grooming need nothing beyond "which pet", so they get an "Everyone" disc.
+- **`components/logs/HouseholdToday.tsx`** — the summary card that replaced the picker: "5 of 9 done"
+  (green when caught up, red count when overdue) plus a per-pet avatar, name and progress bar. It has
+  **no selected state and each pet links to its profile**, so it can't be mistaken for the picker it
+  replaced.
+- **`app/(tabs)/logs/index.tsx` (rewrite)** — `HouseholdToday` → a 2-up grid of `CareTile`s (levers
+  chunked into rows so the chooser panel can be inserted after the right one; an odd count gets a
+  flex filler rather than a stretched tile) → Tasks & care rows (retro-log, reminders, medications,
+  vets — all now household-wide) → a **household-wide Today timeline**. **One pet in play means no
+  chooser at all**: `start()` goes straight to the action. Meds scheduling routes to `/medications`
+  when the pet has more than one medication — picking a med would need a sheet on top of a sheet, and
+  those rows already open this same editor. Sheet targets are held in a local `useSheetTarget<T>()`
+  whose data **outlives `open`**, or the sheet would unmount mid-dismiss and vanish instead of
+  sliding away.
+- **`app/(tabs)/logs/all.tsx`** — household-wide too, and its `PetSelectorRow` is gone: every row
+  already names its pet, so the selector could only hide entries.
+- **Care logs are narrated with FIRST names** — `firstName()` in `lib/data.ts` ("Majed Ahdab" →
+  "Majed"). Applied to all three places that render the same sentence, so they can't disagree:
+  `ActivityRow`'s title (Logs, All logs, Medications), the Activity feed's own inline title, and
+  `store.tsx`'s family-activity toast. Surfaces that *identify* a member rather than narrate one
+  (Family list, roles, invites, member cards) deliberately keep the full name.
+- **Deleted `components/CareStatusRow.tsx`** (its `CoinPop` moved into `CareTile.tsx`). The Logs tab
+  was its only consumer. `PetSelectorRow` is untouched and still used by Care, Pets, Medications and
+  Nutrition.
+- **Needs a device pass on:** the calendar chip's 32pt + hitSlop target on Android (the sibling
+  trick is the fix for the nested-pressable bug, but it has not been finger-tested), the chooser
+  panel opening under a row mid-scroll, and the tile washes in dark mode.
 
 ## Roadmap
 1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030 applied; 0031 STILL PENDING — invites stay broken until it lands**, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.
@@ -725,6 +876,9 @@ shape. **When an animation crashes silently, get the crash report first — do n
 source.** Guessing failed three times running; the stack trace identified it in one pass.
 
 ### Everything else
+- **Never open a `Sheet` from inside another `Sheet`** — `Sheet` is a native `Modal`, and iOS
+  refuses the second presentation while the first is still dismissing, so the new sheet silently
+  never appears. Make it a view of the same sheet (see the 2026-08-03 edit-card fix).
 - **Web demo is production truth**: never rename/drop/retighten schema it queries; new migrations start at 0015 (no 0008 upstream). Each of 0026–0030 carries its own WEB-DEMO COMPAT note — read it before touching them.
 - **`household_members.member_id` has DUAL semantics**: mobile treats it as the account's claimed-card link; the web demo persists its "view as" pointer into the same column. Deliberately NO unique index on it; the 0026 claimed-card guard only counts OTHER users' pointers as claims. Don't "fix" one side without the other.
 - **New root-level route files ship UNGUARDED unless registered** inside the signed-in `Stack.Protected` block in `app/_layout.tsx` (`/verify` + `/reset-password` are unguarded on purpose — OTP creates the session mid-screen).

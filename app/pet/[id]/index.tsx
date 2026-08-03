@@ -633,7 +633,7 @@ export default function PetDetailPage() {
           return (
             <Row
               key={a.id}
-              leading={m ? <InitialAvatar name={m.name} gradient={m.gradient} size={34} /> : undefined}
+              leading={m ? <InitialAvatar name={m.name} gradient={m.gradient} size={34} emoji={m.emoji} /> : undefined}
               title={
                 <Text numberOfLines={1} style={styles.activityTitle}>
                   <Text style={styles.activityWho}>{m?.id === state.currentMemberId ? "You" : m?.name}</Text>{" "}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import MemberAvatarField from "@/components/MemberAvatarField";
 import { InitialAvatar } from "@/components/PetAvatar";
 import RoleField from "@/components/RoleField";
 import Sheet from "@/components/Sheet";
@@ -13,6 +14,7 @@ import {
   Row,
   SectionHeader,
   SelectableChip,
+  SheetFooter,
   SheetSubtitle,
   SheetTitle,
   SmallButton,
@@ -29,6 +31,7 @@ import {
   type Member,
 } from "@/lib/data";
 import { copyInviteCode, inviteExpiryLabel, shareInvite } from "@/lib/inviteShare";
+import { DEFAULT_MEMBER_EMOJI, MEMBER_GRADIENTS } from "@/lib/memberCard";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, type Colors } from "@/lib/theme";
 import { confirmDestructive, Field, RoleBadge, ROLE_LABEL, useFamilyStyles } from "./shared";
@@ -148,8 +151,22 @@ export default function MembersSection() {
   }, [canManage, state.activeHouseholdId, fetchJoinRequests]);
 
   // Account management sheet (tap a signed-in family member).
+  //
+  // "Edit card" and the caregiver terms are VIEWS INSIDE this one sheet, never
+  // a second <Sheet>. Sheet renders a native Modal, and on iOS presenting a
+  // second modal while the first is still dismissing (ours animates out over
+  // 240ms) is refused by UIKit — RCTModalHostViewManager calls
+  // presentViewController: unconditionally, so the new sheet silently never
+  // appeared and "Edit card" did nothing at all. Same reason the terms view
+  // was already inlined here.
   const [managing, setManaging] = useState<HouseholdAccount | null>(null);
   const [managingBusy, setManagingBusy] = useState(false);
+  const [managingView, setManagingView] = useState<"manage" | "edit" | "terms">("manage");
+
+  const closeManaging = () => {
+    setManaging(null);
+    setManagingView("manage");
+  };
 
   // Invite sheet.
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -171,24 +188,25 @@ export default function MembersSection() {
     fetchInvites().then(setActiveInvites);
   };
 
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editMemberName, setEditMemberName] = useState("");
+  const [editMemberEmoji, setEditMemberEmoji] = useState(DEFAULT_MEMBER_EMOJI);
+  const [editMemberGradient, setEditMemberGradient] = useState<[string, string]>(MEMBER_GRADIENTS[0]);
   const [editMemberIsCaregiver, setEditMemberIsCaregiver] = useState(false);
   const [editMemberFunRole, setEditMemberFunRole] = useState(NO_FUN_ROLE);
   const [editMemberCustomFunRole, setEditMemberCustomFunRole] = useState("");
   const [editMemberTermsAccepted, setEditMemberTermsAccepted] = useState(false);
-  const [editMemberShowTerms, setEditMemberShowTerms] = useState(false);
 
   const openEditMember = (m: Member) => {
-    setEditingMember(m);
     setEditMemberName(m.name);
+    setEditMemberEmoji(m.emoji || DEFAULT_MEMBER_EMOJI);
+    setEditMemberGradient(m.gradient);
     // parsed.isAdmin is read and DISCARDED on purpose: legacy cards may still
     // carry the old cosmetic "Admin" label, and saving now drops it.
     const parsed = parseMemberRoles(m.role);
     setEditMemberIsCaregiver(parsed.isCaregiver);
     // Already a caregiver from before this gate existed — grandfathered in, no re-prompt.
     setEditMemberTermsAccepted(parsed.isCaregiver);
-    setEditMemberShowTerms(false);
+    setManagingView("edit");
     if (!parsed.customRole) {
       setEditMemberFunRole(NO_FUN_ROLE);
       setEditMemberCustomFunRole("");
@@ -212,9 +230,6 @@ export default function MembersSection() {
     isCaregiver: editMemberIsCaregiver,
     customRole: resolveFunRole(editMemberFunRole, editMemberCustomFunRole),
   });
-  // The ACCOUNT behind the card being edited, if any — drives the read-only
-  // household-role badge in that sheet.
-  const editingMemberAccount = editingMember ? state.accounts.find((a) => a.memberId === editingMember.id) : undefined;
 
   const shareInviteCode = (invite: HouseholdInvite) => shareInvite(invite);
 
@@ -263,7 +278,7 @@ export default function MembersSection() {
               onPress={() => setManaging(a)}
               leading={
                 card ? (
-                  <InitialAvatar name={card.name} gradient={card.gradient} size={38} />
+                  <InitialAvatar name={card.name} gradient={card.gradient} size={38} emoji={card.emoji} />
                 ) : (
                   <IconCircle icon="person" tint={colors.label2} bg={colors.fill} size={38} />
                 )
@@ -347,8 +362,8 @@ export default function MembersSection() {
       <View style={{ height: 16 }} />
 
       {/* Manage a signed-in account */}
-      <Sheet open={managing !== null} onClose={() => setManaging(null)}>
-        {managing && (
+      <Sheet open={managing !== null} onClose={closeManaging}>
+        {managing && managingView === "manage" && (
           <>
             <SheetTitle>{managingCard?.name ?? "Family member"}</SheetTitle>
             <SheetSubtitle>
@@ -358,13 +373,12 @@ export default function MembersSection() {
             <Group style={{ marginTop: 16 }}>
               {managingCard && (managingIsSelf || canManage) ? (
                 <Row
-                  onPress={() => {
-                    setManaging(null);
-                    openEditMember(managingCard);
-                  }}
-                  leading={<IconCircle icon="person" tint={colors.label2} bg={colors.fill} />}
+                  onPress={() => openEditMember(managingCard)}
+                  leading={
+                    <InitialAvatar name={managingCard.name} gradient={managingCard.gradient} size={36} emoji={managingCard.emoji} />
+                  }
                   title="Edit card"
-                  subtitle="Name and cosmetic roles"
+                  subtitle="Name, icon, color and cosmetic roles"
                   trailing={<Chevron />}
                 />
               ) : null}
@@ -376,7 +390,7 @@ export default function MembersSection() {
                       setManagingBusy(true);
                       await setMemberRole(managing.userId, managing.role === "admin" ? "member" : "admin");
                       setManagingBusy(false);
-                      setManaging(null);
+                      closeManaging();
                     }}
                     leading={<IconCircle icon="star" tint={colors.accent} bg={colors.accentSoft} />}
                     title={managing.role === "admin" ? "Make member" : "Make admin"}
@@ -391,7 +405,7 @@ export default function MembersSection() {
                         "Transfer",
                         async () => {
                           await transferOwnership(managing.userId);
-                          setManaging(null);
+                          closeManaging();
                         }
                       )
                     }
@@ -412,7 +426,7 @@ export default function MembersSection() {
                       "Remove",
                       async () => {
                         await removeHouseholdMember(managing.userId);
-                        setManaging(null);
+                        closeManaging();
                       }
                     )
                   }
@@ -430,7 +444,7 @@ export default function MembersSection() {
                       "Leave",
                       async () => {
                         const ok = await leaveHousehold(state.activeHouseholdId);
-                        if (ok) setManaging(null);
+                        if (ok) closeManaging();
                       }
                     )
                   }
@@ -445,6 +459,90 @@ export default function MembersSection() {
               </Text>
             ) : null}
           </>
+        )}
+
+        {/* Edit card — a view of the manage sheet, not a sheet of its own. */}
+        {managing && managingCard && managingView === "edit" && (
+          <>
+            <SheetTitle>Edit card</SheetTitle>
+            <SheetSubtitle>How {managingIsSelf ? "you appear" : `${managingCard.name} appears`} across the app.</SheetSubtitle>
+
+            <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
+
+            <MemberAvatarField
+              name={editMemberName}
+              emoji={editMemberEmoji}
+              gradient={editMemberGradient}
+              onChangeEmoji={setEditMemberEmoji}
+              onChangeGradient={setEditMemberGradient}
+            />
+
+            {/* The REAL household role, read-only. Only the owner changes
+                roles, from the manage view. */}
+            <FieldLabel>Household role</FieldLabel>
+            <View style={styles.roleReadOnlyRow}>
+              <RoleBadge role={managing.role} />
+              <Text style={shared.fieldHint}>
+                {managing.role === "owner"
+                  ? "Owners can do everything, including transferring the household."
+                  : managing.role === "admin"
+                    ? "Admins can invite and manage members."
+                    : "Members can log care and see everything."}
+              </Text>
+            </View>
+
+            <FieldLabel>Card labels</FieldLabel>
+            <RoleField
+              isCaregiver={editMemberIsCaregiver}
+              onToggleCaregiver={() =>
+                setEditMemberIsCaregiver((prev) => {
+                  const next = !prev;
+                  if (!next) setEditMemberTermsAccepted(false);
+                  return next;
+                })
+              }
+              funRole={editMemberFunRole}
+              customFunRole={editMemberCustomFunRole}
+              onChangeFunRole={setEditMemberFunRole}
+              onChangeCustomFunRole={setEditMemberCustomFunRole}
+            />
+
+            <SheetFooter>
+              {editMemberCaregiverGateActive ? (
+                <AccentButton onPress={() => setManagingView("terms")}>Terms and conditions</AccentButton>
+              ) : (
+                <AccentButton
+                  disabled={!editMemberName.trim()}
+                  onPress={() => {
+                    const name = editMemberName.trim();
+                    editMember(managingCard.id, {
+                      name,
+                      role: resolvedEditMemberRole,
+                      emoji: editMemberEmoji,
+                      gradient: editMemberGradient,
+                    });
+                    toast("person", `${name} updated`, "");
+                    closeManaging();
+                  }}
+                >
+                  Save changes
+                </AccentButton>
+              )}
+              <View style={{ marginTop: 12 }}>
+                <SmallButton label="Back" tone="gray" onPress={() => setManagingView("manage")} />
+              </View>
+            </SheetFooter>
+          </>
+        )}
+
+        {managing && managingView === "terms" && (
+          <CaregiverTermsView
+            onAccept={() => {
+              setEditMemberTermsAccepted(true);
+              setManagingView("edit");
+            }}
+            onBack={() => setManagingView("edit")}
+          />
         )}
       </Sheet>
 
@@ -507,84 +605,6 @@ export default function MembersSection() {
             Create invite code
           </AccentButton>
         </View>
-      </Sheet>
-
-      {/* Edit card — reachable only from the manage-account sheet, and only for
-          your own card or (as owner/admin) someone else's. */}
-      <Sheet
-        open={editingMember !== null}
-        onClose={() => {
-          setEditingMember(null);
-          setEditMemberShowTerms(false);
-        }}
-      >
-        {editingMember &&
-          (editMemberShowTerms ? (
-            <CaregiverTermsView
-              onAccept={() => {
-                setEditMemberTermsAccepted(true);
-                setEditMemberShowTerms(false);
-              }}
-              onBack={() => setEditMemberShowTerms(false)}
-            />
-          ) : (
-            <>
-              <SheetTitle>Edit {editingMember.name}</SheetTitle>
-
-              <Field label="Name" value={editMemberName} onChangeText={setEditMemberName} />
-
-              {/* The REAL household role, read-only. Only the owner changes
-                  roles, from the manage-account sheet. */}
-              {editingMemberAccount ? (
-                <>
-                  <FieldLabel>Household role</FieldLabel>
-                  <View style={styles.roleReadOnlyRow}>
-                    <RoleBadge role={editingMemberAccount.role} />
-                    <Text style={shared.fieldHint}>
-                      {editingMemberAccount.role === "owner"
-                        ? "Owners can do everything, including transferring the household."
-                        : editingMemberAccount.role === "admin"
-                          ? "Admins can invite and manage members."
-                          : "Members can log care and see everything."}
-                    </Text>
-                  </View>
-                </>
-              ) : null}
-
-              <FieldLabel>Card labels</FieldLabel>
-              <RoleField
-                isCaregiver={editMemberIsCaregiver}
-                onToggleCaregiver={() =>
-                  setEditMemberIsCaregiver((prev) => {
-                    const next = !prev;
-                    if (!next) setEditMemberTermsAccepted(false);
-                    return next;
-                  })
-                }
-                funRole={editMemberFunRole}
-                customFunRole={editMemberCustomFunRole}
-                onChangeFunRole={setEditMemberFunRole}
-                onChangeCustomFunRole={setEditMemberCustomFunRole}
-              />
-
-              <View style={{ marginTop: 28 }}>
-                {editMemberCaregiverGateActive ? (
-                  <AccentButton onPress={() => setEditMemberShowTerms(true)}>Terms and conditions</AccentButton>
-                ) : (
-                  <AccentButton
-                    disabled={!editMemberName.trim()}
-                    onPress={() => {
-                      editMember(editingMember.id, { name: editMemberName.trim(), role: resolvedEditMemberRole });
-                      toast("person", `${editMemberName.trim()} updated`, "");
-                      setEditingMember(null);
-                    }}
-                  >
-                    Save changes
-                  </AccentButton>
-                )}
-              </View>
-            </>
-          ))}
       </Sheet>
     </>
   );

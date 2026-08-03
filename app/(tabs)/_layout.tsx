@@ -28,7 +28,7 @@ export default function TabsLayout() {
   // first. membershipsKnown gates this so a transient membership-fetch
   // failure never dumps an existing user into first-run onboarding.
   if (hydrated && state.membershipsKnown && state.households.length === 0) {
-    return <Redirect href="/(onboarding)" />;
+    return <Redirect href="/(onboarding)/start" />;
   }
 
   // Tab order: Logs (leftmost), Care, Home (center), Pets, Community.

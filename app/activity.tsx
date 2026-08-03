@@ -10,7 +10,7 @@ import PetAvatar from "@/components/PetAvatar";
 import { PushedScreen } from "@/components/Screen";
 import { usePullToRefresh } from "@/lib/useRefresh";
 import { AccentButton, Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
-import { ACTIONS, ActionType, Activity, dayKey } from "@/lib/data";
+import { ACTIONS, ActionType, Activity, dayKey, firstName } from "@/lib/data";
 import { dueLabel, timeAgo, useStore } from "@/lib/store";
 import { useListFilter } from "@/lib/useListFilter";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -187,7 +187,7 @@ export default function ActivityScreen() {
                       leading={<IconCircle icon={tile.icon} tint={tile.tint} bg={tile.bg} size={32} iconSize={17} />}
                       title={
                         <Text numberOfLines={expanded ? undefined : 1} style={styles.feedTitle}>
-                          <Text style={styles.feedName}>{isYou ? "You" : (m?.name ?? "A previous family")}</Text>
+                          <Text style={styles.feedName}>{isYou ? "You" : m ? firstName(m.name) : "A previous family"}</Text>
                           <Text style={styles.feedVerb}> {ACTIONS[a.type].verb} </Text>
                           <Text style={styles.feedName}>{p.name}</Text>
                         </Text>

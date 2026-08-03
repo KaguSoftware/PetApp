@@ -12,14 +12,19 @@ import { font, useColors, type Colors } from "@/lib/theme";
  * households. A pending invite deep link is replayed onto /join by the root
  * layout, so this screen only offers the two clean paths.
  */
-export default function OnboardingIndex() {
+export default function OnboardingStart() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const { state, hydrated, signOut, userEmail } = useStore();
 
   // Already in a household (e.g. an invite was redeemed mid-flow) → home.
-  if (hydrated && state.households.length > 0) return <Redirect href="/home" />;
+  if (state.households.length > 0) return <Redirect href="/home" />;
+  // Until the membership list has actually come back we don't KNOW that this
+  // account needs onboarding — and painting "Start a household" on that guess
+  // is alarming for someone who already has one. Hold an empty themed page
+  // instead; the store's on-device snapshot normally makes this a single frame.
+  if (!hydrated || !state.membershipsKnown) return <View style={styles.flex} />;
 
   return (
     <ScrollView

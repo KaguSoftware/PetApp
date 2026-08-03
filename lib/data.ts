@@ -134,6 +134,16 @@ const CAREGIVER_ROLES = new Set(["pet caregiver", "caregiver"]);
 // above plus one free-text "fun" role with no functionality. Legacy
 // single-word values ("Owner", "Admin", "Member", or any custom text) still
 // parse fine: unrecognized tokens just fall through to `customRole`.
+/**
+ * Just the given name — "Majed Ahdab" → "Majed". Care logs read as sentences
+ * ("Majed fed Leo"), and a full name in the subject position turns them into an
+ * audit trail. Everywhere a member is *identified* rather than narrated (the
+ * family list, roles, invites) keeps the full name.
+ */
+export function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 export function parseMemberRoles(role: string): { isAdmin: boolean; isCaregiver: boolean; customRole: string } {
   const parts = role
     .split(",")
