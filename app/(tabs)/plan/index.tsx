@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
@@ -12,6 +13,7 @@ import { TabScreen } from "@/components/Screen";
 import BoardTile, { TileFigure, TileGlyph } from "@/components/plan/BoardTile";
 import { Icon } from "@/components/Icons";
 import { PressableScale } from "@/components/ui";
+import { useReduceMotion } from "@/lib/a11y";
 import { sinceLabel } from "@/lib/careDashboard";
 import { medicationSummary } from "@/lib/careStatus";
 import { CARE_PLANS, type Pet } from "@/lib/data";
@@ -55,6 +57,7 @@ export default function CarePage() {
   const router = useRouter();
   const { state, hydrated } = useStore();
   const refreshControl = usePullToRefresh();
+  const reduceMotion = useReduceMotion();
 
   const [asking, setAsking] = useState<PetScope | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -74,7 +77,9 @@ export default function CarePage() {
       due += s.due;
     }
     return { count, due };
-    // `now` is read once per render on purpose — this page has no ticker.
+    // `now` is deliberately not a dep: this page has no ticker, so re-running
+    // the whole med state machine on it would buy nothing. The counts refresh
+    // whenever the data behind them does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pets, state.schedules, state.activities]);
 
@@ -139,10 +144,14 @@ export default function CarePage() {
 
   const askPanel = (scope: PetScope, tint: string) =>
     asking === scope ? (
-      <View style={[styles.ask, { borderColor: withAlpha(tint, 0.4) }]}>
+      <Animated.View
+        style={[styles.ask, { borderColor: withAlpha(tint, 0.4) }]}
+        entering={reduceMotion ? undefined : FadeIn.duration(160)}
+        exiting={reduceMotion ? undefined : FadeOut.duration(120)}
+      >
         <Text style={styles.askTitle}>{SCOPE_QUESTION[scope]}</Text>
         <PetChoiceRow pets={pets} onPress={(petId) => open(scope, petId)} captionFor={captionFor} />
-      </View>
+      </Animated.View>
     ) : null;
 
   const solo = pets.length === 1 ? pets[0] : undefined;
@@ -284,7 +293,12 @@ export default function CarePage() {
             accessibilityRole="button"
             accessibilityLabel={g.title}
           >
-            <View style={[styles.guide, { backgroundColor: g.bg, borderColor: withAlpha(g.tint, 0.22) }]}>
+            <View style={[styles.guide, { borderColor: withAlpha(g.tint, 0.22) }]}>
+              {/* The guide tints are fixed light-ramp colours, so the wash is
+                  composited over the card surface rather than straight onto the
+                  page — that keeps the glyph's ground light enough to read it
+                  against in dark mode too. */}
+              <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: g.bg }]} />
               <Icon name={g.icon} size={24} color={g.tint} strokeWidth={1.9} />
               <Text numberOfLines={2} style={styles.guideLabel}>
                 {g.title}
@@ -422,9 +436,11 @@ const makeStyles = (colors: Colors) =>
       minHeight: 128,
       borderRadius: radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
+      backgroundColor: colors.card,
       paddingHorizontal: 14,
       paddingTop: 14,
       paddingBottom: 13,
+      overflow: "hidden",
     },
     // Two lines reserved so one- and two-line titles keep every chip aligned,
     // and `auto` floors the read time whichever it runs to.
