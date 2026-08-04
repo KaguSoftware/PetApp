@@ -28,10 +28,10 @@ function ringColor(colors: Colors, tone: CareTone | undefined): string {
 
 /**
  * The pet step, as a row of pets you can actually recognise. This is what
- * replaced the old always-on pet picker at the top of Logs: rather than making
- * everyone choose a pet before they can see anything, the choice moves into the
- * one moment it matters — and at 56pt with a name under it, it costs one
- * glance and one tap.
+ * replaced the always-on pet pickers that used to sit at the top of both Logs
+ * and Care: rather than making everyone choose a pet before they can see
+ * anything, the choice moves into the one moment it matters — and at 56pt with
+ * a name under it, it costs one glance and one tap.
  *
  * Two modes. Given `selectedId` it behaves like a radio group (the retro-log
  * sheet); without one, each pet is a button that commits the action.

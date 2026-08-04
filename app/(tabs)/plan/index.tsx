@@ -1,150 +1,281 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import EditStatSheet from "@/components/EditStatSheet";
-import EditTextSheet from "@/components/EditTextSheet";
 import EmptyState from "@/components/EmptyState";
-import FeedPortionSheet from "@/components/FeedPortionSheet";
 import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
-import PetSelectorRow from "@/components/PetSelectorRow";
+import PetAvatar from "@/components/PetAvatar";
+import { PetChoiceRow } from "@/components/PetChoice";
 import { TabScreen } from "@/components/Screen";
-import NutritionCard from "@/components/nutrition/NutritionCard";
-import { ACTION_ICON, Icon, type IconName } from "@/components/Icons";
-import { AccentButton, Chevron, Chip, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
+import BoardTile, { TileFigure, TileGlyph } from "@/components/plan/BoardTile";
+import { Icon } from "@/components/Icons";
+import { PressableScale } from "@/components/ui";
+import { sinceLabel } from "@/lib/careDashboard";
 import { medicationSummary } from "@/lib/careStatus";
-import { CARE_PLANS, Pet, formatWeight, weightFeedingEntry } from "@/lib/data";
+import { CARE_PLANS, type Pet } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
+import { energyBasis } from "@/lib/nutrition";
 import { useStore } from "@/lib/store";
-import { cardShadow, font, radius, useColors, type Colors } from "@/lib/theme";
+import { font, lightColors, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
-type CustomTargetKey = Exclude<keyof NonNullable<Pet["customPlan"]>, "cadences">;
+/** The two things on the board that are about one animal rather than the house. */
+type PetScope = "plan" | "nutrition";
 
-const CUSTOM_TARGET_FIELDS: Record<"cat" | "dog", { key: CustomTargetKey; title: string; subtitle: string; icon: IconName }[]> = {
-  cat: [
-    { key: "fedPerDay", title: "Feeding", subtitle: "Meals per day", icon: "bowl" },
-    { key: "fedGrams", title: "Food amount", subtitle: "Total grams per day", icon: "box" },
-    { key: "waterPerDay", title: "Fresh water", subtitle: "Refreshes per day", icon: "drop" },
-    { key: "litterPerDay", title: "Litter", subtitle: "Scoops per day", icon: "broom" },
-  ],
-  dog: [
-    { key: "fedPerDay", title: "Feeding", subtitle: "Meals per day", icon: "bowl" },
-    { key: "fedGrams", title: "Food amount", subtitle: "Total grams per day", icon: "box" },
-    { key: "waterPerDay", title: "Fresh water", subtitle: "Refreshes per day", icon: "drop" },
-    { key: "walkPerDay", title: "Walks", subtitle: "Walks per day", icon: "paw" },
-  ],
+const SCOPE_QUESTION: Record<PetScope, string> = {
+  plan: "Whose plan?",
+  nutrition: "Whose food?",
 };
 
-/* The non-daily "other" care activities a custom breed still gets — mirrors the
- * grooming/health/vet items in the vet-built CARE_PLANS. Each has a default
- * cadence the family can edit (stored per-pet in customPlan.cadences[id]). */
-type OtherCareField = { id: string; title: string; detail: string; cadence: string; icon: IconName };
-const OTHER_CARE_FIELDS: Record<"cat" | "dog", OtherCareField[]> = {
-  cat: [
-    { id: "grooming", title: "Brushing / grooming", detail: "Regular brushing to manage shedding and prevent matting.", cadence: "Weekly", icon: "scissors" },
-    { id: "nails", title: "Nail trimming", detail: "Clip nails to prevent overgrowth and snagging.", cadence: "Every 2-4 weeks", icon: "clipper" },
-    { id: "dental", title: "Dental care", detail: "Teeth cleaning, water additives, or dental treats.", cadence: "3-7× weekly", icon: "sparkles" },
-    { id: "weight", title: "Weight check", detail: "Routine monitoring to catch weight gain early.", cadence: "1-2× monthly", icon: "arrow-up" },
-    { id: "parasite", title: "Parasite preventative", detail: "Routine flea, tick, and worm prevention.", cadence: "Monthly", icon: "shield" },
-    { id: "vet", title: "Vet checkup", detail: "Wellness exams and vaccinations.", cadence: "Yearly", icon: "stethoscope" },
-    { id: "meds", title: "Medication tracking", detail: "Log any medication prescribed by the vet.", cadence: "As prescribed", icon: "pill" },
-  ],
-  dog: [
-    { id: "grooming", title: "Brushing / grooming", detail: "Regular brushing to manage shedding and prevent matting.", cadence: "1-2× weekly", icon: "scissors" },
-    { id: "bathing", title: "Bathing", detail: "Occasional baths, or after muddy play.", cadence: "Every 6-8 weeks", icon: "drop" },
-    { id: "ears", title: "Ear cleaning", detail: "Clean ears to prevent moisture buildup and infection.", cadence: "Weekly", icon: "bell" },
-    { id: "nails", title: "Nail trimming", detail: "Clip nails to maintain proper paw structure.", cadence: "Every 3-4 weeks", icon: "clipper" },
-    { id: "dental", title: "Dental care", detail: "Teeth brushing or dental chews to prevent tartar.", cadence: "3-7× weekly", icon: "sparkles" },
-    { id: "weight", title: "Weight check", detail: "Routine monitoring to catch weight gain early.", cadence: "1-2× monthly", icon: "arrow-up" },
-    { id: "parasite", title: "Parasite preventative", detail: "Routine heartworm, flea, and tick prevention.", cadence: "Monthly", icon: "shield" },
-    { id: "vet", title: "Vet checkup", detail: "Wellness exams and vaccinations.", cadence: "Yearly", icon: "stethoscope" },
-    { id: "meds", title: "Medication tracking", detail: "Log any medication prescribed by the vet.", cadence: "Daily or as prescribed", icon: "pill" },
-  ],
-};
-
-const GENERIC_ICON: Record<string, IconName> = {
-  "⚖️": "arrow-up",
-  "🪥": "sparkles",
-  "🛁": "drop",
-  "👂": "bell",
-  "🧶": "yarn",
-  "🐾": "clipper",
-  "🛡️": "shield",
-  "🚪": "door",
-  "💊": "pill",
-};
-
-type GuideGroupKey = "daily" | "weekly" | "vet";
-
-const GUIDE_GROUPS: { key: GuideGroupKey; label: string }[] = [
-  { key: "daily", label: "Daily" },
-  { key: "weekly", label: "Weekly" },
-  { key: "vet", label: "Vet controlled" },
-];
-
-// Every PlanItem title used across CARE_PLANS maps to one of the three cadence groups.
-const GUIDE_GROUP_BY_TITLE: Record<string, GuideGroupKey> = {
-  "Feeding": "daily",
-  "Fresh water": "daily",
-  "Litter box maintenance": "daily",
-  "Play & mental stimulation": "daily",
-  "Potty breaks": "daily",
-  "Exercise & play": "daily",
-  "Exercise & training": "daily",
-  "Walks": "daily",
-  "Brushing / grooming": "weekly",
-  "Brushing / wrinkle cleaning": "weekly",
-  "Ear cleaning": "weekly",
-  "Bathing": "weekly",
-  "Nail trimming": "weekly",
-  "Dental care": "vet",
-  "Weight check": "vet",
-  "Parasite preventative": "vet",
-  "Vet checkup": "vet",
-  "Medication tracking": "vet",
-};
-
-const LOCKED_PREVIEWS: { icon: IconName; title: string; text: string }[] = [
-  { icon: "bowl", title: "Exact portions", text: "Grams per meal and how many times a day, tuned to breed, age & weight." },
-  { icon: "scissors", title: "Grooming cadence", text: "Brushing, bathing, nail & dental care on the right schedule." },
-  { icon: "stethoscope", title: "Vet schedule", text: "Checkups, vaccines & treatments — reminders before they're due." },
-];
+/** What PetPal+ actually buys, three lines, no sentence longer than a glance. */
+const LOCKED_LINES = ["Exact portions in grams", "Grooming and nail cadence", "Vaccines and vet schedule"];
 
 /**
- * Care-guides menu: a titled row with "See all" plus a horizontal rail of
- * tappable guide chips. Available on the Care tab whether or not PetPal+ is on —
- * how-to guidance isn't gated. Chips deep-link straight into a guide; the header
- * opens the full list.
+ * Care — a board, not a document.
+ *
+ * The old page was a per-pet reference manual behind a picker at the top: pick
+ * Milo, scroll past nutrition, guides, links, today's checklist, a feeding
+ * table and a three-level accordion; pick Luna, scroll it all again. Two things
+ * changed.
+ *
+ * The picker is gone. It was a mode — a hidden "currently viewing Milo" you had
+ * to hold in your head — and every tile that genuinely needs a pet now asks for
+ * one at the moment it needs it, with faces rather than a list of names. A
+ * household of one is never asked at all.
+ *
+ * And the manual moved. What is left here is six panels, ranked by size and
+ * separated by hue, each one entirely a button; the long-form plan lives on
+ * `/plan/[petId]`, where the pet is in the URL instead of in your memory.
  */
-function CareGuides() {
+export default function CarePage() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
+  const { state, hydrated } = useStore();
+  const refreshControl = usePullToRefresh();
+
+  const [asking, setAsking] = useState<PetScope | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
+  const pets = state.pets;
+  const now = Date.now();
+
+  const vetBuilt = useMemo(() => pets.filter((p) => CARE_PLANS[p.breed]).length, [pets]);
+  const kcal = useMemo(() => pets.reduce((sum, p) => sum + energyBasis(p).kcal, 0), [pets]);
+
+  const meds = useMemo(() => {
+    let count = 0;
+    let due = 0;
+    for (const p of pets) {
+      const s = medicationSummary(p, state.schedules, state.activities, now);
+      count += s.count;
+      due += s.due;
+    }
+    return { count, due };
+    // `now` is read once per render on purpose — this page has no ticker.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pets, state.schedules, state.activities]);
+
+  const reminders = useMemo(() => {
+    const open = state.reminders.filter((r) => !r.done);
+    return { open: open.length, overdue: open.filter((r) => r.due < now).length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.reminders]);
+
+  const lastVet = useMemo(() => {
+    let ts = 0;
+    for (const p of pets) for (const v of p.vetVisits) ts = Math.max(ts, v.ts);
+    for (const a of state.activities) if (a.type === "vet") ts = Math.max(ts, a.ts);
+    return ts || undefined;
+  }, [pets, state.activities]);
+
+  if (!hydrated) {
+    return (
+      <TabScreen title="Care" trailing={<HeaderActions />} refreshControl={refreshControl}>
+        <PageLoading />
+      </TabScreen>
+    );
+  }
+
+  if (pets.length === 0) {
+    return (
+      <TabScreen title="Care" trailing={<HeaderActions />} refreshControl={refreshControl}>
+        <View style={{ marginTop: 16 }}>
+          <EmptyState
+            icon="heart-text"
+            title="No pets yet"
+            body="Add a pet and its plan, portions and routine show up here."
+            cta="Add a pet"
+            onCta={() => router.push("/pet/new")}
+          />
+        </View>
+      </TabScreen>
+    );
+  }
+
+  const open = (scope: PetScope, petId: string) => {
+    setAsking(null);
+    if (scope === "plan") router.push(`/plan/${petId}`);
+    else router.push({ pathname: "/nutrition", params: { petId } });
+  };
+
+  /** One pet in play means there is no question to ask — the common case. */
+  const start = (scope: PetScope) => {
+    if (asking === scope) {
+      setAsking(null);
+      return;
+    }
+    if (pets.length === 1) {
+      open(scope, pets[0].id);
+      return;
+    }
+    setAsking(scope);
+  };
+
+  const captionFor = (pet: Pet) =>
+    asking === "plan" ? (CARE_PLANS[pet.breed] ? "Vet-built" : "Your targets") : `${energyBasis(pet).kcal.toLocaleString()} kcal`;
+
+  const askPanel = (scope: PetScope, tint: string) =>
+    asking === scope ? (
+      <View style={[styles.ask, { borderColor: withAlpha(tint, 0.4) }]}>
+        <Text style={styles.askTitle}>{SCOPE_QUESTION[scope]}</Text>
+        <PetChoiceRow pets={pets} onPress={(petId) => open(scope, petId)} captionFor={captionFor} />
+      </View>
+    ) : null;
+
+  const solo = pets.length === 1 ? pets[0] : undefined;
+
   return (
-    <View style={styles.guidesWrap}>
-      <PressableScale
-        onPress={() => router.push("/instructions")}
-        accessibilityRole="button"
-        accessibilityLabel="All how-to guides"
-      >
-        <View style={styles.guidesHeader}>
-          <View style={styles.guidesHeaderText}>
-            <Text style={styles.guidesTitle}>How-to guides</Text>
-            <Text style={styles.guidesSubtitle}>Weight checks, dental care & more</Text>
-          </View>
-          <View style={styles.guidesSeeAll}>
-            <Text style={styles.guidesSeeAllText}>See all</Text>
+    <TabScreen title="Care" trailing={<HeaderActions />} refreshControl={refreshControl}>
+      <View style={styles.board}>
+        {state.premium ? (
+          <BoardTile
+            tint={colors.accent}
+            wash={colors.accentSoft}
+            minHeight={176}
+            label={solo ? `${solo.name}'s plan` : "Care plans"}
+            caption={
+              solo
+                ? CARE_PLANS[solo.breed]
+                  ? `Vet-built · ${solo.breed}`
+                  : "Your own targets"
+                : vetBuilt === pets.length
+                  ? `${pets.length} vet-built plans`
+                  : vetBuilt === 0
+                    ? `${pets.length} custom plans`
+                    : `${vetBuilt} vet-built · ${pets.length - vetBuilt} custom`
+            }
+            onPress={() => start("plan")}
+            accessibilityLabel={solo ? `${solo.name}'s care plan` : "Care plans"}
+            accessibilityHint={solo ? undefined : "Choose a pet"}
+          >
+            <View style={styles.faces}>
+              {pets.slice(0, 5).map((p) => (
+                <View key={p.id} style={styles.face}>
+                  <PetAvatar pet={p} size={solo ? "lg" : "sm"} />
+                  {CARE_PLANS[p.breed] ? (
+                    <View style={styles.vetBadge}>
+                      <Icon name="check" size={9} color={colors.white} strokeWidth={3.2} />
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+              {pets.length > 5 ? <Text style={styles.moreFaces}>+{pets.length - 5}</Text> : null}
+            </View>
+          </BoardTile>
+        ) : (
+          <LockedPlanHero onPress={() => setPaywallOpen(true)} />
+        )}
+
+        {askPanel("plan", colors.accent)}
+
+        <View style={styles.row}>
+          <BoardTile
+            tint={colors.green}
+            wash={colors.greenSoft}
+            minHeight={138}
+            flex={7}
+            label="Nutrition"
+            caption={solo ? `${solo.name}'s daily energy` : `Across ${pets.length} pets`}
+            onPress={() => start("nutrition")}
+            accessibilityLabel={`Nutrition, ${kcal.toLocaleString()} kilocalories a day`}
+            accessibilityHint={solo ? undefined : "Choose a pet"}
+          >
+            <TileFigure value={kcal.toLocaleString()} unit="kcal/day" tint={colors.green} />
+          </BoardTile>
+
+          <BoardTile
+            tint={colors.red}
+            wash={colors.redSoft}
+            minHeight={138}
+            flex={5}
+            label="Medication"
+            caption={meds.count === 0 ? "None tracked" : meds.due > 0 ? `${meds.due} due now` : "All up to date"}
+            captionTint={meds.due > 0 ? colors.red : undefined}
+            onPress={() => router.push("/medications")}
+            accessibilityLabel={`Medication, ${meds.count === 0 ? "none tracked" : `${meds.count} tracked`}`}
+          >
+            {meds.count === 0 ? (
+              <TileGlyph icon="pill" tint={colors.red} />
+            ) : (
+              <TileFigure value={String(meds.count)} unit={meds.count === 1 ? "med" : "meds"} tint={colors.red} />
+            )}
+          </BoardTile>
+        </View>
+
+        {askPanel("nutrition", colors.green)}
+
+        <View style={styles.row}>
+          <BoardTile
+            tint={colors.orange}
+            wash={colors.orangeSoft}
+            minHeight={120}
+            flex={5}
+            label="Reminders"
+            caption={reminders.overdue > 0 ? `${reminders.overdue} overdue` : reminders.open > 0 ? "Coming up" : "Nothing set"}
+            captionTint={reminders.overdue > 0 ? colors.red : undefined}
+            corner={{
+              icon: "plus",
+              onPress: () => router.push({ pathname: "/reminders", params: { new: "1" } }),
+              accessibilityLabel: "New reminder",
+            }}
+            onPress={() => router.push("/reminders")}
+            accessibilityLabel={`Reminders, ${reminders.open} open`}
+          >
+            {reminders.open === 0 ? (
+              <TileGlyph icon="bell" tint={colors.orange} />
+            ) : (
+              <TileFigure value={String(reminders.open)} unit="open" tint={colors.orange} />
+            )}
+          </BoardTile>
+
+          <BoardTile
+            tint={colors.vetTint}
+            wash={colors.vetBg}
+            minHeight={120}
+            flex={7}
+            label="Find a vet"
+            caption={lastVet ? `Last visit ${sinceLabel(lastVet, now)}` : "No visits logged"}
+            onPress={() => router.push("/vets")}
+            accessibilityLabel="Find a vet"
+          >
+            <TileGlyph icon="cross" tint={colors.vetTint} />
+          </BoardTile>
+        </View>
+      </View>
+
+      <PressableScale onPress={() => router.push("/instructions")} accessibilityRole="button" accessibilityLabel="All guides">
+        <View style={styles.railHead}>
+          <Text style={styles.railTitle}>Guides</Text>
+          <View style={styles.seeAll}>
+            <Text style={styles.seeAllText}>See all</Text>
             <Icon name="chevron-right" size={14} color={colors.accent} />
           </View>
         </View>
       </PressableScale>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.guidesRail}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
         {GUIDES.map((g) => (
           <PressableScale
             key={g.id}
@@ -153,526 +284,150 @@ function CareGuides() {
             accessibilityRole="button"
             accessibilityLabel={g.title}
           >
-            <View style={styles.guideChip}>
-              <View style={[styles.guideChipIcon, { backgroundColor: g.bg }]}>
-                <Icon name={g.icon} size={22} color={g.tint} />
-              </View>
-              <Text numberOfLines={2} style={styles.guideChipLabel}>
+            <View style={[styles.guide, { backgroundColor: g.bg, borderColor: withAlpha(g.tint, 0.22) }]}>
+              <Icon name={g.icon} size={24} color={g.tint} strokeWidth={1.9} />
+              <Text numberOfLines={2} style={styles.guideLabel}>
                 {g.title}
               </Text>
-              <View style={styles.guideChipMeta}>
-                <Icon name="clock" size={10} color={colors.label3} />
-                <Text style={styles.guideChipMetaText}>{g.minutes}m</Text>
-              </View>
+              <Text style={styles.guideMinutes}>{g.minutes} min</Text>
             </View>
           </PressableScale>
         ))}
       </ScrollView>
-    </View>
-  );
-}
 
-/**
- * Reminders + vet marketplace, reachable from the Care tab.
- *
- * Both routes previously lived ONLY behind the bell (Activity), which made them
- * effectively hidden — "notifications" is not where someone looks to book a vet
- * or plan a task. They sit here too, next to the care plan they belong to, and
- * are rendered on BOTH the premium and locked paths: booking a vet and setting
- * a reminder are not premium features, so the paywall must not bury them.
- */
-function CareLinks({ petId, petName }: { petId: string; petName: string }) {
-  const colors = useColors();
-  const router = useRouter();
-  const { state } = useStore();
-  const open = state.reminders.filter((r) => !r.done && r.petId === petId);
-  const overdue = open.filter((r) => r.due < Date.now()).length;
-  const forWhom = ` for ${petName}`;
-  const pet = state.pets.find((p) => p.id === petId);
-  const meds = pet ? medicationSummary(pet, state.schedules, state.activities, Date.now()) : null;
-  return (
-    <>
-      <SectionHeader>Tasks &amp; care</SectionHeader>
-      <Group>
-        <Row
-          onPress={() => router.push("/reminders")}
-          leading={<IconCircle icon="bell" tint={colors.orange} bg={colors.orangeSoft} />}
-          title="Reminders"
-          subtitle={
-            open.length === 0
-              ? "Nothing scheduled — tap to add one"
-              : overdue > 0
-                ? `${overdue} overdue · ${open.length} open${forWhom}`
-                : `${open.length} open${forWhom}`
-          }
-          trailing={<Chevron />}
-        />
-        {meds ? (
-          <Row
-            onPress={() => router.push({ pathname: "/medications", params: { petId } })}
-            leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
-            title="Medication"
-            subtitle={meds.label}
-            trailing={<Chevron />}
-          />
-        ) : null}
-        <Row
-          onPress={() => router.push("/vets")}
-          leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}
-          title="Find a vet"
-          subtitle="Browse clinics and request an appointment"
-          trailing={<Chevron />}
-        />
-      </Group>
-    </>
-  );
-}
-
-export default function PlanPage() {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const router = useRouter();
-  const { state, hydrated, editPet, logAction, toast } = useStore();
-  const refreshControl = usePullToRefresh();
-  const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
-  const [feedPortionOpen, setFeedPortionOpen] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [editingTarget, setEditingTarget] = useState<CustomTargetKey | null>(null);
-  const [editingCadence, setEditingCadence] = useState<string | null>(null);
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [openItems, setOpenItems] = useState<Set<string>>(new Set());
-  const [openGroups, setOpenGroups] = useState<Set<GuideGroupKey>>(new Set());
-
-  const toggleItem = (title: string) => {
-    setOpenItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(title)) next.delete(title);
-      else next.add(title);
-      return next;
-    });
-  };
-
-  const toggleGroup = (key: GuideGroupKey) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  if (!hydrated) {
-    return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
-        <PageLoading />
-      </TabScreen>
-    );
-  }
-
-  const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
-  if (!pet) {
-    return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
-        <View style={{ marginTop: 16 }}>
-          <EmptyState
-            icon="paw"
-            title="No pets yet"
-            body="Add a pet to see its care plan and daily checklist here."
-            cta="Add a pet"
-            onCta={() => router.push("/pets")}
-          />
-        </View>
-      </TabScreen>
-    );
-  }
-  const plan = CARE_PLANS[pet.breed];
-  const feedingGuide = weightFeedingEntry(pet);
-
-  // Today's logged actions for the selected pet — drives the "Today" checklist
-  // (this glanceable status used to live on Home; Care is its single surface now).
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const todays = state.activities.filter((a) => a.petId === pet.id && a.ts >= startOfDay.getTime());
-
-  if (!state.premium) {
-    return (
-      <TabScreen title="Care Plan" trailing={<HeaderActions />} refreshControl={refreshControl}>
-        <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
-        {/* Above the wall on purpose: nutrition is free, and the never-feed list
-            inside it is a safety notice that must never sit behind a paywall. */}
-        <NutritionCard pet={pet} />
-        <View style={styles.lockedWrap}>
-          <View style={styles.lockCircle}>
-            <Icon name="lock" size={34} color={colors.accent} />
-          </View>
-          <Text style={styles.lockedTitle}>Your pet&apos;s complete guide</Text>
-          <Text style={styles.lockedBody}>
-            A vet-built, breed-specific plan: exact portions in grams, grooming cadence, vet schedule. We remind you before you need
-            to remember.
-          </Text>
-          <View style={styles.lockedPreviews}>
-            {LOCKED_PREVIEWS.map((t) => (
-              <View key={t.title} style={styles.lockedPreviewRow}>
-                <View style={styles.lockedPreviewIcon}>
-                  <Icon name={t.icon} size={16} color={colors.accent} />
-                </View>
-                <View style={styles.lockedPreviewCopy}>
-                  <Text style={styles.lockedPreviewTitle}>{t.title}</Text>
-                  <Text style={styles.lockedPreviewText}>{t.text}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-          <View style={styles.lockedCta}>
-            <AccentButton onPress={() => setPaywallOpen(true)}>Unlock with PetPal+</AccentButton>
-          </View>
-        </View>
-        <CareGuides />
-        {/* Not gated: reminders and vet booking are free features. */}
-        <CareLinks petId={pet.id} petName={pet.name} />
-        <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
-      </TabScreen>
-    );
-  }
-
-  return (
-    <TabScreen title="Care Plan" subtitle={plan ? `Vet-Built ${pet.breed}` : undefined} trailing={<HeaderActions />} refreshControl={refreshControl}>
-      {/* Same avatar-row selector as the Logs tab — one tap to switch pets,
-          no "name + chevron → sheet" detour. */}
-      <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
-
-      <NutritionCard pet={pet} />
-
-      <CareGuides />
-
-      <CareLinks petId={pet.id} petName={pet.name} />
-
-      {plan ? (
-        <>
-          <SectionHeader>Today</SectionHeader>
-          <Group>
-            {plan.items
-              .filter((i) => i.perDay && i.action)
-              .map((item) => {
-                const target = item.perDay ?? 1;
-                const done = todays.filter((a) => a.type === item.action).length;
-                const complete = done >= target;
-                const ai = ACTION_ICON[item.action!];
-                return (
-                  <Row
-                    key={item.title}
-                    onPress={
-                      complete
-                        ? undefined
-                        : () => {
-                            if (item.action === "fed") setFeedPortionOpen(true);
-                            else logAction(pet.id, item.action!);
-                          }
-                    }
-                    leading={
-                      complete ? (
-                        <View style={styles.doneCircle}>
-                          <Icon name="check" size={18} color={colors.white} />
-                        </View>
-                      ) : (
-                        <IconCircle icon={ai.icon} tint={ai.tint} bg={ai.bg} />
-                      )
-                    }
-                    title={item.title}
-                    subtitle={complete ? "Complete for today" : item.detail.split(".")[0]}
-                    trailing={
-                      <Text style={[styles.countLabel, complete && { color: colors.green }]}>
-                        {Math.min(done, target)}/{target}
-                      </Text>
-                    }
-                  />
-                );
-              })}
-          </Group>
-
-          {feedingGuide ? (
-            <>
-              <SectionHeader>Weight &amp; feeding guide</SectionHeader>
-              <Text style={styles.sectionHint}>Updates automatically as {pet.name} ages.</Text>
-              <Group>
-                <View style={styles.guideGrid}>
-                  <View style={styles.guideCell}>
-                    <Text style={styles.guideLabel}>Ideal weight</Text>
-                    <Text style={styles.guideValue}>
-                      {formatWeight(feedingGuide.weightKgRange[0], state.units)}–{formatWeight(feedingGuide.weightKgRange[1], state.units)}
-                    </Text>
-                  </View>
-                  <View style={styles.guideCell}>
-                    <Text style={styles.guideLabel}>Calories/day</Text>
-                    <Text style={styles.guideValue}>
-                      {feedingGuide.calorieRange[0]}–{feedingGuide.calorieRange[1]} kcal
-                    </Text>
-                  </View>
-                  <View style={styles.guideCell}>
-                    <Text style={styles.guideLabel}>Dry kibble</Text>
-                    <Text style={styles.guideValue}>
-                      ~{feedingGuide.kibbleGramsRange[0]}–{feedingGuide.kibbleGramsRange[1]} g
-                    </Text>
-                  </View>
-                </View>
-              </Group>
-            </>
-          ) : null}
-
-          <PressableScale
-            onPress={() => setGuideOpen((v) => !v)}
-            hitSlop={4}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: guideOpen }}
-          >
-            <View style={styles.guideToggle}>
-              <SectionHeader style={{ marginTop: 0, marginBottom: 0, flex: 1 }}>Tap for full {pet.breed} guide</SectionHeader>
-              <View style={guideOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-                <Chevron />
-              </View>
-            </View>
-          </PressableScale>
-          {guideOpen ? <Text style={styles.sectionHint}>{plan.intro}</Text> : null}
-          {GUIDE_GROUPS.map((group) => {
-            const items = plan.items.filter((item) => (GUIDE_GROUP_BY_TITLE[item.title] ?? "vet") === group.key);
-            if (items.length === 0) return null;
-            const isGroupOpen = openGroups.has(group.key);
-            return (
-              <View key={group.key} style={{ marginTop: 8 }}>
-                <PressableScale
-                  onPress={() => toggleGroup(group.key)}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: isGroupOpen }}
-                >
-                  <View style={styles.groupToggle}>
-                    <Text style={styles.groupToggleLabel}>{group.label}</Text>
-                    <View style={isGroupOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-                      <Chevron />
-                    </View>
-                  </View>
-                </PressableScale>
-                {isGroupOpen ? (
-                  <Group style={{ marginTop: 8 }}>
-                    {items.map((item) => {
-                      const ai = item.action ? ACTION_ICON[item.action] : null;
-                      const icon: IconName = ai?.icon ?? GENERIC_ICON[item.emoji] ?? "heart-text";
-                      const isOpen = openItems.has(item.title);
-                      return (
-                        <View key={item.title} style={styles.guideItem}>
-                          <PressableScale
-                            onPress={() => toggleItem(item.title)}
-                            hitSlop={6}
-                            accessibilityRole="button"
-                            accessibilityState={{ expanded: isOpen }}
-                          >
-                            <View style={styles.guideItemHead}>
-                              <IconCircle icon={icon} tint={ai?.tint ?? colors.label2} bg={ai?.bg ?? colors.fill} size={32} iconSize={16} />
-                              <Text style={styles.guideItemTitle}>{item.title}</Text>
-                              <Chip style={{ backgroundColor: colors.accentSoft }}>
-                                <Text style={styles.cadencePillLabel}>{item.cadence}</Text>
-                              </Chip>
-                              <View style={isOpen ? { transform: [{ rotate: "90deg" }] } : undefined}>
-                                <Chevron />
-                              </View>
-                            </View>
-                          </PressableScale>
-                          {isOpen ? <Text style={styles.guideItemDetail}>{item.detail}</Text> : null}
-                        </View>
-                      );
-                    })}
-                  </Group>
-                ) : null}
-              </View>
-            );
-          })}
-        </>
-      ) : (
-        <>
-          <SectionHeader>Today</SectionHeader>
-          <Text style={styles.sectionHint}>
-            {pet.breed} isn&apos;t on our vet-built breed list yet — set your own daily targets below and PetPal will track against
-            them.
-          </Text>
-          <Group>
-            {CUSTOM_TARGET_FIELDS[pet.species].map((f) => {
-              const value = pet.customPlan?.[f.key];
-              return (
-                <Row
-                  key={f.key}
-                  onPress={() => setEditingTarget(f.key)}
-                  leading={<IconCircle icon={f.icon} tint={colors.accent} bg={colors.accentSoft} />}
-                  title={f.title}
-                  subtitle={value != null ? f.subtitle : `${f.subtitle} — not set`}
-                  trailing={
-                    <Text style={[styles.targetValue, value == null && { color: colors.label3 }]}>{value != null ? value : "Set"}</Text>
-                  }
-                />
-              );
-            })}
-          </Group>
-
-          <SectionHeader>Grooming, health &amp; vet</SectionHeader>
-          <Text style={styles.sectionHint}>
-            The rest of {pet.name}&apos;s routine. Tap any activity to set how often it should happen.
-          </Text>
-          <Group>
-            {OTHER_CARE_FIELDS[pet.species].map((f) => {
-              const cadence = pet.customPlan?.cadences?.[f.id] ?? f.cadence;
-              return (
-                <Row
-                  key={f.id}
-                  onPress={() => setEditingCadence(f.id)}
-                  leading={<IconCircle icon={f.icon} tint={colors.accent} bg={colors.accentSoft} />}
-                  title={f.title}
-                  subtitle={f.detail}
-                  trailing={
-                    <Chip style={{ backgroundColor: colors.accentSoft }}>
-                      <Text style={styles.cadencePillLabel}>{cadence}</Text>
-                    </Chip>
-                  }
-                />
-              );
-            })}
-          </Group>
-        </>
-      )}
-
-      {!plan
-        ? CUSTOM_TARGET_FIELDS[pet.species].map((f) => (
-            <EditStatSheet
-              key={f.key}
-              open={editingTarget === f.key}
-              onClose={() => setEditingTarget(null)}
-              title={`${pet.name}'s ${f.title.toLowerCase()} target`}
-              label={f.subtitle}
-              initialValue={pet.customPlan?.[f.key]}
-              onSave={(value) => {
-                editPet(pet.id, {
-                  name: pet.name,
-                  breed: pet.breed,
-                  ageYears: pet.ageYears,
-                  weightKg: pet.weightKg,
-                  cupGrams: pet.cupGrams,
-                  customPlan: { ...pet.customPlan, [f.key]: value },
-                });
-                toast("list", `${f.title} target updated`, `${value} ${f.subtitle.toLowerCase()}`);
-              }}
-            />
-          ))
-        : null}
-
-      {!plan
-        ? OTHER_CARE_FIELDS[pet.species].map((f) => (
-            <EditTextSheet
-              key={f.id}
-              open={editingCadence === f.id}
-              onClose={() => setEditingCadence(null)}
-              title={`${f.title} frequency`}
-              label="How often"
-              placeholder={f.cadence}
-              initialValue={pet.customPlan?.cadences?.[f.id] ?? f.cadence}
-              onSave={(value) => {
-                editPet(pet.id, {
-                  name: pet.name,
-                  breed: pet.breed,
-                  ageYears: pet.ageYears,
-                  weightKg: pet.weightKg,
-                  cupGrams: pet.cupGrams,
-                  customPlan: {
-                    ...pet.customPlan,
-                    cadences: { ...pet.customPlan?.cadences, [f.id]: value },
-                  },
-                });
-                toast("list", `${f.title} updated`, value);
-              }}
-            />
-          ))
-        : null}
-
-      <FeedPortionSheet pet={pet} open={feedPortionOpen} onClose={() => setFeedPortionOpen(false)} />
+      <Paywall open={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </TabScreen>
   );
 }
 
-const makeStyles = (colors: Colors) => StyleSheet.create({
-  guidesWrap: { marginTop: 8, marginBottom: 8 },
-  guidesHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 4, paddingVertical: 8 },
-  guidesHeaderText: { flexShrink: 1, minWidth: 0 },
-  guidesTitle: { fontSize: 18, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  guidesSubtitle: { marginTop: 5, fontSize: 13, fontFamily: font.regular, color: colors.label2 },
-  guidesSeeAll: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 0, marginLeft: 8, paddingTop: 3 },
-  guidesSeeAllText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
-  // paddingBottom clears the chips' card shadow, which the old 2pt clipped.
-  guidesRail: { gap: 10, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 8 },
-  guideChip: {
-    width: 108,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    gap: 8,
-    ...cardShadow,
-  },
-  guideChipIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  // Reserve two lines so single- and two-line titles keep every chip the same height.
-  // minHeight, not height — keeps the chips aligned on a 2-line grid while
-  // letting a longer title (or larger system text size) grow instead of clip.
-  guideChipLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label, lineHeight: 17, minHeight: 34 },
-  guideChipMeta: { flexDirection: "row", alignItems: "center", gap: 3 },
-  guideChipMetaText: { fontSize: 11, fontFamily: font.medium, color: colors.label3 },
-  lockedWrap: { alignItems: "center", paddingTop: 40, paddingBottom: 24 },
-  lockCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  lockedTitle: { marginTop: 20, fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, textAlign: "center" },
-  lockedBody: {
-    marginTop: 8,
-    maxWidth: 300,
-    fontSize: 14,
-    fontFamily: font.regular,
-    color: colors.label2,
-    textAlign: "center",
-    lineHeight: 21,
-  },
-  lockedPreviews: { marginTop: 28, width: "100%", gap: 10 },
-  lockedPreviewRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    ...cardShadow,
-  },
-  lockedPreviewIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
-  lockedPreviewCopy: { flex: 1, minWidth: 0, gap: 2 },
-  lockedPreviewTitle: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  lockedPreviewText: { fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 18 },
-  lockedCta: { marginTop: 28, width: "100%" },
-  doneCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
-  countLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label3 },
-  sectionHint: { marginBottom: 12, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
-  guideGrid: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
-  guideCell: { flex: 1, alignItems: "center" },
-  guideLabel: { fontSize: 11, fontFamily: font.medium, color: colors.label2 },
-  guideValue: { marginTop: 1, fontSize: 14, fontFamily: font.semibold, color: colors.label, textAlign: "center" },
-  guideToggle: { marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, minHeight: 44 },
-  groupToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: radius.md,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.sep,
-    minHeight: 48,
-    ...cardShadow,
-  },
-  groupToggleLabel: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  guideItem: { paddingHorizontal: 16, paddingVertical: 14 },
-  guideItemHead: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 },
-  guideItemTitle: { flex: 1, fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  cadencePillLabel: { fontSize: 11, fontFamily: font.semibold, color: colors.accent },
-  guideItemDetail: { marginTop: 8, paddingLeft: 44, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 19 },
-  targetValue: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
-});
+/**
+ * The plan tile when PetPal+ is off. It keeps the hero's position and gains
+ * height rather than becoming a wall across the page: everything else on the
+ * board — nutrition, medication, reminders, the vet, the guides — is free, and
+ * burying free features behind an upsell would be the worse trade.
+ *
+ * Filled from the LIGHT accent ramp in both themes: dark mode's accent is a
+ * pale lavender tuned for text on a dark page, and white type on a panel of it
+ * lands near 2:1. The light ramp's deeper violet clears 5:1 either way.
+ */
+function LockedPlanHero({ onPress }: { onPress: () => void }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  return (
+    <PressableScale haptic onPress={onPress} accessibilityRole="button" accessibilityLabel="Unlock the vet-built plan with PetPal+">
+      <LinearGradient
+        colors={[lightColors.accent, lightColors.accentDeep]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.locked}
+      >
+        <View style={styles.lockedTop}>
+          <View style={styles.lockDisc}>
+            <Icon name="lock" size={17} color={colors.white} strokeWidth={2.1} />
+          </View>
+          <Text style={styles.lockedKicker}>PETPAL+</Text>
+        </View>
+
+        <Text style={styles.lockedTitle}>The vet-built plan</Text>
+
+        <View style={styles.lockedLines}>
+          {LOCKED_LINES.map((line) => (
+            <View key={line} style={styles.lockedLine}>
+              <Icon name="check" size={13} color={colors.white} strokeWidth={2.6} />
+              <Text style={styles.lockedLineText}>{line}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.unlock}>
+          <Text style={styles.unlockLabel}>Unlock</Text>
+          <Icon name="chevron-right" size={15} color={lightColors.accentDeep} strokeWidth={2.4} />
+        </View>
+      </LinearGradient>
+    </PressableScale>
+  );
+}
+
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    board: { marginTop: 12, gap: 10 },
+    row: { flexDirection: "row", gap: 10, alignItems: "stretch" },
+
+    faces: { flexDirection: "row", alignItems: "center", gap: 8 },
+    face: { paddingRight: 2 },
+    vetBadge: {
+      position: "absolute",
+      right: 0,
+      bottom: 0,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.accent,
+      borderWidth: 2,
+      borderColor: colors.bg,
+    },
+    moreFaces: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
+
+    // The pet step, opened by the tile that asked. Deliberately not a sheet: a
+    // modal would cover the board you are acting on, and the answer is one tap.
+    ask: {
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      backgroundColor: colors.card,
+      paddingHorizontal: 12,
+      paddingTop: 12,
+      paddingBottom: 12,
+    },
+    askTitle: { marginBottom: 8, paddingHorizontal: 4, fontSize: 15, fontFamily: font.semibold, color: colors.label },
+
+    locked: { borderRadius: radius.lg, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
+    lockedTop: { flexDirection: "row", alignItems: "center", gap: 10 },
+    lockDisc: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(255, 255, 255, 0.2)",
+    },
+    lockedKicker: { fontSize: 11.5, fontFamily: font.bold, letterSpacing: 1.4, color: "rgba(255, 255, 255, 0.82)" },
+    lockedTitle: { marginTop: 16, fontSize: 26, fontFamily: font.bold, letterSpacing: -0.6, color: colors.white },
+    lockedLines: { marginTop: 14, gap: 7 },
+    lockedLine: { flexDirection: "row", alignItems: "center", gap: 8 },
+    lockedLineText: { fontSize: 14, fontFamily: font.medium, color: "rgba(255, 255, 255, 0.92)" },
+    unlock: {
+      marginTop: 20,
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      minHeight: 40,
+      paddingLeft: 20,
+      paddingRight: 14,
+      borderRadius: radius.full,
+      backgroundColor: colors.white,
+      justifyContent: "center",
+    },
+    unlockLabel: { fontSize: 15, fontFamily: font.semibold, color: lightColors.accentDeep },
+
+    railHead: { marginTop: 26, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4, minHeight: 32 },
+    railTitle: { fontSize: 17, fontFamily: font.bold, letterSpacing: -0.25, color: colors.label },
+    seeAll: { flexDirection: "row", alignItems: "center", gap: 2 },
+    seeAllText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
+    rail: { gap: 10, paddingHorizontal: 4, paddingTop: 12, paddingBottom: 4 },
+    guide: {
+      width: 116,
+      minHeight: 128,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: 14,
+      paddingTop: 14,
+      paddingBottom: 13,
+    },
+    // Two lines reserved so one- and two-line titles keep every chip aligned,
+    // and `auto` floors the read time whichever it runs to.
+    guideLabel: { marginTop: 12, fontSize: 14, fontFamily: font.semibold, lineHeight: 18, color: colors.label },
+    guideMinutes: { marginTop: "auto", paddingTop: 8, fontSize: 11.5, fontFamily: font.medium, color: colors.label3 },
+  });
