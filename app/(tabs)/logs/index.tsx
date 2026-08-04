@@ -15,7 +15,7 @@ import Sheet from "@/components/Sheet";
 import { TimeWheelPicker } from "@/components/WheelPicker";
 import CareTile from "@/components/logs/CareTile";
 import HouseholdToday from "@/components/logs/HouseholdToday";
-import PetChoicePanel, { PetChoiceRow } from "@/components/logs/PetChoice";
+import PetChoicePanel, { PetChoiceRow } from "@/components/PetChoice";
 import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,

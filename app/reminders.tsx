@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateField from "@/components/DateField";
@@ -51,7 +52,11 @@ export default function RemindersScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, hydrated, addReminder, toggleReminder, deleteReminder, toast } = useStore();
-  const [addOpen, setAddOpen] = useState(false);
+  // `?new=1` opens the add sheet on arrival, so a caller that means "make one"
+  // (the + on Care's Reminders tile) lands on the form rather than on the list
+  // with the real target still one tap away in the header.
+  const { new: openNew } = useLocalSearchParams<{ new?: string }>();
+  const [addOpen, setAddOpen] = useState(openNew === "1");
   const refreshControl = usePullToRefresh();
   const [title, setTitle] = useState("");
   const [petId, setPetId] = useState("");
