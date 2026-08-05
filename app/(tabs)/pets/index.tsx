@@ -1,444 +1,176 @@
-import EditStatSheet from "@/components/EditStatSheet";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
-import { Icon } from "@/components/Icons";
 import PageLoading from "@/components/PageLoading";
 import PetSelectorRow from "@/components/PetSelectorRow";
-import { COIN_SPRITE } from "@/components/pixel/hudSprites";
-import Pet3D from "@/components/pixel/Pet3D";
-import { PixelCosmetic } from "@/components/pixel/PixelPet";
-import PixelSprite from "@/components/pixel/PixelSprite";
 import { TabScreen } from "@/components/Screen";
-import Sheet from "@/components/Sheet";
-import {
-  AccentButton,
-  Chevron,
-  Chip,
-  CoinPill,
-  Group,
-  IconCircle,
-  PRESS_SCALE_SMALL,
-  PressableScale,
-  Row,
-  SectionHeader,
-  SheetSubtitle,
-  SheetTitle,
-} from "@/components/ui";
-import {
-  cmToUnit,
-  COSMETICS,
-  formatAge,
-  formatLength,
-  formatWeight,
-  kgToUnit,
-  lengthUnitLabel,
-  unitToCm,
-  unitToKg,
-  weightUnitLabel,
-  type Cosmetic,
-  type CosmeticSlot,
-  type Pet,
-} from "@/lib/data";
+import Stage from "@/components/pets/Stage";
+import Wardrobe from "@/components/pets/Wardrobe";
+import { PageButton } from "@/components/plan/Chapter";
+import { PressableScale } from "@/components/ui";
 import { useStore } from "@/lib/store";
-import { cardShadow, font, HIT, radius, useColors, type Colors } from "@/lib/theme";
+import { font, useColors, withAlpha, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
-import Svg, { Defs, Line, RadialGradient, Rect, Stop } from "react-native-svg";
+import { wardrobeFor, type WardrobeItem } from "@/lib/wardrobe";
 
-/* Every slot, head first, listed one after another in a single scrollable sheet. */
-const SLOTS: { slot: CosmeticSlot; hint: string }[] = [
-  { slot: "head", hint: "Hats & headwear" },
-  { slot: "face", hint: "Glasses & eyewear" },
-  { slot: "neck", hint: "Collars & scarves" },
-  { slot: "body", hint: "Outfits & capes" },
-];
-
-const GRID_STEP = 14;
-
-/** Arcade backdrop: soft radial glow near the top + faint 14px retro grid. */
-function ArcadeStage({ children, style }: { children: React.ReactNode; style?: object }) {
-  const colors = useColors();
-  const [dim, setDim] = useState({ w: 0, h: 0 });
-  const vLines = dim.w > 0 ? Array.from({ length: Math.floor(dim.w / GRID_STEP) }, (_, i) => (i + 1) * GRID_STEP) : [];
-  const hLines = dim.h > 0 ? Array.from({ length: Math.floor(dim.h / GRID_STEP) }, (_, i) => (i + 1) * GRID_STEP) : [];
-  return (
-    <View style={style} onLayout={(e) => setDim({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-      {dim.w > 0 && dim.h > 0 ? (
-        <Svg width={dim.w} height={dim.h} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Defs>
-            <RadialGradient id="stageGlow" cx="50%" cy="15%" rx="60%" ry="55%">
-              <Stop offset="0" stopColor={colors.arcadeGlow} />
-              <Stop offset="1" stopColor={colors.arcadeGlow} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          {vLines.map((x) => (
-            <Line key={`v${x}`} x1={x} y1={0} x2={x} y2={dim.h} stroke={colors.arcadeGrid} strokeWidth={1} />
-          ))}
-          {hLines.map((y) => (
-            <Line key={`h${y}`} x1={0} y1={y} x2={dim.w} y2={y} stroke={colors.arcadeGrid} strokeWidth={1} />
-          ))}
-          <Rect x={0} y={0} width={dim.w} height={dim.h} fill="url(#stageGlow)" />
-        </Svg>
-      ) : null}
-      {children}
-    </View>
-  );
-}
-
-function ItemCard({
-  c,
-  pet,
-  coins,
-  onBuy,
-  onToggle,
-}: {
-  c: Cosmetic;
-  pet: Pet;
-  coins: number;
-  onBuy: () => void;
-  onToggle: () => void;
-}) {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const owned = pet.owned.includes(c.id);
-  const equipped = pet.equipped[c.slot] === c.id;
-  const affordable = coins >= c.price;
-  return (
-    <View style={styles.itemCard}>
-      <View style={styles.itemPreview}>
-        <PixelCosmetic id={c.id} size={44} />
-      </View>
-      <Text numberOfLines={1} style={styles.itemName}>
-        {c.name}
-      </Text>
-      {owned ? (
-        <PressableScale
-          scaleTo={PRESS_SCALE_SMALL}
-          onPress={onToggle}
-          hitSlop={5}
-          accessibilityRole="button"
-          accessibilityState={{ selected: equipped }}
-          style={{ marginTop: 10 }}
-        >
-          <View style={[styles.itemButton, { backgroundColor: equipped ? colors.greenSoft : colors.fill }]}>
-            {equipped ? <Icon name="check" size={14} color={colors.green} /> : null}
-            <Text style={[styles.itemButtonLabel, { color: equipped ? colors.green : colors.label }]}>
-              {equipped ? "Wearing" : "Put on"}
-            </Text>
-          </View>
-        </PressableScale>
-      ) : (
-        <PressableScale
-          scaleTo={PRESS_SCALE_SMALL}
-          disabled={!affordable}
-          onPress={onBuy}
-          hitSlop={5}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !affordable }}
-          style={{ marginTop: 10 }}
-        >
-          <View style={[styles.itemButton, { backgroundColor: affordable ? colors.accentSoft : colors.fill }]}>
-            <PixelSprite sprite={COIN_SPRITE} size={13} />
-            <Text style={[styles.itemButtonLabel, { color: affordable ? colors.accent : colors.label3 }]}>{c.price}</Text>
-          </View>
-        </PressableScale>
-      )}
-    </View>
-  );
-}
-
+/**
+ * Pets — the wardrobe.
+ *
+ * The tab had one job (dress the animal) and hid all of it behind a button.
+ * Above that button sat a shadowed card wrapping an arcade stage, a row of five
+ * identical grey chips for age, weight, height, length and an item count, and
+ * below it a `Group` holding a single "Add another pet" row with an icon disc
+ * on its left. The button opened a sheet containing four section headers and
+ * fifteen shadowed cards, each with a preview box and its own pill.
+ *
+ * Now the page is the wardrobe. The stage is a bleed rather than a box, the
+ * animal is the lead image, and every piece it can wear is on the page in four
+ * chapters — one per slot — with the rule of each chapter carrying what's on.
+ *
+ * The four measurement sheets are gone rather than restyled: `/pet/[id]`
+ * already edits age, weight, height and length, and a dress-up tab was a
+ * strange second door to a health record. The identity line under the name says
+ * the two numbers that ARE this page's business — how many pieces the animal
+ * owns, and how many it has on — and the name itself opens the profile for
+ * everything else.
+ */
 export default function PetsScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, buyCosmetic, toggleEquip, addWeight, editPet, toast } = useStore();
   const router = useRouter();
+  const { state, hydrated, buyCosmetic, toggleEquip, toast } = useStore();
   const refreshControl = usePullToRefresh();
-  const searchParams = useLocalSearchParams<{ shop?: string }>();
-  const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
-  const [accessoriesOpen, setAccessoriesOpen] = useState(() => searchParams.shop === "1");
-  const [editingStat, setEditingStat] = useState<"weight" | "age" | "height" | "length" | null>(null);
 
-  // "Coin bump" pop on the stage pet whenever a buy/equip lands.
-  const bump = useSharedValue(1);
-  const bumpStyle = useAnimatedStyle(() => ({ transform: [{ scale: bump.value }] }));
-  const react = () => {
-    bump.value = withSequence(
-      withTiming(1.18, { duration: 160, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) })
-    );
-  };
+  const [petId, setPetId] = useState(state.pets[0]?.id ?? "");
+  // Bumped on every buy or equip; the stage pops the animal when it changes.
+  const [pulse, setPulse] = useState(0);
 
   const pet = state.pets.find((p) => p.id === petId) ?? state.pets[0];
+  const doc = useMemo(() => (pet ? wardrobeFor(pet, state.coins) : null), [pet, state.coins]);
 
-  if (!hydrated)
+  // Spam-tap guard on the profile link — a burst of taps otherwise stacks
+  // several pushes before the first transition starts. Released on focus, so it
+  // can never strand the link the way a timer can if the screen unmounts first.
+  const navLock = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      navLock.current = false;
+    }, [])
+  );
+  const openProfile = useCallback(() => {
+    if (!pet || navLock.current) return;
+    navLock.current = true;
+    router.push(`/pet/${pet.id}`);
+  }, [pet, router]);
+
+  const trailing = <HeaderActions showCoins />;
+
+  if (!hydrated) {
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
+      <TabScreen title="Pets" subtitle="Dress them up" trailing={trailing} refreshControl={refreshControl}>
         <PageLoading />
       </TabScreen>
     );
+  }
 
-  const openAddPet = () => router.push("/pet/new");
-
-  if (!pet) {
+  if (!pet || !doc) {
     return (
-      <TabScreen title="Pets" subtitle="Style your companion" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
+      <TabScreen title="Pets" subtitle="Dress them up" trailing={trailing} refreshControl={refreshControl}>
         <View style={{ marginTop: 16 }}>
-          <AccentButton onPress={openAddPet}>Add a pet</AccentButton>
+          <EmptyState
+            icon="paw"
+            title="No pets yet"
+            body="Add a pet and this becomes their dressing room — hats, glasses, collars and capes, bought with the coins your care logs earn."
+            cta="Add a pet"
+            onCta={() => router.push("/pet/new")}
+          />
         </View>
       </TabScreen>
     );
   }
 
-  const buy = (c: Cosmetic) => {
-    buyCosmetic(pet.id, c.id);
-    react();
-    toast("bag", `${c.name} purchased`, `${pet.name} is wearing it now`);
-  };
-  const toggle = (c: Cosmetic) => {
-    const wasEquipped = pet.equipped[c.slot] === c.id;
-    toggleEquip(pet.id, c.id);
-    react();
-    if (wasEquipped) toast("paw", `Took off the ${c.name}`, `${pet.name}'s look updated`);
-    else toast("paw", `${pet.name} is wearing the ${c.name}`, "Looking sharp");
+  /**
+   * One target for every cell, because a piece is one thing in three states.
+   * Owned pieces toggle straight on and off. A purchase spends a currency the
+   * family worked for and cannot be undone, so it asks first — the same native
+   * confirm the app uses everywhere else something is irreversible.
+   */
+  const press = (item: WardrobeItem) => {
+    const c = item.cosmetic;
+    if (item.owned) {
+      const wasWorn = item.worn;
+      toggleEquip(pet.id, c.id);
+      setPulse((n) => n + 1);
+      if (wasWorn) toast("paw", `Took off the ${c.name}`, `${pet.name}'s look updated`);
+      else toast("paw", `${pet.name} is wearing the ${c.name}`, "Looking sharp");
+      return;
+    }
+    if (!item.affordable) {
+      toast("coin", "Not enough coins", `${c.name} costs ${c.price} — log some care to earn more`);
+      return;
+    }
+    Alert.alert(`Buy the ${c.name}?`, `${c.price} coins. ${pet.name} will put it on straight away.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Buy",
+        onPress: () => {
+          buyCosmetic(pet.id, c.id);
+          setPulse((n) => n + 1);
+          toast("bag", `${c.name} purchased`, `${pet.name} is wearing it now`);
+        },
+      },
+    ]);
   };
 
   return (
-    <TabScreen
-      title="Pets"
-      subtitle="Style your companion"
-      trailing={<HeaderActions showCoins />}
-      refreshControl={refreshControl}
-    >
-      {/* Same avatar-row selector as the Logs tab, with a trailing "+" tile
-          so adding a pet stays one tap away. */}
-      <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} onAdd={openAddPet} />
+    <TabScreen title="Pets" subtitle="Dress them up" trailing={trailing} refreshControl={refreshControl}>
+      <Text style={styles.standfirst}>{doc.standfirst}</Text>
 
-      {/* Dressing stage — always the real voxel 3D pet (no 2D/3D toggle). */}
-      <View style={styles.stageCard}>
-        <ArcadeStage style={styles.stage}>
-          <View style={styles.petBox}>
-            <Animated.View style={[styles.petCenter, bumpStyle]}>
-              <Pet3D pet={pet} size={200} />
-            </Animated.View>
-          </View>
+      {/* The same reel every other pet-scoped page uses. Its "+" is why there
+          is no add-a-pet row further down the page. */}
+      <PetSelectorRow pets={state.pets} selectedId={pet.id} onSelect={setPetId} />
 
-          <Text style={styles.dragHint}>Drag to spin</Text>
+      <Stage pet={pet} pulse={pulse} />
 
-          <Text style={styles.petName}>{pet.name}</Text>
-          <Text style={styles.petBreed}>{pet.breed}</Text>
-          <View style={styles.chipsRow}>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("age")}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Age ${formatAge(pet.ageYears)} — tap to edit`}
-            >
-              <Chip>{formatAge(pet.ageYears)}</Chip>
-            </PressableScale>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("weight")}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Weight ${formatWeight(pet.weightKg, state.units)} — tap to edit`}
-            >
-              <Chip>{formatWeight(pet.weightKg, state.units)}</Chip>
-            </PressableScale>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("height")}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Height ${pet.heightCm != null ? formatLength(pet.heightCm, state.units) : "not set"} — tap to edit`}
-            >
-              <Chip>{pet.heightCm != null ? formatLength(pet.heightCm, state.units) : "Height —"}</Chip>
-            </PressableScale>
-            <PressableScale
-              scaleTo={PRESS_SCALE_SMALL}
-              onPress={() => setEditingStat("length")}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Length ${pet.lengthCm != null ? formatLength(pet.lengthCm, state.units) : "not set"} — tap to edit`}
-            >
-              <Chip>{pet.lengthCm != null ? formatLength(pet.lengthCm, state.units) : "Length —"}</Chip>
-            </PressableScale>
-            <Chip>{`${pet.owned.length} items`}</Chip>
-          </View>
-
-          {/* Accessories — opens a sheet listing every slot in one scroll */}
-          <PressableScale onPress={() => setAccessoriesOpen(true)} accessibilityRole="button" style={{ marginTop: 20, width: "100%" }}>
-            <View style={styles.otherButton}>
-              <Icon name="bag" size={17} color={colors.label} />
-              <Text style={styles.otherButtonLabel}>Accessories</Text>
-            </View>
-          </PressableScale>
-        </ArcadeStage>
-      </View>
-
-      {/* Add-pet affordance lives in content (header stays CoinPill + bell) */}
-      <Group style={{ marginTop: 16 }}>
-        <Row
-          onPress={openAddPet}
-          leading={<IconCircle icon="plus" tint={colors.accent} bg={colors.accentSoft} />}
-          title="Add another pet"
-          subtitle="Cats & dogs welcome"
-          trailing={<Chevron />}
-        />
-      </Group>
-
-      {/* Accessories sheet — every slot on one scrollable page, no tabs */}
-      <Sheet open={accessoriesOpen} onClose={() => setAccessoriesOpen(false)}>
-        <View style={styles.sheetTitleRow}>
-          <SheetTitle>Accessories</SheetTitle>
-          <CoinPill amount={state.coins} />
+      {/* The subject's name, set like a chapter head — the same shape Home uses
+          for a pet, so an animal is introduced the same way in both places. */}
+      <PressableScale
+        onPress={openProfile}
+        accessibilityRole="header"
+        accessibilityLabel={`${pet.name}, ${pet.breed}. Open profile.`}
+        hitSlop={{ top: 8, bottom: 4, left: 4, right: 4 }}
+      >
+        <View style={styles.nameRow}>
+          <Text numberOfLines={1} style={styles.name}>
+            {pet.name}
+          </Text>
+          <View style={styles.nameRule} />
         </View>
-        <SheetSubtitle>For {pet.name}</SheetSubtitle>
+      </PressableScale>
+      <Text style={styles.identity}>{doc.identity}</Text>
 
-        {SLOTS.map((s) => {
-          // Gender-restricted items drop out per pet, so a slot can end up empty —
-          // skip it rather than leaving an orphan header.
-          const items = COSMETICS.filter((c) => c.slot === s.slot && (!c.restrictGender || c.restrictGender === pet.gender));
-          if (items.length === 0) return null;
-          return (
-            <View key={s.slot}>
-              <SectionHeader>{s.hint}</SectionHeader>
-              <View style={styles.shopGrid}>
-                {items.map((c) => (
-                  <ItemCard key={c.id} c={c} pet={pet} coins={state.coins} onBuy={() => buy(c)} onToggle={() => toggle(c)} />
-                ))}
-              </View>
-            </View>
-          );
-        })}
-      </Sheet>
+      <Wardrobe doc={doc} onPress={press} />
 
-      <EditStatSheet
-        open={editingStat === "weight"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s weight`}
-        label={`Weight (${weightUnitLabel(state.units)})`}
-        min={0.1}
-        max={state.units === "lb" ? 260 : 120}
-        unit={weightUnitLabel(state.units)}
-        initialValue={kgToUnit(pet.weightKg, state.units)}
-        onSave={(v) => {
-          const kg = unitToKg(v, state.units);
-          addWeight(pet.id, kg);
-          toast("scale", `${pet.name}'s weight updated`, formatWeight(kg, state.units));
-        }}
-      />
-      <EditStatSheet
-        open={editingStat === "age"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s age`}
-        label="Age (years)"
-        min={0}
-        max={30}
-        unit="yr"
-        initialValue={pet.ageYears}
-        onSave={(ageYears) => {
-          editPet(pet.id, {
-            name: pet.name,
-            breed: pet.breed,
-            ageYears,
-            weightKg: pet.weightKg,
-            cupGrams: pet.cupGrams,
-            heightCm: pet.heightCm,
-            lengthCm: pet.lengthCm,
-          });
-          toast("calendar", `${pet.name}'s age updated`, formatAge(ageYears));
-        }}
-      />
-      <EditStatSheet
-        open={editingStat === "height"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s height`}
-        label={`Height (${lengthUnitLabel(state.units)})`}
-        min={state.units === "lb" ? 2 : 5}
-        max={state.units === "lb" ? 60 : 150}
-        unit={lengthUnitLabel(state.units)}
-        initialValue={pet.heightCm != null ? cmToUnit(pet.heightCm, state.units) : undefined}
-        onSave={(v) => {
-          const heightCm = unitToCm(v, state.units);
-          editPet(pet.id, { name: pet.name, breed: pet.breed, ageYears: pet.ageYears, weightKg: pet.weightKg, cupGrams: pet.cupGrams, heightCm, lengthCm: pet.lengthCm });
-          toast("scale", `${pet.name}'s height updated`, formatLength(heightCm, state.units));
-        }}
-      />
-      <EditStatSheet
-        open={editingStat === "length"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s length`}
-        label={`Length (${lengthUnitLabel(state.units)})`}
-        min={state.units === "lb" ? 4 : 10}
-        max={state.units === "lb" ? 120 : 300}
-        unit={lengthUnitLabel(state.units)}
-        initialValue={pet.lengthCm != null ? cmToUnit(pet.lengthCm, state.units) : undefined}
-        onSave={(v) => {
-          const lengthCm = unitToCm(v, state.units);
-          editPet(pet.id, { name: pet.name, breed: pet.breed, ageYears: pet.ageYears, weightKg: pet.weightKg, cupGrams: pet.cupGrams, heightCm: pet.heightCm, lengthCm });
-          toast("scale", `${pet.name}'s length updated`, formatLength(lengthCm, state.units));
-        }}
-      />
+      {/* Colophon: where the coins come from, and everything about this animal
+          that is not what it is wearing. */}
+      <View style={styles.colophon}>
+        <PageButton label={`Coins · ${state.coins.toLocaleString()}`} tint={colors.orange} icon="coin" full onPress={() => router.push("/coins")} />
+        <PageButton label={`${pet.name}'s profile`} tint={colors.accent} icon="paw" full onPress={openProfile} />
+      </View>
     </TabScreen>
   );
 }
 
-const makeStyles = (colors: Colors) => StyleSheet.create({
-  stageCard: {
-    marginTop: 8,
-    borderRadius: radius.xl,
-    backgroundColor: colors.card,
-    overflow: "hidden",
-    ...cardShadow,
-  },
-  stage: { alignItems: "center", paddingHorizontal: 20, paddingBottom: 20, paddingTop: 8 },
-  // Sized to the 200pt pet PLUS the slot-button overhang on each side, so the
-  petBox: {
-    position: "relative",
-    width: 200,
-    height: 200,
-    marginVertical: 28,
-  },
-  // Fills petBox so the 200pt pet stays optically centred inside the box.
-  petCenter: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  dragHint: { marginTop: -16, marginBottom: 8, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
-  petName: { fontSize: 20, fontFamily: font.bold, letterSpacing: -0.2, color: colors.label },
-  petBreed: { fontSize: 13, fontFamily: font.medium, color: colors.label2 },
-  chipsRow: { marginTop: 10, flexDirection: "row", gap: 6 },
-  otherButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    height: HIT,
-    width: "100%",
-    borderRadius: radius.md,
-    backgroundColor: colors.fill,
-  },
-  otherButtonLabel: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
-  sheetTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  shopGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  itemCard: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    padding: 14,
-    ...cardShadow,
-  },
-  itemPreview: { aspectRatio: 2, borderRadius: radius.md, backgroundColor: colors.fill, alignItems: "center", justifyContent: "center" },
-  itemName: { marginTop: 10, fontSize: 14, fontFamily: font.semibold, color: colors.label },
-  itemButton: {
-    height: 34,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    borderRadius: radius.full,
-  },
-  itemButtonLabel: { fontSize: 13, fontFamily: font.semibold },
-  breedHint: { marginTop: 6, fontSize: 12, fontFamily: font.medium, color: colors.label3 },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    standfirst: { marginTop: 10, maxWidth: 360, fontSize: 15, fontFamily: font.regular, lineHeight: 22, color: colors.label2 },
+
+    nameRow: { marginTop: 22, flexDirection: "row", alignItems: "center", gap: 12 },
+    name: { fontSize: 25, fontFamily: font.bold, letterSpacing: -0.5, color: colors.label, flexShrink: 1 },
+    nameRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: withAlpha(colors.accent, 0.4) },
+    identity: { marginTop: 5, fontSize: 14.5, fontFamily: font.regular, color: colors.label2 },
+
+    colophon: { marginTop: 40, paddingTop: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, gap: 8 },
+  });

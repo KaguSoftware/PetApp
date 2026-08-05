@@ -674,7 +674,7 @@ member can edit their own card but not someone else's (0040 guard).
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below); `components/logs/` — the Logs dashboard's tiles + summary; `components/plan/` — the Care document primitives (`Chapter`/`PageButton` are shared, not plan-only); `components/inbox/` — the unified notifications+reminders page (see below).
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below); `components/logs/` — the Logs dashboard's tiles + summary; `components/plan/` — the Care document primitives (`Chapter`/`PageButton` are shared by Care, Inbox **and Home** — not plan-only); `components/inbox/` — the unified notifications+reminders page (see below); `components/home/` — the Home front page's four parts (see below); `components/pets/` — the dressing stage + the wardrobe gallery (see below).
 - `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: inbox, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
 - `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
@@ -847,6 +847,120 @@ The page now shows the same merge the notification queue holds.
   is itself inside a scroll view, and how long the "now" chapter gets in a household that has both
   alerts and several late levers.
 
+### Home is a document now, and its chapters are the animals (2026-08-05, owner request) — built, `tsc` + `eslint` clean, iOS + Android bundle (10.7 MB), no migration needed
+
+Full redesign, to the twelve rules the owner supplied (two vertical alignments make a table · rules
+between sections not rows · step the scale per section · small ink big target · recolour before
+adding a glyph · tinted fill hairline border no shadow · affordances trailing · one button shape ·
+paint the empty state on the line · one axis and one now-line · demote before deleting · never a
+sheet from a sheet). Home is the third page in the Care/Inbox document vocabulary — same `Chapter`
+and `PageButton`, one copy, three pages.
+
+**What it replaced:** six container vocabularies stacked — a shadowed hero card with a swipe
+carousel inside it, a row of coloured supply pills, a red alert banner, a 2-up grid of shadowed
+shortcut tiles, a `Group` of reminder rows with an avatar down the left of every one, and a trivia
+card with its own icon disc, foot rule and 3/12 counter. Three separate leading-icon columns, one
+flat 14–16pt scale, elevation on things that don't float, and — because the hero paged one animal at
+a time — no way for a two-pet household to see itself at once.
+
+- **`lib/home.ts` (new, pure)** — the document model. It is a *reading* of state and never a second
+  definition of one: every figure comes out of `summarizeLever`, computed **once** at the top of
+  `homeDocument` and read by the standfirst, the lede, every care line and every note. (The first
+  draft re-ran `careItemStatus` per line; that was both a second walk of the whole activity list per
+  pet per lever and a way for a row to disagree with the sentence above it by a minute.)
+  - **The lede** is one thing, one sentence, one button — never a count. Levers are walked in
+    `householdLevers` order by severity, so the first animal in trouble wins and food outranks the
+    yard. Its button acts in place for the five levers that need no further input and is a door
+    (chevron, not tick) for the two that do.
+  - **`whenLabel`**, `NEEDS`, `LOG_LABEL`, `LINE_LABEL` — Home's own wording. `LINE_LABEL` is nouns
+    ("Meals / Water / Walks"), not `ACTIONS`' past participles: "Fed / Water / Walk" in a column is
+    three parts of speech.
+- **`components/home/TodayRail.tsx`** — the day so far: every pet on one clock under one now-line.
+  **Deliberately not Care's `DayRail`.** There a mark is a time the family has SET (the plan, drawn
+  whether or not anything happened); here it is a time that HAS happened, been missed, or is still
+  coming. Care's rail stays empty for a household that never opened the schedule editor; this one
+  fills the moment anybody logs anything, because **unscheduled logs land on it too**. Three states
+  told in fill only — done solid in the action's colour, missed washed red, ahead drawn in the page
+  colour behind a hairline so the rule shows through. No ticks, no badges.
+  - A slot's "done" window is `[slot − grace, next slot − grace)`, the same window `careItemStatus`
+    uses. A log inside a window a slot already spoke for is skipped, or a meal logged at 8:20 against
+    an 8:00 slot draws twice (different half-hour bucket).
+  - The NOW cap and its line are laid out **inside** `rows` (hence its `paddingTop`), not hung above
+    the first row on a negative `top` — a child outside its parent can't be touched on Android and
+    renders inconsistently there (same class as the hat-slot bug).
+- **`components/home/PetChapter.tsx`** — one section per pet. The head is a name, a rule, and nothing
+  else, and **the rule takes the pet's worst state**: "Luna is behind" is said by recolouring
+  something already on the page. Inside, the scale steps twice — daily levers get 17pt rows, and
+  grooming, the last checkup and the whole cupboard run in underneath as one 14.5pt line of prose.
+  Breed/age/weight run in under the name with age and weight as their own targets. **The value on a
+  care line logs that lever** (30pt of chip, 10 of slop): the row is not a button, the number is.
+- **`components/home/QuickRow.tsx`** — replaces `ShortcutsSection`. The three built-in quick logs are
+  **gone rather than moved**: each pet's own care line already logs that lever, so a fixed "Groom"
+  tile was a second door to something one tap away. What is left is what only a family can define,
+  in the page's one button shape. Removing is a recolour (Edit turns them red in place), not a corner
+  cross.
+- **`components/home/Endnote.tsx`** — the breed fact, as the closing paragraph it always was. Which
+  pet it is about rotates **by the day**, not by which one is in trouble, so a two-pet household
+  hears about both and the note doesn't move under a state change.
+- **Deleted `ShortcutsSection.tsx`, `StockStrip.tsx`, `BreedFactsSection.tsx`** (Home was the only
+  consumer of all three) and the **pet hero carousel** — which also retires the app's most
+  crash-prone block of worklets. See the note above: the Reanimated rule's canonical example moved.
+  The switch-pet sheet went with it: every pet is on the page now, so there is nothing to switch.
+- **The alert banner is absorbed, not dropped** — raised alerts sort to the top of the "Ahead"
+  chapter and are counted on its Inbox button.
+- **Needs a device pass on:** the care-line values as log buttons on Android (adjacent small
+  pressables in a scroll view — the thing that has bitten this app before), the rail's mark spacing
+  on a 320pt-wide phone with five slots in one afternoon, the NOW cap near either end of the axis,
+  and the whole page in dark mode. **Also worth an owner check:** the carousel and its swipe
+  animation were an explicit Phase-8 request and are now gone; the brief's "no elevation, no icon
+  columns, no cards" rules and a hero card can't both be true.
+
+### Pets is the wardrobe now, on the page (2026-08-05, owner request) — built, `tsc` + `eslint` clean, iOS + Android bundle (10.7 MB), no migration needed
+
+Same twelve rules as the Home pass above, applied to the tab that had one job and hid all of it
+behind a button.
+
+**What it replaced:** a shadowed card wrapping the arcade stage; a row of five identical grey chips
+(age, weight, height, length, item count); a `Group` holding one "Add another pet" row with an icon
+disc on its left; and one "Accessories" button opening a **sheet** that contained four section
+headers and fifteen shadowed cards, each with its own preview box, name and pill button. Three
+containers deep for something you buy with play money, and a flat 12–14pt scale throughout.
+
+- **`lib/wardrobe.ts` (new, pure)** — what fits this animal (gender-restricted pieces drop out, and a
+  pet with no gender recorded sees only the unrestricted ones), what it owns, what it has on, what is
+  still out of reach. The standfirst is the useful version of "you can't afford anything": when
+  nothing is in reach it prints the cheapest remaining price **and the exact gap**.
+- **`components/pets/Stage.tsx`** — **the stage is a bleed, not a box.** The arcade backdrop is
+  painted straight onto the page and vignetted back into it by a second radial gradient (transparent
+  in the middle, page colour at the rim, drawn over the grid), so the grid has no edge to be a
+  border. No card, no shadow, no radius, and **no `<Mask>`/`<ClipPath>`** — three gradients and some
+  lines, which keeps it inside the react-native-svg surface the rest of the app already uses. The
+  buy/equip pop takes a plain `pulse` counter as a prop and writes a shared value from an effect, so
+  no worklet captures a changing JS value.
+- **`components/pets/Wardrobe.tsx`** — the sheet is gone; the shop is the page, in four chapters, one
+  per slot. **The chapter's rule carries what's on** (trailing, on the rule) and recolours to accent
+  when the slot is filled; when it is empty the rule carries the slot's *hint* ("glasses & shades")
+  instead, so an empty slot reads as content rather than as a gap.
+  - A gallery is the one place in this app a grid of images is right — you can't tell a monocle from
+    a bow tie by reading its name — so the **images stay and the chrome goes**. A piece is a sprite
+    on the page; only the piece being **worn** gets a tinted tile behind it, so at most one cell per
+    slot is ever a box. Unowned pieces are faded, not padlocked. Every cell carries the same
+    fixed-height status line ("wearing" / "put on" / coin + price, accent when affordable) so a row
+    of owned and unowned pieces still lines up along its floor.
+  - **Buying now asks first** (`Alert.alert`). It didn't before, but the target was a small pill;
+    the cells are ~76pt wide and a purchase spends earned currency with no undo. `buyCosmetic`'s own
+    affordability guard is untouched — an unaffordable tap just toasts the shortfall.
+- **The four `EditStatSheet`s are deleted, not restyled.** `app/pet/[id]/index.tsx` already edits
+  age, weight, height and length; a dress-up tab was a strange second door into a health record. The
+  identity line under the name says the two numbers that ARE this page's business (owns N of M,
+  wearing K) and the name itself — set as a chapter head, the same shape Home uses for a pet — opens
+  the profile. The "Add another pet" row went too: `PetSelectorRow`'s pinned "+" is right there.
+- **`?shop=1` is retired** — nothing linked with it once the sheet went (the coin pill has routed to
+  `/coins` since round 2).
+- **Needs a device pass on:** `Pet3D`'s pan versus the page scroll now that the stage has no card
+  around it (unchanged code, new neighbours), the vignette in dark mode, the 4-column grid on a
+  320pt-wide phone, and whether the purchase confirm feels like friction in the earn loop.
+
 ## Roadmap
 1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030 applied; 0031 STILL PENDING — invites stay broken until it lands**, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.
 2. Web-demo follow-up patches (3 small ones listed in the accounts section) in the webdemo repo.
@@ -926,10 +1040,12 @@ resolution coincides with layout/state changes feeding an animation.
    where an unguarded `requestAnimationFrame` → `scrollTo` on a torn-down `ScrollView` in
    `WheelPicker` caused the same silent close.)
 
-The canonical correct example is the Home hero carousel (`app/(tabs)/home/index.tsx`): `heroWSV` /
-`lastIndexSV` mirrors, `DOT_RANGE` hoisted, `alive` guard, `"worklet"` on every callback. Copy that
-shape. **When an animation crashes silently, get the crash report first — do not guess from the
-source.** Guessing failed three times running; the stack trace identified it in one pass.
+The canonical correct example **used to be the Home hero carousel**; that carousel was deleted in
+the 2026-08-05 Home redesign below, so copy `AnimatedNumber` in `components/nutrition/atoms.tsx`
+instead — every changing value (prefix, suffix, decimals, separators) mirrored into a shared value,
+formatting helpers `"worklet"`-marked and built from language primitives only. **When an animation
+crashes silently, get the crash report first — do not guess from the source.** Guessing failed three
+times running; the stack trace identified it in one pass.
 
 ### Everything else
 - **Never open a `Sheet` from inside another `Sheet`** — `Sheet` is a native `Modal`, and iOS

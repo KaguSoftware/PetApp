@@ -1,37 +1,42 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  interpolateColor,
-  runOnJS,
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import BreedFactsSection from "@/components/BreedFactsSection";
+import Animated from "react-native-reanimated";
 import EmptyState from "@/components/EmptyState";
 import EditStatSheet from "@/components/EditStatSheet";
+import FeedPortionSheet from "@/components/FeedPortionSheet";
 import HeaderActions from "@/components/HeaderActions";
+import { Icon } from "@/components/Icons";
+import PageLoading from "@/components/PageLoading";
 import PetAvatar from "@/components/PetAvatar";
 import { TabScreen } from "@/components/Screen";
-import Sheet from "@/components/Sheet";
-import ShortcutsSection from "@/components/ShortcutsSection";
-import StockStrip from "@/components/StockStrip";
 import StreakCalendarSheet from "@/components/StreakCalendarSheet";
 import Welcome from "@/components/Welcome";
-import { Icon } from "@/components/Icons";
-import { Chevron, Chip, Group, IconCircle, PressableScale, PRESS_SCALE_SMALL, Row, SectionHeader, SheetTitle } from "@/components/ui";
-import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel } from "@/lib/data";
-import { effectiveDailyTarget } from "@/lib/careStatus";
-import { useReduceMotion } from "@/lib/a11y";
-import { dueLabel, useStore } from "@/lib/store";
-import { cardShadow, font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
+import Endnote from "@/components/home/Endnote";
+import PetChapter from "@/components/home/PetChapter";
+import QuickRow from "@/components/home/QuickRow";
+import TodayRail from "@/components/home/TodayRail";
+import { Chapter, PageButton } from "@/components/plan/Chapter";
+import { PressableScale } from "@/components/ui";
+import { formatAge, formatWeight, kgToUnit, unitToKg, weightUnitLabel, type ActionType, type Pet } from "@/lib/data";
+import { homeDocument, type LedeKind } from "@/lib/home";
+import { useStore } from "@/lib/store";
+import { font, radius, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 import { useGooeyBump, useGooeyGlow } from "@/lib/useGooeyBump";
+
+/**
+ * Hue means urgency on this page, and only the lede is allowed to be hot. Care
+ * spends colour on rhythm and Inbox on horizon because those pages are read
+ * end to end; Home is read in three seconds standing at the kitchen counter, so
+ * exactly one thing gets to shout and the rest of the document stays grey.
+ */
+const LEDE_TINT: Record<LedeKind, keyof Colors> = {
+  overdue: "red",
+  due: "orange",
+  open: "accent",
+  clear: "green",
+};
 
 /** Compact day-streak pill for the Home header (flame + count). */
 function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }) {
@@ -42,12 +47,7 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
   const { style: anim } = useGooeyBump(streak, "streak");
   const glow = useGooeyGlow(streak, "streak");
   return (
-    <PressableScale
-      haptic
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${streak} day streak`}
-    >
+    <PressableScale haptic onPress={onPress} accessibilityRole="button" accessibilityLabel={`${streak} day streak`}>
       <View style={styles.streakPillWrap}>
         <Animated.View pointerEvents="none" style={[styles.streakGlow, glow]} />
         <Animated.View style={[styles.streakPill, anim]}>
@@ -62,546 +62,305 @@ function StreakPill({ streak, onPress }: { streak: number; onPress: () => void }
   );
 }
 
-const DOT_SIZE = 8;
-const DOT_ACTIVE_W = 22;
-
 /**
- * One page dot, driven by the carousel's live track value so it stretches and
- * darkens continuously as the finger moves — not in a jump after the swipe
- * lands. At track === index the dot is the wide "active" pill; a slide away it
- * is a small faint circle, and it interpolates between the two.
+ * Home — the household's front page.
+ *
+ * What it replaced was a stack of six containers: a shadowed hero card with a
+ * carousel inside it, a strip of coloured supply pills, a red alert banner, a
+ * two-column grid of shadowed shortcut tiles, a grouped list of reminders with
+ * an avatar down the left of every row, and a trivia card. Six vocabularies,
+ * three separate icon columns, one flat type scale, and — because the hero
+ * paged one animal at a time — no way to see a two-pet household at once.
+ *
+ * It is a document now, in the vocabulary Care and Inbox already share, with
+ * the axis Home alone needs: its chapters are the animals. Reading down the
+ * page you get one sentence of state, then the one thing that needs doing with
+ * the face of whoever needs it, then the family's own one-tap logs, then the
+ * day so far on a single clock, then a section per pet, then what is written
+ * down for later, and finally something to read. Rules divide chapters and
+ * nothing else; spacing separates the rows. The only filled, rounded things on
+ * screen are buttons.
+ *
+ * Nothing here duplicates a neighbour. The rail shows *when* things happened;
+ * the pet sections show *what state* each lever is in; Inbox owns the queue and
+ * Logs owns the doing, and both are one button away at the foot of the page.
  */
-function PetDot({ index, track, onPress, label }: { index: number; track: SharedValue<number>; onPress: () => void; label: string }) {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  // Precomputed OUTSIDE the worklet (per theme, via useMemo). Calling
-  // withAlpha() inside useAnimatedStyle would run a JS function on the UI
-  // thread every frame, per dot.
-  const dotRange = useMemo<readonly [string, string]>(() => [withAlpha(colors.label, 0.18), colors.label], [colors]);
-  const style = useAnimatedStyle(() => {
-    "worklet";
-    // 1 when this dot's page is centered, 0 when a full slide away or more.
-    const nearness = Math.max(0, 1 - Math.abs(track.value - index));
-    return {
-      width: DOT_SIZE + (DOT_ACTIVE_W - DOT_SIZE) * nearness,
-      backgroundColor: interpolateColor(nearness, [0, 1], dotRange as unknown as string[]),
-    };
-  });
-  return (
-    <PressableScale scaleTo={PRESS_SCALE_SMALL} onPress={onPress} accessibilityLabel={label} hitSlop={10}>
-      <Animated.View style={[styles.petDot, style]} />
-    </PressableScale>
-  );
-}
-
-/** Animated "meals today" progress bar. */
-function MealsBar({ pct }: { pct: number }) {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [barW, setBarW] = useState(0);
-  const progress = useSharedValue(0);
-  // One MealsBar renders per carousel slide, and slides mount/unmount as the
-  // hero frame measures — cancel so no tween outlives its view.
-  useEffect(() => {
-    progress.value = withTiming(pct, { duration: 250, easing: Easing.out(Easing.quad) });
-    return () => cancelAnimation(progress);
-  }, [pct, progress]);
-  const fillStyle = useAnimatedStyle(() => ({ width: (barW * progress.value) / 100 }));
-  return (
-    <View style={styles.barTrack} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
-      <Animated.View style={[styles.barFill, { backgroundColor: pct >= 100 ? colors.green : colors.accent }, fillStyle]} />
-    </View>
-  );
-}
-
 export default function Home() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { state, hydrated, addWeight, editPet, toast } = useStore();
   const router = useRouter();
+  const { state, hydrated, addWeight, editPet, logAction, toast } = useStore();
   const refreshControl = usePullToRefresh();
-  const [petIndex, setPetIndex] = useState(0);
-  const [editingStat, setEditingStat] = useState<"weight" | "age" | null>(null);
-  const [petPickerOpen, setPetPickerOpen] = useState(false);
-  const [streakOpen, setStreakOpen] = useState(false);
 
-  // Bumped every time Home regains focus, and used as part of the hero
-  // avatar's `key` below. A tap that pushes `/pet/[id]` can occasionally get
-  // its touch stolen mid-press by the hero's swipe GestureDetector (no
-  // onPressOut/onPress fires to resolve it), leaving PressableScale's dim
-  // stuck below full opacity. Remounting on focus guarantees a fresh shared
-  // value at 1 whenever the avatar becomes visible again, regardless of why
-  // a previous press was left unresolved.
-  const [avatarFocusKey, setAvatarFocusKey] = useState(0);
-  // Guards against spam-tapping the avatar: without it, every tap in a fast
-  // burst fires its own router.push before the first navigation's transition
-  // even starts, stacking several `/pet/[id]` screens and re-triggering the
-  // press-dim animation mid-flight on each one — which is what kept
-  // reproducing the transparent-avatar glitch under rapid taps. Unlocked
-  // again whenever Home regains focus.
-  const avatarNavLockRef = useRef(false);
+  const [streakOpen, setStreakOpen] = useState(false);
+  // Sheet targets outlive `open` so the panel can slide away instead of
+  // unmounting mid-dismiss and vanishing.
+  const [editing, setEditing] = useState<{ pet: Pet; stat: "weight" | "age" } | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [feedFor, setFeedFor] = useState<Pet | null>(null);
+  const [feedOpen, setFeedOpen] = useState(false);
+
+  // States flip on time passing alone: a slot goes from "ahead" to "missed"
+  // with nobody touching the screen. Same 60s tick the Inbox and the Logs
+  // dashboard run on, so the three can't disagree about what o'clock it is.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Spam-tap guard: without it every tap in a fast burst fires its own push
+  // before the first transition starts, stacking several `/pet/[id]` screens.
+  // Unlocked whenever Home regains focus.
+  const navLock = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      avatarNavLockRef.current = false;
-      setAvatarFocusKey((k) => k + 1);
+      navLock.current = false;
     }, [])
   );
+  const openPet = (pet: Pet) => {
+    if (navLock.current) return;
+    navLock.current = true;
+    router.push(`/pet/${pet.id}`);
+  };
 
-  // Hero carousel. The card itself is a fixed frame that never moves; inside it
-  // a track holding every pet slides horizontally, so one pet pushes the next
-  // one out of the way. No fading — pure translation, like a paged scroller.
-  //
-  // `track` is measured in slides: 0 = first pet centered, 1 = second, and
-  // fractional values while a finger is dragging.
-  const reduceMotion = useReduceMotion();
-  const [heroW, setHeroW] = useState(0);
-  const track = useSharedValue(0);
-  const dragStart = useSharedValue(0);
-  // heroW and lastIndex are MIRRORED into shared values rather than captured
-  // from the render closure. A worklet that closes over a plain JS number has to
-  // be re-created and re-serialized across the JS/UI thread boundary every time
-  // that number changes — and both of these change at exactly the moment the
-  // Supabase fetch resolves (layout measures, state.pets fills in). Doing that
-  // while a promise continuation is mutating JS objects is what aborted the
-  // process: the crash report shows a null write in Hermes' property store on
-  // the JS thread and a worklet throwing on the UI thread, simultaneously.
-  // Shared values are owned by the UI thread, so reading them costs no capture.
-  const heroWSV = useSharedValue(0);
-  const lastIndexSV = useSharedValue(0);
-  const trackStyle = useAnimatedStyle(() => {
-    "worklet";
-    return { transform: [{ translateX: -track.value * heroWSV.value }] };
-  });
+  const doc = useMemo(
+    () => homeDocument(state.pets, state.schedules, state.activities, state.reminders, state.units, now),
+    [state.pets, state.schedules, state.activities, state.reminders, state.units, now]
+  );
 
-  // Guards every animation completion callback that hops back to JS. A timing
-  // animation started here can still be running when Home unmounts or swaps
-  // render path (it mounts unhydrated, returns the empty state, then re-renders
-  // once Supabase data lands) — and a runOnJS callback that fires against a
-  // torn-down component is a native crash, not a catchable JS error, so the app
-  // just closes with nothing in the Metro log. Same failure class as the
-  // WheelPicker scrollTo fix in d1de0cc.
-  const alive = useSharedValue(true);
-  useEffect(() => {
-    alive.value = true;
-    return () => {
-      alive.value = false;
-      // Stop anything mid-flight so its callback can never run post-unmount.
-      cancelAnimation(track);
-    };
-  }, [alive, track]);
+  const me = state.members.find((m) => m.id === state.currentMemberId);
+  const hour = new Date().getHours();
+  const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}${me ? `, ${me.name}` : ""}`;
+  const trailing = <HeaderActions showCoins leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />;
 
-  // Keep the UI-thread mirrors in step with the JS-side values. Reduce-motion
-  // is folded into heroW: zero disables the gesture entirely, which is exactly
-  // the reduced-motion behavior (no finger tracking, instant index swap).
-  useEffect(() => {
-    heroWSV.value = reduceMotion ? 0 : heroW;
-  }, [heroW, reduceMotion, heroWSV]);
-
-  useEffect(() => {
-    lastIndexSV.value = Math.max(0, state.pets.length - 1);
-  }, [state.pets.length, lastIndexSV]);
-
-  // Keep the track aligned when the index changes from outside the gesture
-  // (the dots, a pet being deleted, the switch-pet sheet).
-  //
-  // Skips animating until the frame is measured: before that the track renders
-  // a single full-width slide, so tweening toward a multi-slide offset would
-  // animate against a width that is about to change.
-  useEffect(() => {
-    if (reduceMotion || heroW === 0) {
-      track.value = petIndex;
-      return;
-    }
-    track.value = withTiming(petIndex, { duration: 280, easing: Easing.out(Easing.cubic) });
-  }, [petIndex, reduceMotion, heroW, track]);
-
-  // Deleting the pet you're viewing (or any earlier one) leaves petIndex past
-  // the end of the list; without this the hero silently swaps to a different
-  // pet while every derived count keeps pointing at the old index.
-  const petCount = state.pets.length;
-  useEffect(() => {
-    setPetIndex((i) => (i > petCount - 1 ? Math.max(0, petCount - 1) : i));
-  }, [petCount]);
-
-  const pet = state.pets[Math.min(petIndex, state.pets.length - 1)] as (typeof state.pets)[number] | undefined;
-
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  // Horizontal swipe on the hero card pages between pets, like the web's
-  // pointer swipe. activeOffsetX keeps taps and vertical scrolls untouched.
-  //
-  // The threshold is deliberately generous (25, not 15): this Pan wraps the
-  // whole hero, including the small chips and the 7pt pet dots, and a tap that
-  // drifts past the threshold cancels the press instead of firing it. Small
-  // targets attract exactly that kind of imprecise tap.
-  // Every worklet below reads ONLY shared values and its own event argument —
-  // no captured JS state — so the gesture object never needs rebuilding when
-  // the pet list or the measured width changes.
-  const swipe = Gesture.Pan()
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-12, 12])
-    .onBegin(() => {
-      "worklet";
-      dragStart.value = track.value;
-    })
-    .onUpdate((e) => {
-      "worklet";
-      const w = heroWSV.value;
-      if (w === 0) return;
-      const last = lastIndexSV.value;
-      let next = dragStart.value - e.translationX / w;
-      // Rubber-band past the ends instead of letting the track run off.
-      if (next < 0) next = next * 0.3;
-      else if (next > last) next = last + (next - last) * 0.3;
-      track.value = next;
-    })
-    .onEnd((e) => {
-      "worklet";
-      const w = heroWSV.value;
-      if (w === 0) return;
-      const last = lastIndexSV.value;
-      // Decide the target slide from where the drag ended plus its velocity, so
-      // a quick flick pages even when it didn't travel far.
-      const projected = track.value - (e.velocityX / w) * 0.15;
-      const target = Math.max(0, Math.min(last, Math.round(projected)));
-      track.value = withTiming(target, { duration: 280, easing: Easing.out(Easing.cubic) }, (done) => {
-        "worklet";
-        // Commit the index once the slide lands — the rest of the page (meals
-        // bar, reminders) reads off petIndex, so flipping it mid-flight would
-        // swap content under the moving track. `alive` gates the hop back to
-        // JS: without it an unmount during the 280ms slide crashes natively.
-        if (done && alive.value) runOnJS(setPetIndex)(target);
-      });
-    });
-
-  if (!hydrated || !pet) {
+  if (!hydrated) {
     return (
-      <TabScreen title="Home" trailing={<HeaderActions showCoins />} refreshControl={refreshControl}>
-        {hydrated ? (
-          <View style={{ marginTop: 16 }}>
-            <EmptyState
-              icon="paw"
-              title="No pets yet"
-              body="Add your first pet to start tracking their care together."
-              cta="Add a pet"
-              onCta={() => router.push("/pets")}
-            />
-          </View>
-        ) : (
-          <View style={styles.loadingWrap}>
-            <Text style={styles.loadingText}>Loading your household…</Text>
-          </View>
-        )}
+      <TabScreen title="Home" subtitle={greeting} trailing={trailing} refreshControl={refreshControl}>
+        <PageLoading />
+      </TabScreen>
+    );
+  }
+
+  if (state.pets.length === 0) {
+    return (
+      <TabScreen title="Home" subtitle={greeting} trailing={trailing} refreshControl={refreshControl}>
+        <View style={{ marginTop: 16 }}>
+          <EmptyState
+            icon="paw"
+            title="No pets yet"
+            body="Add your first pet and this page becomes the household's day: what's been done, what's late, and who needs you next."
+            cta="Add a pet"
+            onCta={() => router.push("/pet/new")}
+          />
+        </View>
         <Welcome />
       </TabScreen>
     );
   }
 
-  const me = state.members.find((m) => m.id === state.currentMemberId);
-  // Meals for ANY pet — every slide in the carousel renders its own bar, so this
-  // can't be derived from the selected pet alone.
-  //
-  // The pet's feeding schedule (when set on the Logs tab) is the source of
-  // truth for meals per day; otherwise the canonical daily target (breed plan
-  // → species default) so a plan-less cat targets 3 meals, not a hardcoded 2.
-  const mealsFor = (p: (typeof state.pets)[number]) => {
-    const target = effectiveDailyTarget(p, "fed", state.schedules) ?? 2;
-    const count = state.activities.filter(
-      (a) => a.petId === p.id && a.type === "fed" && a.ts >= startOfDay.getTime()
-    ).length;
-    return { target, count, pct: Math.min(100, Math.round((count / target) * 100)) };
+  const ledeTint = colors[LEDE_TINT[doc.lede.kind]];
+
+  /** The lede's single button. Two of the seven levers need more than a tap
+   *  (a portion, which medicine), so those are a door and the rest act here. */
+  const runLede = () => {
+    const action = doc.lede.action;
+    if (!action) return;
+    if (action.kind === "route") {
+      router.push(action.href);
+      return;
+    }
+    if (action.kind === "feed") {
+      setFeedFor(action.pet);
+      setFeedOpen(true);
+      return;
+    }
+    logAction(action.pet.id, action.type);
   };
 
-  // Household-wide outstanding alerts, deduped by pet+title (the data can hold
-  // duplicates) — Home shows one calm summary line, the details live on /inbox.
-  const alertCount = new Set(state.reminders.filter((r) => r.alert && !r.done).map((r) => `${r.petId}|${r.title}`)).size;
+  /** A care line's value logs that lever, for that pet, right there. */
+  const pressLine = (pet: Pet, type: ActionType) => {
+    if (type === "fed") {
+      setFeedFor(pet);
+      setFeedOpen(true);
+      return;
+    }
+    if (type === "meds" || type === "vet") {
+      router.push("/logs");
+      return;
+    }
+    logAction(pet.id, type);
+  };
 
-  // Reminders are household-wide, NOT scoped to the pet in the hero — every
-  // pet's next few items share one list, each row tagged with whose it is.
-  const upcomingReminders = state.reminders.filter((r) => !r.done).sort((a, b) => a.due - b.due).slice(0, 3);
-
-  const hour = new Date().getHours();
-  const greeting = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${me?.name}`;
-
-  const multiPet = state.pets.length > 1;
+  const edit = (pet: Pet, stat: "weight" | "age") => {
+    setEditing({ pet, stat });
+    setEditOpen(true);
+  };
 
   return (
-    <TabScreen
-      title="Home"
-      subtitle={greeting}
-      // The streak pill goes INSIDE the island (not beside it) — a fragment of
-      // siblings in `headerRight` leaves only one of them tappable. See
-      // components/HeaderActions.tsx.
-      trailing={<HeaderActions showCoins leading={<StreakPill streak={state.streak} onPress={() => setStreakOpen(true)} />} />}
-      refreshControl={refreshControl}
-    >
-      {/* Pet hero — a FIXED card frame; the pets themselves ride a track that
-          slides inside it, so one pet pushes the next out of the way. */}
-      <View style={styles.hero} onLayout={(e) => setHeroW(e.nativeEvent.layout.width)}>
-        <GestureDetector gesture={swipe}>
-          <View style={styles.heroViewport}>
-            {/* Before the frame is measured, render ONLY the current pet at full
-                width. Rendering every slide with an undefined width lays them
-                out side by side at content width, which overflows the frame and
-                thrashes layout on the first pass. */}
-            <Animated.View style={[styles.heroTrack, trackStyle]}>
-              {(heroW === 0 ? [pet] : state.pets).map((p) => (
-                <View key={p.id} style={[styles.heroSlide, heroW === 0 ? styles.heroSlideFull : { width: heroW }]}>
-                  <View style={styles.heroTop}>
-                    <PressableScale
-                      key={`${p.id}-${avatarFocusKey}`}
-                      onPress={() => {
-                        if (avatarNavLockRef.current) return;
-                        avatarNavLockRef.current = true;
-                        router.push(`/pet/${p.id}`);
-                      }}
-                      accessibilityLabel={`Open ${p.name}'s details`}
-                      hitSlop={6}
-                      overflowsBounds
-                    >
-                      <PetAvatar pet={p} size="lg" idle />
-                    </PressableScale>
-                    {/* Visible switch affordance next to the swipe gesture: the
-                        name row opens the same switch-pet sheet other tabs use. */}
-                    <PressableScale
-                      scaleTo={0.99}
-                      onPress={() => (multiPet ? setPetPickerOpen(true) : router.push(`/pet/${p.id}`))}
-                      accessibilityLabel={multiPet ? "Switch pet" : `Open ${p.name}'s details`}
-                      style={styles.heroText}
-                    >
-                      <View style={styles.heroTextInner}>
-                        <View style={styles.heroNameRow}>
-                          <Text numberOfLines={1} style={styles.heroName}>
-                            {p.name}
-                          </Text>
-                          {/* Points down, not right: this row opens a sheet
-                              below rather than pushing a screen. The 2px drop
-                              centers it on the letters: Inter's ascender is far
-                              taller than its x-height, so the text line box's
-                              center sits ~2px above the middle of the glyphs. */}
-                          <View style={styles.heroNameChevron}>
-                            <Icon name="chevron-down" size={15} color={colors.label3} strokeWidth={3} />
-                          </View>
-                        </View>
-                        <Text numberOfLines={1} style={styles.heroBreed}>
-                          {p.breed}
-                        </Text>
-                      </View>
-                    </PressableScale>
-                  </View>
+    <TabScreen title="Home" subtitle={greeting} trailing={trailing} refreshControl={refreshControl}>
+      <Text style={styles.standfirst}>{doc.standfirst}</Text>
 
-                  <View style={styles.chipsRow}>
-                    <PressableScale
-                      scaleTo={PRESS_SCALE_SMALL}
-                      onPress={() => setEditingStat("age")}
-                      accessibilityLabel="Edit age"
-                      hitSlop={10}
-                    >
-                      <Chip>
-                        <Text style={styles.chipText}>{formatAge(p.ageYears)}</Text>
-                        <Icon name="chevron-right" size={9} color={colors.label3} />
-                      </Chip>
-                    </PressableScale>
-                    <PressableScale
-                      scaleTo={PRESS_SCALE_SMALL}
-                      onPress={() => setEditingStat("weight")}
-                      accessibilityLabel="Edit weight"
-                      hitSlop={10}
-                    >
-                      <Chip>
-                        <Text style={styles.chipText}>{formatWeight(p.weightKg, state.units)}</Text>
-                        <Icon name="chevron-right" size={9} color={colors.label3} />
-                      </Chip>
-                    </PressableScale>
-                  </View>
-
-                  <View style={{ marginTop: 16 }}>
-                    <View style={styles.mealsRow}>
-                      <Text style={styles.mealsLabel}>Meals today</Text>
-                      <Text style={styles.mealsCount}>
-                        {mealsFor(p).count} <Text style={{ color: colors.label3 }}>of {mealsFor(p).target}</Text>
-                      </Text>
-                    </View>
-                    <MealsBar pct={mealsFor(p).pct} />
-                  </View>
-                </View>
-              ))}
-            </Animated.View>
+      {/* The lede. One thing, one sentence, one button — and the animal it is
+          about, because the answer to "who needs me" should be a face rather
+          than a name in a list. */}
+      <Chapter label={doc.lede.kicker} tint={ledeTint}>
+        <View style={styles.lede}>
+          <View style={styles.ledeText}>
+            <Text style={[styles.headline, doc.lede.kind === "overdue" && { color: colors.red }]}>{doc.lede.headline}</Text>
+            {doc.lede.detail ? <Text style={styles.ledeDetail}>{doc.lede.detail}</Text> : null}
           </View>
-        </GestureDetector>
+          {doc.lede.pet ? (
+            <PressableScale
+              onPress={() => openPet(doc.lede.pet!)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${doc.lede.pet.name}`}
+              hitSlop={6}
+              overflowsBounds
+            >
+              <PetAvatar pet={doc.lede.pet} size="lg" idle />
+            </PressableScale>
+          ) : null}
+        </View>
+        {doc.lede.action ? (
+          <View style={styles.ledeAction}>
+            {/* A chevron means you leave the page. The two levers that need
+                more than a tap (which portion, which medicine) are a door; the
+                rest are done from here and get a tick instead. */}
+            <PageButton
+              label={doc.lede.action.label}
+              tint={ledeTint}
+              icon={doc.lede.action.kind === "route" ? "list" : "check"}
+              chevron={doc.lede.action.kind === "route"}
+              onPress={runLede}
+            />
+          </View>
+        ) : null}
+      </Chapter>
 
-        {/* Dots sit OUTSIDE the viewport — part of the fixed frame, not the slide. */}
-        {multiPet && (
-          <>
-            <View style={styles.dotsRow}>
-              {state.pets.map((p, i) => (
-                <PetDot key={p.id} index={i} track={track} onPress={() => setPetIndex(i)} label={`Show ${p.name}`} />
-              ))}
-            </View>
-            {/* Dots alone were too subtle a cue — say it in words too, so
-                nobody thinks the household has one pet. Plain JS render off
-                petIndex; deliberately NOT driven by the live track value (no
-                worklet, no re-serialization risk — see the crash-rule note). */}
-            <Text style={styles.heroCount}>
-              swipe to switch · {petIndex + 1} of {petCount} pets
-            </Text>
-          </>
+      {/* The page's figure: every pet's day on one clock, under one now-line.
+          It sits directly under the lede rather than below the shortcuts,
+          because a household with nothing pinned would otherwise get a block of
+          teaching prose between the two things it opened the app to see. */}
+      <Chapter label="Today so far" tint={colors.label3}>
+        <TodayRail days={doc.days} now={now} showFaces={state.pets.length > 1} onPressPet={openPet} />
+      </Chapter>
+
+      <Chapter label="One tap" tint={colors.label3}>
+        <QuickRow />
+      </Chapter>
+
+      {doc.sections.map((section, i) => (
+        <PetChapter
+          key={section.pet.id}
+          section={section}
+          first={i === 0}
+          onOpenPet={() => openPet(section.pet)}
+          onEditAge={() => edit(section.pet, "age")}
+          onEditWeight={() => edit(section.pet, "weight")}
+          onPressLine={(type) => pressLine(section.pet, type)}
+        />
+      ))}
+
+      {/* What the family has written down for later. Alerts the app raised
+          float to the top of it; the queue itself lives in the Inbox. */}
+      <Chapter label="Ahead" tint={colors.label3}>
+        {doc.ahead.length === 0 ? (
+          <Text style={styles.aheadEmpty}>Nothing written down. Anything the family shouldn&apos;t forget goes in the inbox.</Text>
+        ) : (
+          doc.ahead.map((item) => (
+            <PressableScale
+              key={item.id}
+              onPress={() => router.push("/inbox")}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.label}${item.who ? `, ${item.who}` : ""}, ${item.when}`}
+            >
+              <View style={styles.aheadRow}>
+                <Text numberOfLines={1} style={styles.aheadLabel}>
+                  {item.label}
+                  {item.who ? <Text style={styles.aheadWho}> {item.who}</Text> : null}
+                </Text>
+                <Text
+                  style={[
+                    styles.aheadWhen,
+                    item.tint === "late" && { color: colors.red },
+                    item.tint === "warn" && { color: colors.orange },
+                  ]}
+                >
+                  {item.when}
+                </Text>
+              </View>
+            </PressableScale>
+          ))
         )}
+        <View style={styles.aheadAction}>
+          <PageButton
+            label="Inbox"
+            tint={colors.accent}
+            icon="bell"
+            count={doc.openReminders}
+            size="sm"
+            onPress={() => router.push("/inbox")}
+          />
+        </View>
+      </Chapter>
+
+      <Chapter label="Notes" tint={colors.label3}>
+        <Endnote pets={state.pets} />
+      </Chapter>
+
+      {/* Colophon: the three doors off this page, as the exits they are. */}
+      <View style={styles.colophon}>
+        <PageButton label="Log care" tint={colors.accent} icon="check" full onPress={() => router.push("/logs")} />
+        <PageButton label="The routine" tint={colors.green} icon="heart-text" full onPress={() => router.push("/plan")} />
+        <PageButton label="Your pets" tint={colors.label2} icon="paw" full onPress={() => router.push("/pets")} />
       </View>
 
-      {/* This pet's supply levels, right off the hero — colour + percentage only */}
-      <StockStrip pet={pet} />
-
-      {/* One calm entry point for everything that needs attention */}
-      {alertCount > 0 && (
-        <PressableScale onPress={() => router.push("/inbox")} accessibilityRole="button" style={{ marginTop: 12 }}>
-          <View style={styles.alertBanner}>
-            <View style={styles.alertIcon}>
-              <Icon name="bell" size={16} color={colors.white} />
-            </View>
-            <Text style={styles.alertLabel}>
-              {alertCount} thing{alertCount === 1 ? "" : "s"} need{alertCount === 1 ? "s" : ""} attention
-            </Text>
-            <Icon name="chevron-right" size={15} color={withAlpha(colors.red, 0.7)} />
-          </View>
-        </PressableScale>
-      )}
-
-      {/* One-tap logging for the things this family does every day — the fixed
-          buttons log against whichever pet the carousel above is showing */}
-      <ShortcutsSection pet={pet} />
-
-      {/* Every pet's next reminders, each tagged with whose it is */}
-      <SectionHeader
-        trailing={
-          <PressableScale
-            scaleTo={PRESS_SCALE_SMALL}
-            onPress={() => router.push("/inbox")}
-            accessibilityRole="button"
-            accessibilityLabel="See all reminders"
-            hitSlop={10}
-          >
-            <Text style={styles.seeAll}>See all</Text>
-          </PressableScale>
-        }
-      >
-        Reminders
-      </SectionHeader>
-      <Group>
-        {upcomingReminders.length > 0 ? (
-          upcomingReminders.map((r) => {
-            const rPet = state.pets.find((p) => p.id === r.petId);
-            const overdue = dueLabel(r.due) === "overdue";
-            return (
-              <Row
-                key={r.id}
-                onPress={() => router.push("/inbox")}
-                leading={
-                  rPet ? (
-                    <PetAvatar pet={rPet} size="sm" showCosmetics={false} />
-                  ) : (
-                    <IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} size={40} />
-                  )
-                }
-                title={
-                  <Text numberOfLines={1} style={[styles.reminderTitle, r.alert ? { color: colors.red } : null]}>
-                    {r.title}
-                  </Text>
-                }
-                subtitle={
-                  <View style={styles.reminderTagRow}>
-                    {rPet ? (
-                      <View style={styles.petTag}>
-                        <Text numberOfLines={1} style={styles.petTagLabel}>
-                          {rPet.name}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <Text numberOfLines={1} style={[styles.reminderDue, overdue ? { color: colors.red } : null]}>
-                      {overdue ? "overdue" : `due ${dueLabel(r.due)}`}
-                    </Text>
-                  </View>
-                }
-                trailing={<Chevron />}
-              />
-            );
-          })
-        ) : (
-          <Row
-            onPress={() => router.push("/inbox")}
-            leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} size={40} />}
-            title="No upcoming reminders"
-            subtitle="Tap to add one for the family"
-            trailing={<Chevron />}
+      {editing ? (
+        editing.stat === "weight" ? (
+          <EditStatSheet
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            title={`${editing.pet.name}'s weight`}
+            label={`Weight (${weightUnitLabel(state.units)})`}
+            min={0.1}
+            max={state.units === "lb" ? 260 : 120}
+            unit={weightUnitLabel(state.units)}
+            initialValue={kgToUnit(editing.pet.weightKg, state.units)}
+            onSave={(v) => {
+              const kg = unitToKg(v, state.units);
+              addWeight(editing.pet.id, kg);
+              toast("scale", `${editing.pet.name}'s weight updated`, formatWeight(kg, state.units));
+            }}
           />
-        )}
-      </Group>
+        ) : (
+          <EditStatSheet
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            title={`${editing.pet.name}'s age`}
+            label="Age (years)"
+            min={0}
+            max={30}
+            unit="yr"
+            initialValue={editing.pet.ageYears}
+            onSave={(ageYears) => {
+              // Typing an age switches the pet back to approximate-age mode — a
+              // stored birth date would otherwise silently win on next load.
+              editPet(editing.pet.id, {
+                name: editing.pet.name,
+                breed: editing.pet.breed,
+                ageYears,
+                weightKg: editing.pet.weightKg,
+                cupGrams: editing.pet.cupGrams,
+                ...(editing.pet.birthDate != null ? { birthDate: null } : {}),
+              });
+              toast("calendar", `${editing.pet.name}'s age updated`, formatAge(ageYears));
+            }}
+          />
+        )
+      ) : null}
 
-      {/* Ambient breed trivia about whichever pet the hero is showing — closes
-          the page on a light note, below everything actionable */}
-      <BreedFactsSection pet={pet} />
-
-      {/* Switch pet */}
-      <Sheet open={petPickerOpen} onClose={() => setPetPickerOpen(false)}>
-        <View style={{ marginBottom: 12 }}>
-          <SheetTitle>Switch pet</SheetTitle>
-        </View>
-        <Group>
-          {state.pets.map((p, i) => (
-            <Row
-              key={p.id}
-              onPress={() => {
-                setPetIndex(i);
-                setPetPickerOpen(false);
-              }}
-              leading={<PetAvatar pet={p} size="sm" />}
-              title={p.name}
-              subtitle={p.breed}
-              trailing={p.id === pet.id ? <Icon name="check" size={18} color={colors.accent} /> : undefined}
-            />
-          ))}
-        </Group>
-      </Sheet>
-
-      <EditStatSheet
-        open={editingStat === "weight"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s weight`}
-        label={`Weight (${weightUnitLabel(state.units)})`}
-        min={0.1}
-        max={state.units === "lb" ? 260 : 120}
-        unit={weightUnitLabel(state.units)}
-        initialValue={kgToUnit(pet.weightKg, state.units)}
-        onSave={(v) => {
-          const kg = unitToKg(v, state.units);
-          addWeight(pet.id, kg);
-          toast("scale", `${pet.name}'s weight updated`, formatWeight(kg, state.units));
-        }}
-      />
-      <EditStatSheet
-        open={editingStat === "age"}
-        onClose={() => setEditingStat(null)}
-        title={`${pet.name}'s age`}
-        label="Age (years)"
-        min={0}
-        max={30}
-        unit="yr"
-        initialValue={pet.ageYears}
-        onSave={(ageYears) => {
-          // Typing an age switches the pet back to approximate-age mode — a
-          // stored birth date would otherwise silently win on next load.
-          editPet(pet.id, {
-            name: pet.name,
-            breed: pet.breed,
-            ageYears,
-            weightKg: pet.weightKg,
-            cupGrams: pet.cupGrams,
-            ...(pet.birthDate != null ? { birthDate: null } : {}),
-          });
-          toast("calendar", `${pet.name}'s age updated`, formatAge(ageYears));
-        }}
-      />
+      {feedFor ? <FeedPortionSheet pet={feedFor} open={feedOpen} onClose={() => setFeedOpen(false)} /> : null}
 
       <StreakCalendarSheet open={streakOpen} onClose={() => setStreakOpen(false)} />
 
@@ -610,86 +369,50 @@ export default function Home() {
   );
 }
 
-const makeStyles = (colors: Colors) => StyleSheet.create({
-  seeAll: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
-  reminderTitle: { fontSize: 16, fontFamily: font.medium, color: colors.label },
-  reminderTagRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
-  // The per-pet tag: a compact chip so a household-wide list still reads as
-  // "whose is this?" at a glance.
-  petTag: {
-    maxWidth: 120,
-    borderRadius: radius.full,
-    backgroundColor: colors.fill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  petTagLabel: { fontSize: 11.5, fontFamily: font.semibold, color: colors.label2 },
-  reminderDue: { fontSize: 13, fontFamily: font.regular, color: colors.label2, flexShrink: 1 },
-  streakPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.orangeSoft,
-  },
-  streakPillLabel: { fontSize: 14, fontFamily: font.bold, color: colors.orange },
-  // Untransformed wrapper so the glow scales independently of the pill's
-  // squash — see the matching pair on CoinPill in components/ui.tsx.
-  streakPillWrap: { position: "relative" },
-  // Flush, not inset — the native header clips outside its bounds. See the
-  // matching coinGlow note in components/ui.tsx.
-  streakGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: radius.full,
-    backgroundColor: colors.orange,
-    opacity: 0,
-  },
-  loadingWrap: { marginTop: 40, alignItems: "center" },
-  loadingText: { fontSize: 14, fontFamily: font.regular, color: colors.label2, textAlign: "center" },
-  // The frame is fixed and clips the sliding track. Padding lives on each slide
-  // (not here) so the track spans the full card width and a pet slides edge to
-  // edge instead of stopping inside the padding.
-  // marginTop gives the hero card a little breathing room below the greeting /
-  // header so it doesn't crowd the title the moment the page opens.
-  hero: { marginTop: 10, borderRadius: radius.lg, backgroundColor: colors.card, paddingBottom: 10, overflow: "hidden", ...cardShadow },
-  heroViewport: { overflow: "hidden" },
-  heroTrack: { flexDirection: "row" },
-  heroSlide: { paddingHorizontal: 20, paddingTop: 28 },
-  // Pre-measurement: fill the frame instead of sizing to content.
-  heroSlideFull: { width: "100%" },
-  heroTop: { flexDirection: "row", alignItems: "center", gap: 16 },
-  heroText: { flex: 1, minWidth: 0 },
-  heroTextInner: { minHeight: 44, justifyContent: "center" },
-  heroNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  heroNameChevron: { marginTop: 2 },
-  heroName: { fontSize: 22, fontFamily: font.bold, letterSpacing: -0.3, color: colors.label, flexShrink: 1 },
-  heroBreed: { fontSize: 14, fontFamily: font.medium, color: colors.label2 },
-  chipsRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chipText: { fontSize: 12, fontFamily: font.medium, color: colors.label2 },
-  mealsRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
-  mealsLabel: { fontSize: 13, fontFamily: font.semibold, color: colors.label2 },
-  mealsCount: { fontSize: 13, fontFamily: font.semibold, color: colors.label },
-  barTrack: { marginTop: 6, height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: "hidden" },
-  barFill: { height: "100%", borderRadius: 3 },
-  dotsRow: { marginTop: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  heroCount: { marginTop: 8, textAlign: "center", fontSize: 12, fontFamily: font.medium, color: colors.label3 },
-  // Width/color are animated by PetDot; this carries the constant geometry.
-  petDot: { width: DOT_SIZE, height: DOT_SIZE, borderRadius: DOT_SIZE / 2 },
-  alertBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.redSoft,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  alertIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
-  alertLabel: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: font.semibold, color: colors.red },
-});
+const makeStyles = (colors: Colors) =>
+  StyleSheet.create({
+    standfirst: { marginTop: 10, maxWidth: 360, fontSize: 15, fontFamily: font.regular, lineHeight: 22, color: colors.label2 },
+
+    lede: { paddingTop: 14, flexDirection: "row", alignItems: "center", gap: 16 },
+    ledeText: { flex: 1, minWidth: 0 },
+    // The page's largest type after the title. It is a sentence, not a metric:
+    // a number here would tell you a quantity instead of a thing to do.
+    headline: { fontSize: 27, fontFamily: font.bold, letterSpacing: -0.6, lineHeight: 32, color: colors.label },
+    ledeDetail: { marginTop: 6, fontSize: 14.5, fontFamily: font.regular, color: colors.label2 },
+    ledeAction: { marginTop: 18, alignSelf: "flex-start" },
+
+    aheadRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 44, paddingVertical: 5 },
+    aheadLabel: { flex: 1, minWidth: 0, fontSize: 16, fontFamily: font.medium, letterSpacing: -0.2, color: colors.label },
+    aheadWho: { fontFamily: font.regular, color: colors.label3 },
+    aheadWhen: { fontSize: 14.5, fontFamily: font.semibold, color: colors.label2 },
+    aheadEmpty: { paddingTop: 12, maxWidth: 360, fontSize: 14.5, fontFamily: font.regular, lineHeight: 21, color: colors.label2 },
+    aheadAction: { marginTop: 14, alignSelf: "flex-start" },
+
+    colophon: { marginTop: 36, paddingTop: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.sep, gap: 8 },
+
+    streakPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      height: 32,
+      borderRadius: radius.full,
+      backgroundColor: colors.orangeSoft,
+    },
+    streakPillLabel: { fontSize: 14, fontFamily: font.bold, color: colors.orange },
+    // Untransformed wrapper so the glow scales independently of the pill's
+    // squash — see the matching pair on CoinPill in components/ui.tsx.
+    streakPillWrap: { position: "relative" },
+    // Flush, not inset — the native header clips outside its bounds. See the
+    // matching coinGlow note in components/ui.tsx.
+    streakGlow: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: radius.full,
+      backgroundColor: colors.orange,
+      opacity: 0,
+    },
+  });
