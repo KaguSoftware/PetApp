@@ -674,8 +674,8 @@ member can edit their own card but not someone else's (0040 guard).
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below).
-- `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: activity, reminders, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below); `components/logs/` — the Logs dashboard's tiles + summary; `components/plan/` — the Care document primitives (`Chapter`/`PageButton` are shared, not plan-only); `components/inbox/` — the unified notifications+reminders page (see below).
+- `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: inbox, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
 - `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
 
@@ -790,6 +790,62 @@ page can only stop being per-pet if the pet moves into the action.
 - **Needs a device pass on:** the calendar chip's 32pt + hitSlop target on Android (the sibling
   trick is the fix for the nested-pressable bug, but it has not been finger-tested), the chooser
   panel opening under a row mid-scroll, and the tile washes in dark mode.
+
+### Notifications + Reminders are ONE page now — `/inbox` (2026-08-05, owner request) — built, `tsc` + `eslint` clean, iOS + Android bundle (10.7 MB), no migration needed
+
+The brief: *"unify notifications and reminders together, following the logic and style we've used
+in strictly the following: logs and care."* So the merge is real (one route, one model) and the
+build is the other two pages' vocabulary, each used where it is strongest.
+
+**Why they were one thing all along.** `/activity` was the bell — auto-raised care alerts, then the
+family feed. `/reminders` was the list the family wrote for itself. Both sorted by time, both keyed
+by pet, both said "overdue", and both had their own filter sheet over the same reminders table.
+Neither could show the third thing that actually pings a phone: the **care schedules the Logs tab
+sets**, which `lib/notifications.ts` has always merged with reminders before handing them to the OS.
+The page now shows the same merge the notification queue holds.
+
+- **`lib/inbox.ts` (new, pure)** — the document model, in the shape `carePlan.ts` established:
+  chapters, but by **horizon** (`now` / `today` / `tomorrow` / `week` / `later`) instead of by
+  rhythm. `inboxDocument(reminders, pets, schedules, activities, now, filter)` folds three sources
+  into one `InboxItem[]`: alerts (deduped `petId|title`, always `now` — an unresolved warning has no
+  future tense), reminders (past-due repeating ones **rolled forward with `nextRepeatDue`**, exactly
+  as the scheduler rolls them, so the page can't promise a time the OS queue doesn't hold), and care
+  schedule occurrences. Tone vocabulary and clock strings are `careDashboard.ts`'s own
+  (`clockLabel`/`sinceLabel`), so a thing reads here exactly as it does on the tile it came from.
+  - **Care schedules reach only to the end of tomorrow.** A household with times set makes 5–6 slots
+    a day; a 7-day horizon buries every reminder under forty rows of "Milo · Dinner". The week's
+    rhythm is the Care tab's day rail's question. Lateness is one **roll-up per lever** (from
+    `summarizeLever`), not a row per pet per missed slot — the Logs tile already owns that detail.
+- **`app/inbox.tsx`** — standfirst → `InboxSummary` → horizon chapters → folded "Done" → the feed →
+  colophon. **Ahead of you is the Care document** (`Chapter`/`PageButton` imported from
+  `components/plan/Chapter` — one copy, two pages; hue means *when* here as it means *how often*
+  there). **Behind you is the Logs timeline verbatim** — the same `ActivityRow`, day-grouped, paged
+  at 40, including its tap-your-own-log-to-undo. One `FilterSheet` with all three axes now
+  (pet/type/tag/range) instead of one per screen. A 60s tick keeps horizons honest.
+- **`components/inbox/InboxSummary.tsx`** — the Logs `HouseholdToday` card doing this page's job.
+  The difference: here a face **is** a control (filtering by pet is the whole utility of a shared
+  inbox), and it is the same `PetChoiceRow` the Logs chooser uses, in radio mode, so a selected pet
+  looks selected exactly as it does one tab over. Household of one → no faces.
+- **`components/inbox/InboxRow.tsx`** — a document line, not a card row: label left, time right in
+  the item's tone, hairline under. Two targets only — the 44pt completion circle, and the body,
+  which expands to the sentence explaining what raised the item plus where it leads (Book a vet /
+  Log it / Open pet / **Delete**). Delete moved into the expansion deliberately: a permanent × a
+  thumb-width from a permanent ✓ on a list read in a hurry. Undo is unchanged (`undoableDelete`).
+- **`components/inbox/AddReminderSheet.tsx`** — the old add form lifted out whole; nothing about it
+  was the problem. `?new=1` still opens it on arrival.
+- **Header trailing is ONE wrapper `View`**, not the fragment `/reminders` used to return —
+  `react-native-screens` hit-tests only the first `headerRight` subview, so that page's filter and +
+  could not both be tappable (the round-5 bug, still live in the file until it was deleted).
+- **Deleted `app/activity.tsx` + `app/reminders.tsx`.** Every door repointed: bell, Home's alert
+  banner + all three reminder rows, Care's colophon (label now "Inbox"), pet detail's "All".
+  `app/_layout.tsx` registers `inbox` (root routes ship unguarded otherwise). Deep links updated in
+  `lib/notifications.ts` and `supabase/functions/send-due-reminders`; `NotificationSync` now
+  **allow-lists** the tapped url (`/logs` or `/inbox`) instead of passing it through, because a
+  notification queued by an older build still names the route that no longer exists.
+- **Needs a device pass on:** the completion circle vs. the body press on Android (adjacent
+  pressables, the thing that has bitten this app before), the summary's face row inside a card that
+  is itself inside a scroll view, and how long the "now" chapter gets in a household that has both
+  alerts and several late levers.
 
 ## Roadmap
 1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030 applied; 0031 STILL PENDING — invites stay broken until it lands**, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.

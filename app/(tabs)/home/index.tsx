@@ -314,7 +314,7 @@ export default function Home() {
   };
 
   // Household-wide outstanding alerts, deduped by pet+title (the data can hold
-  // duplicates) — Home shows one calm summary line, the details live on /activity.
+  // duplicates) — Home shows one calm summary line, the details live on /inbox.
   const alertCount = new Set(state.reminders.filter((r) => r.alert && !r.done).map((r) => `${r.petId}|${r.title}`)).size;
 
   // Reminders are household-wide, NOT scoped to the pet in the hero — every
@@ -455,7 +455,7 @@ export default function Home() {
 
       {/* One calm entry point for everything that needs attention */}
       {alertCount > 0 && (
-        <PressableScale onPress={() => router.push("/activity")} accessibilityRole="button" style={{ marginTop: 12 }}>
+        <PressableScale onPress={() => router.push("/inbox")} accessibilityRole="button" style={{ marginTop: 12 }}>
           <View style={styles.alertBanner}>
             <View style={styles.alertIcon}>
               <Icon name="bell" size={16} color={colors.white} />
@@ -477,7 +477,7 @@ export default function Home() {
         trailing={
           <PressableScale
             scaleTo={PRESS_SCALE_SMALL}
-            onPress={() => router.push("/reminders")}
+            onPress={() => router.push("/inbox")}
             accessibilityRole="button"
             accessibilityLabel="See all reminders"
             hitSlop={10}
@@ -496,7 +496,7 @@ export default function Home() {
             return (
               <Row
                 key={r.id}
-                onPress={() => router.push("/reminders")}
+                onPress={() => router.push("/inbox")}
                 leading={
                   rPet ? (
                     <PetAvatar pet={rPet} size="sm" showCosmetics={false} />
@@ -529,7 +529,7 @@ export default function Home() {
           })
         ) : (
           <Row
-            onPress={() => router.push("/reminders")}
+            onPress={() => router.push("/inbox")}
             leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} size={40} />}
             title="No upcoming reminders"
             subtitle="Tap to add one for the family"

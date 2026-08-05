@@ -54,14 +54,20 @@ export default function NotificationSync() {
     return () => sub.remove();
   }, []);
 
-  // Route notification taps to the reminders screen.
+  // Route notification taps to whatever the notification named — the Inbox for
+  // a reminder, the Logs dashboard for a care slot — falling back to the Inbox,
+  // which is now the page that lists both.
   useEffect(() => {
     let sub: { remove: () => void } | undefined;
     try {
       sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const url = response.notification.request.content.data?.url;
         try {
-          router.push(typeof url === "string" && url.startsWith("/") ? (url as "/reminders") : "/reminders");
+          // Allow-listed, not passed through: a notification queued by an older
+          // build still names `/reminders`, a route that no longer exists, and
+          // pushing it would dead-end the tap. Everything reminder-shaped lands
+          // on the Inbox now.
+          router.push(url === "/logs" ? "/logs" : "/inbox");
         } catch {
           // no-op — navigation not ready
         }

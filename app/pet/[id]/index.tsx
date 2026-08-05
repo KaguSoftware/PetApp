@@ -615,7 +615,7 @@ export default function PetDetailPage() {
         trailing={
           <PressableScale
             scaleTo={PRESS_SCALE_SMALL}
-            onPress={() => router.push("/activity")}
+            onPress={() => router.push("/inbox")}
             accessibilityRole="button"
             accessibilityLabel="All activity"
             hitSlop={10}
