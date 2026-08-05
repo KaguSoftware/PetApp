@@ -7,7 +7,7 @@ import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
  * Top-right bell on tab pages, badged with the outstanding care-alert count.
- * Tapping opens the activity hub — mirrors the web NotificationBell.
+ * Tapping opens the Inbox — alerts, reminders and the family feed on one page.
  */
 export default function NotificationBell() {
   const colors = useColors();
@@ -26,8 +26,8 @@ export default function NotificationBell() {
   }
   return (
     <Pressable
-      onPress={() => router.push("/activity")}
-      accessibilityLabel={count > 0 ? `Activity, ${count} alerts` : "Activity"}
+      onPress={() => router.push("/inbox")}
+      accessibilityLabel={count > 0 ? `Inbox, ${count} alerts` : "Inbox"}
       accessibilityRole="button"
       // The pill is 38pt; 6pt on every side brings the real touch target to
       // 50pt, comfortably past the 44pt minimum, without overlapping its

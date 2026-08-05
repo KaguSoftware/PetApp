@@ -78,15 +78,14 @@ function RootStack() {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-          <Stack.Screen name="activity" />
           <Stack.Screen name="coins" />
+          <Stack.Screen name="inbox" />
           <Stack.Screen name="instructions" />
           <Stack.Screen name="instructions/[id]" />
           <Stack.Screen name="join" />
           <Stack.Screen name="medications" />
           <Stack.Screen name="nutrition" />
           <Stack.Screen name="nutrition/[section]" />
-          <Stack.Screen name="reminders" />
           <Stack.Screen name="pet/[id]/index" />
           <Stack.Screen name="pet/[id]/card" />
           <Stack.Screen name="pet/new" />

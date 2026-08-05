@@ -12,22 +12,15 @@ import PageLoading from "@/components/PageLoading";
 import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
 import { TabScreen } from "@/components/Screen";
 import Sheet from "@/components/Sheet";
-import { TimeWheelPicker } from "@/components/WheelPicker";
 import CareTile from "@/components/logs/CareTile";
 import HouseholdToday from "@/components/logs/HouseholdToday";
 import PetChoicePanel, { PetChoiceRow } from "@/components/PetChoice";
-import { ACTION_ICON, Icon } from "@/components/Icons";
 import {
   AccentButton,
-  Chevron,
   FieldLabel,
   Group,
-  IconCircle,
   PressableScale,
-  Row,
   SectionHeader,
-  Segmented,
-  SelectableChip,
   SheetFooter,
   SheetSubtitle,
   SheetTitle,
@@ -91,13 +84,6 @@ export default function LogsScreen() {
   const editor = useSheetTarget<{ petId: string; type: ActionType; medId?: string }>();
   const vetDetail = useSheetTarget<{ petId: string }>();
 
-  const [retroOpen, setRetroOpen] = useState(false);
-  const [retroPetId, setRetroPetId] = useState("");
-  const [retroType, setRetroType] = useState<ActionType | null>(null);
-  const [retroMedId, setRetroMedId] = useState<string | null>(null);
-  const [retroDay, setRetroDay] = useState<"today" | "yesterday">("today");
-  const [retroTime, setRetroTime] = useState("");
-
   const [vetReason, setVetReason] = useState("");
   const [vetClinic, setVetClinic] = useState("");
   const vetClinicRef = useRef<TextInput>(null);
@@ -126,13 +112,6 @@ export default function LogsScreen() {
     startOfDay.setHours(0, 0, 0, 0);
     return state.activities.filter((a) => a.ts >= startOfDay.getTime());
   }, [state.activities, now]);
-
-  // Open reminders across the household, so the Reminders row can say what is
-  // waiting instead of being a blind link.
-  const reminderSummary = useMemo(() => {
-    const open = state.reminders.filter((r) => !r.done);
-    return { open: open.length, overdue: open.filter((r) => r.due < now).length };
-  }, [state.reminders, now]);
 
   // "All caught up" — fires once when every lever asking for something today
   // has been answered, for every pet.
@@ -260,45 +239,6 @@ export default function LogsScreen() {
     }
   };
 
-  const retroPet = petById(retroPetId) ?? pets[0];
-  const retroActions: ActionType[] = [
-    "fed",
-    "water",
-    ...(retroPet.species === "cat" ? (["litter"] as ActionType[]) : (["walk"] as ActionType[])),
-    "groomed",
-    ...(retroPet.meds.length > 0 ? (["meds"] as ActionType[]) : []),
-    "vet",
-  ];
-
-  // Timestamp for the retro-log sheet. The wheel always yields a valid "HH:MM",
-  // so the only failure left is picking a time that hasn't happened yet.
-  const retroTimestamp = (() => {
-    const m = /^(\d{1,2}):(\d{2})$/.exec(retroTime);
-    if (!m) return null;
-    const d = new Date();
-    if (retroDay === "yesterday") d.setDate(d.getDate() - 1);
-    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-    const ts = d.getTime();
-    return ts > Date.now() ? null : ts;
-  })();
-  const retroNeedsMed = retroType === "meds" && retroPet.meds.length > 1 && retroMedId == null;
-  const retroTypeValid = retroType != null && retroActions.includes(retroType);
-
-  const openRetro = () => {
-    setRetroPetId(pets[0].id);
-    setRetroType(null);
-    setRetroMedId(null);
-    setRetroDay("today");
-    // Seed the wheel at the current time — the common case is "I did this a
-    // little while ago", so the user spins back rather than starting blank.
-    // Floored to the wheel's 5-minute grid so the row it parks on IS the value
-    // that gets logged (and stays in the past).
-    const d = new Date();
-    const m5 = d.getMinutes() - (d.getMinutes() % 5);
-    setRetroTime(`${String(d.getHours()).padStart(2, "0")}:${String(m5).padStart(2, "0")}`);
-    setRetroOpen(true);
-  };
-
   const pendingIndex = pending ? levers.indexOf(pending.type) : -1;
   const pendingSummary = pending ? summaries[pendingIndex] : undefined;
   const feedPet = feed.data ? petById(feed.data.petId) : undefined;
@@ -383,44 +323,6 @@ export default function LogsScreen() {
       </View>
       <Text style={styles.gridHint}>Tap a tile to log it. The calendar in its corner sets the times everyone gets reminded about.</Text>
 
-      {/* Reminders and the vet marketplace used to be reachable ONLY from the
-          bell, which put them two taps behind an icon most people read as
-          "notifications". They belong next to the care they relate to. */}
-      <SectionHeader>Tasks &amp; care</SectionHeader>
-      <Group>
-        <Row
-          onPress={openRetro}
-          leading={<IconCircle icon="clock" tint={colors.accent} bg={colors.accentSoft} />}
-          title={<Text style={styles.accentTitle}>Forgot to log something earlier?</Text>}
-          subtitle="Backfill from earlier today or yesterday"
-        />
-        <Row
-          onPress={() => router.push("/reminders")}
-          leading={<IconCircle icon="bell" tint={colors.orange} bg={colors.orangeSoft} />}
-          title="Reminders"
-          subtitle={
-            reminderSummary.open === 0
-              ? "Nothing scheduled — tap to add one"
-              : reminderSummary.overdue > 0
-                ? `${reminderSummary.overdue} overdue · ${reminderSummary.open} open`
-                : `${reminderSummary.open} open across the household`
-          }
-          trailing={<Chevron />}
-        />
-        <Row
-          onPress={() => router.push("/medications")}
-          leading={<IconCircle icon="pill" tint={colors.red} bg={colors.redSoft} />}
-          title="Medication"
-          trailing={<Chevron />}
-        />
-        <Row
-          onPress={() => router.push("/vets")}
-          leading={<IconCircle icon="cross" tint={colors.green} bg={colors.greenSoft} />}
-          title="Find a vet"
-          trailing={<Chevron />}
-        />
-      </Group>
-
       {/* Today's timeline — every pet, newest first. Capped at 6; the rest live
           behind "See all" so a busy household doesn't turn this into an
           endless scroll. */}
@@ -468,92 +370,6 @@ export default function LogsScreen() {
       <Text style={styles.footnote}>
         Every action is shared with the family and shows up in Activity. Tap the bell any time to see what everyone&apos;s been up to.
       </Text>
-
-      {/* Retro logging — backfill something from earlier today or yesterday. */}
-      <Sheet open={retroOpen} onClose={() => setRetroOpen(false)}>
-        <SheetTitle>Log an earlier action</SheetTitle>
-        <SheetSubtitle>Backfill something that already happened</SheetSubtitle>
-
-        {pets.length > 1 ? (
-          <>
-            <FieldLabel>Which pet</FieldLabel>
-            <PetChoiceRow
-              pets={pets}
-              selectedId={retroPet.id}
-              onPress={(petId) => {
-                setRetroPetId(petId);
-                setRetroMedId(null);
-                const next = petById(petId);
-                // Species and medication lists differ per pet — a carried-over
-                // selection could log a litter change for a dog.
-                if (next && retroType && !leverApplies(next, retroType)) setRetroType(null);
-              }}
-            />
-          </>
-        ) : null}
-
-        <FieldLabel>What happened</FieldLabel>
-        <View style={styles.chipsWrap}>
-          {retroActions.map((type) => {
-            const a = ACTION_ICON[type];
-            const active = retroType === type;
-            return (
-              <SelectableChip
-                key={type}
-                label={ACTIONS[type].label}
-                selected={active}
-                onPress={() => {
-                  setRetroType(type);
-                  if (type !== "meds") setRetroMedId(null);
-                }}
-                leading={<Icon name={a.icon} size={14} color={active ? colors.white : colors.label} />}
-              />
-            );
-          })}
-        </View>
-
-        {retroType === "meds" && retroPet.meds.length > 1 ? (
-          <>
-            <FieldLabel>Which med?</FieldLabel>
-            <View style={styles.chipsWrap}>
-              {retroPet.meds.map((m) => (
-                <SelectableChip key={m.id} label={m.name} selected={retroMedId === m.id} onPress={() => setRetroMedId(m.id)} />
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        <FieldLabel>When</FieldLabel>
-        <Segmented
-          options={[
-            { value: "today", label: "Earlier today" },
-            { value: "yesterday", label: "Yesterday" },
-          ]}
-          value={retroDay}
-          onChange={setRetroDay}
-        />
-        {/* 5-minute steps (the picker's default): backfilling doesn't need
-            minute precision, and it cuts the minute wheel from 60 rows to 12. */}
-        <TimeWheelPicker value={retroTime} onChange={setRetroTime} />
-        {retroTimestamp == null ? <Text style={styles.retroHint}>That time hasn&apos;t happened yet — pick a time in the past.</Text> : null}
-
-        <SheetFooter>
-          <AccentButton
-            disabled={!retroTypeValid || retroTimestamp == null || retroNeedsMed}
-            onPress={() => {
-              const ts = retroTimestamp;
-              if (!retroType || !retroTypeValid || ts == null || retroNeedsMed) return;
-              const medId = retroType === "meds" ? (retroMedId ?? retroPet.meds[0]?.id) : undefined;
-              if (logAction(retroPet.id, retroType, undefined, ts, medId)) {
-                successHaptic();
-                setRetroOpen(false);
-              }
-            }}
-          >
-            Log it
-          </AccentButton>
-        </SheetFooter>
-      </Sheet>
 
       {/* Vet visit details — offered right after logging a vet action. */}
       <Sheet open={vetDetail.open} onClose={vetDetail.dismiss}>
@@ -647,11 +463,8 @@ const makeStyles = (colors: Colors) =>
     gridRow: { flexDirection: "row", gap: 10, alignItems: "stretch" },
     gridFiller: { flex: 1 },
     gridHint: { marginTop: 10, paddingHorizontal: 4, fontSize: 12, fontFamily: font.regular, color: colors.label3, lineHeight: 17 },
-    accentTitle: { fontSize: 16, fontFamily: font.semibold, color: colors.accent },
-    retroHint: { marginTop: 8, fontSize: 13, fontFamily: font.regular, color: colors.red },
     seeAll: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
     emptyToday: { paddingHorizontal: 4, paddingVertical: 10 },
     emptyTodayText: { fontSize: 13, fontFamily: font.regular, color: colors.label2 },
     footnote: { marginTop: 16, paddingHorizontal: 4, fontSize: 13, fontFamily: font.regular, color: colors.label2, lineHeight: 20 },
-    chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   });

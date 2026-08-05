@@ -14,7 +14,7 @@ import { useColors, type Colors } from "@/lib/theme";
 /**
  * Full log history for the household — what the Logs dashboard's "See all"
  * opens once a day's timeline runs past six entries. Same day-grouping and
- * paging as /activity (the bell's full history), and like the dashboard it
+ * paging as /inbox (the bell's full history), and like the dashboard it
  * covers every pet at once: each row already names the pet it was for, so a
  * per-pet selector would only ever hide entries.
  */

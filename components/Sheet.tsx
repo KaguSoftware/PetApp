@@ -37,11 +37,14 @@ export function SheetScrollable({ children }: { children: React.ReactElement }) 
 export default function Sheet({
   open,
   onClose,
+  onClosed,
   children,
   scrollable = true,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Fires once the exit animation has finished AND the Modal has unmounted. */
+  onClosed?: () => void;
   children: React.ReactNode;
   scrollable?: boolean;
 }) {
@@ -66,6 +69,32 @@ export default function Sheet({
   const scrollY = useSharedValue(0);
   const engaged = useSharedValue(false);
   const dragStart = useSharedValue(0);
+
+  // A RN Modal is a native window, and presenting one while the previous is
+  // still up is silently dropped on iOS. So anything that wants to open a
+  // second sheet (or navigate) has to wait for THIS, not for a guessed timer —
+  // a 220ms hand-off against a 240ms exit is exactly what made the Care tab's
+  // "Set daily times" appear to do nothing at all. The extra frame lets the
+  // unmount commit land before the next window asks to present.
+  const closedRef = useRef(onClosed);
+  closedRef.current = onClosed;
+  const finishClose = useCallback(() => setMounted(false), []);
+
+  // Fired from an effect on `mounted`, not from the animation callback: the
+  // callback runs before React has committed the unmount, so a listener that
+  // presents another Modal was still racing a live native window. An effect
+  // can only run after that commit, which makes the hand-off deterministic
+  // instead of a frame-count bet.
+  const armed = useRef(false);
+  useEffect(() => {
+    if (open) {
+      armed.current = true;
+      return;
+    }
+    if (mounted || !armed.current) return;
+    armed.current = false;
+    closedRef.current?.();
+  }, [open, mounted]);
 
   useEffect(() => {
     if (open) {
@@ -98,10 +127,10 @@ export default function Sheet({
       // that continues a drag doesn't hitch at the finger's release point.
       if (liveH.value > travelH.value) travelH.value = liveH.value;
       progress.value = withTiming(0, { duration: 240, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
-        if (done) runOnJS(setMounted)(false);
+        if (done) runOnJS(finishClose)();
       });
     }
-  }, [open, mounted, progress, reduceMotion, dragY, scrollY, engaged, travelH, liveH]);
+  }, [open, mounted, progress, reduceMotion, dragY, scrollY, engaged, travelH, liveH, finishClose]);
 
   // The gestures are memoized because their IDENTITY matters: inner scrollables
   // hold a block relation against contentPan via SheetPanContext, and a fresh

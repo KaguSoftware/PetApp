@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   for (const reminder of due) {
     const users = (memberships ?? []).filter((m) => m.household_id === reminder.household_id).map((m) => m.user_id);
     for (const token of (tokens ?? []).filter((t) => users.includes(t.user_id))) {
-      messages.push({ to: token.expo_token, title: reminder.title, data: { url: "/reminders" } });
+      messages.push({ to: token.expo_token, title: reminder.title, data: { url: "/inbox" } });
     }
   }
 

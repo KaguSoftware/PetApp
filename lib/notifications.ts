@@ -86,7 +86,7 @@ export async function syncScheduledNotifications(
         at,
         title: reminder.title,
         body: pets.find((p) => p.id === reminder.petId)?.name,
-        url: "/reminders",
+        url: "/inbox",
       }));
 
     const fromSchedules: PendingNotification[] = schedules.flatMap((s) => {
