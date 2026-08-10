@@ -1,61 +1,103 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import EmptyState from "@/components/EmptyState";
 import HeaderActions from "@/components/HeaderActions";
 import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
+import PetAvatar from "@/components/PetAvatar";
 import ScheduleEditorSheet from "@/components/ScheduleEditorSheet";
 import { TabScreen } from "@/components/Screen";
+import Sheet from "@/components/Sheet";
+import { actionTone, type IconName } from "@/components/Icons";
 import CareItemSheet from "@/components/plan/CareItemSheet";
-import { Chapter, PageButton, PlanRow, RunIn } from "@/components/plan/Chapter";
-import DayRail from "@/components/plan/DayRail";
-import TimesPanel from "@/components/plan/TimesPanel";
-import { AccentButton } from "@/components/ui";
-import { breedNotes, carePlanDocument, dayRailMarks, RHYTHM_LABEL, type PlanEntry, type PlanLine, type Rhythm } from "@/lib/carePlan";
-import { CARE_PLANS, type ActionType, type Pet } from "@/lib/data";
+import CareStatTile, { type TilePetValue } from "@/components/plan/CareStatTile";
+import { PageButton } from "@/components/plan/Chapter";
+import NutritionHero from "@/components/plan/NutritionHero";
+import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SheetTitle } from "@/components/ui";
+import { carePlanDocument, breedNotes, type PlanChapter, type PlanEntry, type PlanLine, type Rhythm } from "@/lib/carePlan";
+import { type ActionType, type Pet } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
-import { energyBasis } from "@/lib/nutrition";
 import { useStore } from "@/lib/store";
-import { font, useColors, withAlpha, type Colors } from "@/lib/theme";
+import { font, useColors, type Colors } from "@/lib/theme";
 import { usePullToRefresh } from "@/lib/useRefresh";
 
 /**
- * Hue means *time* on this page, not category. Once you've learned that the
- * teal chapter is the once-a-year stuff, you stop reading the headings.
+ * The slow chapters merge into one board, so the cadence has to move into the
+ * value: "1×" under an "Every week" heading becomes "Weekly" on its own.
+ * Day-chapter values (counts, grams, times) already carry their meaning.
  */
-const RHYTHM_TINT: Record<Rhythm, keyof Colors> = {
-  day: "accent",
-  week: "green",
-  weeks: "orange",
-  year: "vetTint",
-};
-
-/** "Leo", "Leo and Milo", "Leo, Milo and Nala" — first names, like a family. */
-function join(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+function cadenceLabel(rhythm: Rhythm, value: string): string {
+  if (rhythm === "day") return value;
+  if (/[ap]m|:/i.test(value)) return value; // scheduled times print as-is
+  const unit = rhythm === "week" ? "a week" : rhythm === "weeks" ? "a month" : "a year";
+  if (value === "1×") return rhythm === "week" ? "Weekly" : rhythm === "weeks" ? "Monthly" : "Yearly";
+  if (/^\d/.test(value) && value.endsWith("×")) return `${value} ${unit}`;
+  if (/wks|mo\b|yr\b|days/.test(value)) return `Every ${value.replace(/^every /i, "")}`;
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+/** Merge the week / weeks / year chapters into one ordered line list. The same
+ *  item can sit in two slow chapters when two pets run different cadences —
+ *  merged by id here so it is one tile with both pets on it. */
+function slowLines(chapters: PlanChapter[]): { line: PlanLine; rhythms: Map<string, Rhythm> }[] {
+  const out: { line: PlanLine; rhythms: Map<string, Rhythm> }[] = [];
+  const byId = new Map<string, { line: PlanLine; rhythms: Map<string, Rhythm> }>();
+  for (const chapter of chapters) {
+    if (chapter.rhythm === "day") continue;
+    for (const line of chapter.lines) {
+      const existing = byId.get(line.id);
+      if (existing) {
+        existing.line = { ...existing.line, entries: [...existing.line.entries, ...line.entries] };
+        for (const e of line.entries) existing.rhythms.set(e.pet.id, chapter.rhythm);
+        const idx = out.findIndex((o) => o.line.id === line.id);
+        if (idx >= 0) out[idx] = existing;
+      } else {
+        const item = { line, rhythms: new Map(line.entries.map((e) => [e.pet.id, chapter.rhythm] as const)) };
+        byId.set(line.id, item);
+        out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
+/** "2×" + "3×" → "2–3×", "300 g" + "460 g" → "300–460 g"; anything messier
+ *  than a numeric spread steps back to "Varies" — the floor has the detail. */
+function summarize(values: string[]): string {
+  const nums = values.map((v) => /^(\d+)\s*(×|g)$/.exec(v)).filter((m): m is RegExpExecArray => m != null);
+  if (nums.length === values.length && nums.every((m) => m[2] === nums[0][2])) {
+    const ns = nums.map((m) => Number(m[1]));
+    const lo = Math.min(...ns);
+    const hi = Math.max(...ns);
+    const unit = nums[0][2] === "g" ? " g" : "×";
+    return lo === hi ? `${lo}${unit}` : `${lo}–${hi}${unit}`;
+  }
+  return "Varies";
+}
+
+/** The hue an item without a loggable action still deserves — an all-violet
+ *  "Routine care" board would say nothing at a glance. */
+const CANON_TONE: Record<string, { tint: keyof Colors; bg: keyof Colors }> = {
+  play: { tint: "green", bg: "greenSoft" },
+  potty: { tint: "orange", bg: "orangeSoft" },
+  ears: { tint: "vetTint", bg: "vetBg" },
+  bathing: { tint: "vetTint", bg: "vetBg" },
+  dental: { tint: "accent", bg: "accentSoft" },
+  nails: { tint: "groomTint", bg: "groomBg" },
+  weight: { tint: "green", bg: "greenSoft" },
+  parasite: { tint: "orange", bg: "orangeSoft" },
+};
+
 /**
- * Care — a document whose chapters are rhythms.
+ * Care — the household's routine as a stat board.
  *
- * The page used to be a per-pet reference manual behind a picker at the top:
- * pick Milo, scroll nutrition, guides, links, a checklist, a feeding table and
- * a three-level accordion; pick Luna, scroll it all again. Three things changed.
- *
- * It is organised by *when*, not by *what*. Every day, every week, every few
- * weeks, once a year — the axis pet care actually runs on, so an item's chapter
- * tells you as much as its name does.
- *
- * There are no cards, tiles or containers anywhere on it. Labels sit left,
- * values right, hairline rules divide chapters, and the space between them does
- * the work a border used to.
- *
- * And nothing here asks which pet. A value carries the face of the animal it
- * belongs to and is itself the button, so `(Leo) 2×` opens Leo's meals with no
- * question in between. A household of one drops the faces and the page becomes
- * a plain label-and-number document.
+ * A violet Nutrition hero opens the page, then two 2-up tile grids: "Every
+ * day" (counts and portions) and "Routine care" (everything slower, cadences
+ * spelled out). The value is the hero of every tile — 2×, 460 g, Weekly — set
+ * large over a soft wash of the item's own hue, the same visual language as
+ * the Logs dashboard. When the pets disagree, the tile floor names each
+ * animal's number next to its face, and tapping asks which pet first.
  */
 export default function CarePage() {
   const colors = useColors();
@@ -68,19 +110,23 @@ export default function CarePage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [openNote, setOpenNote] = useState<string | null>(null);
-  // Hoisted out of the item sheet: two RN Modals cannot be stacked, so the
-  // sheet closes and hands its intent up rather than opening the editor itself.
+  // "Which pet?" for a tile whose pets disagree. Values here outlive `open`
+  // so the sheet slides away instead of vanishing.
+  const [choice, setChoice] = useState<{ line: PlanLine; tint: string; values: string[] } | null>(null);
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const chosenRef = useRef<PlanEntry | null>(null);
+  // Hoisted out of the item sheet: two RN Modals cannot be stacked, so each
+  // sheet closes and hands its intent up rather than opening the next itself.
   const [timesFor, setTimesFor] = useState<{ pet: Pet; type: ActionType; medId?: string } | null>(null);
   const [timesOpen, setTimesOpen] = useState(false);
-  const [timesPanel, setTimesPanel] = useState(false);
 
   const pets = state.pets;
   const premium = state.premium;
 
   const chapters = useMemo(() => carePlanDocument(pets, state.schedules, premium), [pets, state.schedules, premium]);
-  const days = useMemo(() => dayRailMarks(pets, state.schedules), [pets, state.schedules]);
+  const daily = chapters.find((c) => c.rhythm === "day");
+  const slow = useMemo(() => slowLines(chapters), [chapters]);
   const notes = useMemo(() => (premium ? breedNotes(pets) : []), [pets, premium]);
-  const kcal = useMemo(() => pets.reduce((sum, p) => sum + energyBasis(p).kcal, 0), [pets]);
   const openReminders = state.reminders.filter((r) => !r.done).length;
   const medCount = pets.reduce((n, p) => n + p.meds.length, 0);
 
@@ -108,179 +154,183 @@ export default function CarePage() {
     );
   }
 
-  const pick = (line: PlanLine, entry: PlanEntry, tint: string) => {
-    setPicked({ line, entry, tint });
+  const toneFor = (line: PlanLine): { icon: IconName; tint: string; bg: string } => {
+    if (line.action) return { ...actionTone(colors, line.action), icon: line.icon };
+    const canon = CANON_TONE[line.id];
+    return canon
+      ? { icon: line.icon, tint: colors[canon.tint], bg: colors[canon.bg] }
+      : { icon: line.icon, tint: colors.accent, bg: colors.accentSoft };
+  };
+
+  const pick = (line: PlanLine, entry: PlanEntry) => {
+    setPicked({ line, entry, tint: toneFor(line).tint });
     setSheetOpen(true);
   };
 
-  const vetNames = pets.filter((p) => CARE_PLANS[p.breed]).map((p) => p.name);
-  const ownNames = pets.filter((p) => !CARE_PLANS[p.breed]).map((p) => p.name);
-  const solo = pets.length === 1 ? pets[0] : undefined;
+  /** One item as one tile. */
+  const renderLine = (line: PlanLine, rhythmOf: (petId: string) => Rhythm) => {
+    const tone = toneFor(line);
+    const values = line.entries.map((e) => cadenceLabel(rhythmOf(e.pet.id), e.value));
+    const agreed = line.entries.length === 1 || (values.every((v) => v === values[0]) && line.entries.every((e) => e.suggested == null));
 
-  const standfirst = !premium
-    ? `The general routine for ${pets.every((p) => p.species === pets[0].species) ? `a ${pets[0].species}` : "a cat and a dog"}.`
-    : solo
-      ? CARE_PLANS[solo.breed]
-        ? `A vet-built plan for a ${solo.breed}.`
-        : `Your own targets for ${solo.name}.`
-      : ownNames.length === 0
-        ? "Vet-built for every pet in the house."
-        : vetNames.length === 0
-          ? "Your own targets, for all of them."
-          : `Vet-built for ${join(vetNames)} · your own targets for ${join(ownNames)}.`;
+    if (agreed) {
+      const entry = line.entries[0];
+      return (
+        <CareStatTile
+          key={line.id}
+          icon={tone.icon}
+          tint={tone.tint}
+          bg={tone.bg}
+          value={values[0]}
+          label={line.label}
+          caption={entry.extra}
+          own={line.entries.some((e) => e.suggested != null)}
+          onPress={() => pick(line, entry)}
+        />
+      );
+    }
+
+    const petValues: TilePetValue[] = line.entries.map((e, i) => ({
+      pet: e.pet,
+      value: values[i],
+      own: e.suggested != null,
+    }));
+    return (
+      <CareStatTile
+        key={line.id}
+        icon={tone.icon}
+        tint={tone.tint}
+        bg={tone.bg}
+        value={summarize(values)}
+        label={line.label}
+        petValues={petValues}
+        onPress={() => {
+          setChoice({ line, tint: tone.tint, values });
+          setChoiceOpen(true);
+        }}
+      />
+    );
+  };
+
+  /** An odd tile count keeps the last tile at half width. */
+  const grid = (tiles: React.ReactNode[]) => (
+    <View style={styles.grid}>
+      {tiles}
+      {tiles.length % 2 === 1 ? <View style={styles.gridFiller} /> : null}
+    </View>
+  );
 
   return (
     <TabScreen title="Care" trailing={<HeaderActions />} refreshControl={refreshControl}>
-      {/* Masthead. The faces that used to sit here were the same faces the rail
-          below carries, and there they each own a day rather than just naming
-          an animal — one row of pets on the page is enough. */}
-      <Text style={styles.standfirst}>{standfirst}</Text>
+      <NutritionHero pets={pets} />
 
-      {/* The page's opening figure: one rail per pet on a shared clock,
-          carrying the icons that used to run down the left edge of every row.
-          Always drawn, empty rows included — hiding it when nothing was
-          scheduled hid the whole idea from everyone who had never set a time. */}
-      <DayRail days={days} tint={colors.accent} now={Date.now()} showFaces={pets.length > 1} />
-      <View style={styles.railAction}>
-        <PageButton
-          label={days.some((d) => d.marks.length > 0) ? "Edit daily times" : "Set daily times"}
-          tint={colors.accent}
-          icon="clock"
-          full
-          expanded={timesPanel}
-          onPress={() => setTimesPanel((v) => !v)}
-        />
-        {timesPanel ? (
-          <TimesPanel
-            pets={pets}
-            schedules={state.schedules}
-            tint={colors.accent}
-            onEdit={(pet, type, medId) => {
-              setTimesFor({ pet, type, medId });
-              setTimesOpen(true);
-            }}
-          />
-        ) : null}
-      </View>
+      {daily ? (
+        <View>
+          <SectionHeader>Every day</SectionHeader>
+          {grid(daily.lines.map((line) => renderLine(line, () => "day")))}
+        </View>
+      ) : null}
 
-      {chapters.map((chapter) => {
-        const tint = colors[RHYTHM_TINT[chapter.rhythm]];
-        const density = chapter.rhythm === "day" ? "day" : chapter.rhythm === "week" ? "week" : "runIn";
-        return (
-          <Chapter key={chapter.rhythm} label={RHYTHM_LABEL[chapter.rhythm]} tint={tint}>
-            {density === "runIn" ? (
-              <RunIn
-                lines={chapter.lines}
-                tint={tint}
-                onPick={(line, entry) => pick(line, entry, tint)}
-                onGuide={(guideId) => router.push(`/instructions/${guideId}`)}
-              />
-            ) : (
-              chapter.lines.map((line) => (
-                <PlanRow
-                  key={line.id}
-                  line={line}
-                  tint={tint}
-                  density={density}
-                  showFaces={pets.length > 1}
-                  onPick={(entry) => pick(line, entry, tint)}
-                  onGuide={(guideId) => router.push(`/instructions/${guideId}`)}
-                />
-              ))
-            )}
-            {chapter.rhythm === "day" ? (
-              <View style={styles.chapterAction}>
-                <PageButton
-                  label={`Nutrition · ${kcal.toLocaleString()} kcal a day`}
-                  tint={tint}
-                  icon="bowl"
-                  full
-                  onPress={() =>
-                    router.push(pets.length === 1 ? { pathname: "/nutrition", params: { petId: pets[0].id } } : "/nutrition")
-                  }
-                />
-              </View>
-            ) : null}
-          </Chapter>
-        );
-      })}
-
-      {/* The upgrade is an endnote, not a wall. Everything above it already
-          works; PetPal+ swaps the species defaults for the breed's own numbers,
-          which is a claim best made after someone has read their own routine. */}
-      {!premium ? (
-        <View style={styles.upgrade}>
-          <View style={styles.upgradeRule} />
-          <Text style={styles.upgradeTitle}>PetPal+</Text>
-          <Text style={styles.upgradeBody}>
-            Swaps this for a vet-built plan: portions in grams from {solo ? `${solo.name}'s` : "each pet's"} age and weight, the
-            cadences {solo ? `a ${solo.breed}` : "each breed"} actually needs, and the vet&apos;s note behind every line.
-          </Text>
-          <View style={styles.upgradeCta}>
-            <AccentButton onPress={() => setPaywallOpen(true)}>Unlock PetPal+</AccentButton>
-          </View>
+      {slow.length > 0 ? (
+        <View>
+          <SectionHeader>Routine care</SectionHeader>
+          {grid(slow.map(({ line, rhythms }) => renderLine(line, (petId) => rhythms.get(petId) ?? "week")))}
         </View>
       ) : null}
 
       {notes.length > 0 ? (
-        <Chapter label="Notes" tint={colors.label3}>
-          {notes.map((note) => {
-            const isOpen = openNote === note.breed;
-            return (
-              <View key={note.breed} style={styles.note}>
-                <Text style={styles.noteBreed}>{note.breed}</Text>
-                <Text numberOfLines={isOpen ? undefined : 3} style={styles.noteBody}>
-                  {note.intro}
-                </Text>
-                <View style={styles.noteAction}>
-                  <PageButton
-                    label={isOpen ? "View less" : "View more"}
-                    tint={colors.accent}
-                    size="sm"
-                    chevron={false}
-                    onPress={() => setOpenNote(isOpen ? null : note.breed)}
-                  />
-                </View>
-              </View>
-            );
-          })}
-        </Chapter>
+        <View>
+          <SectionHeader>Breed notes</SectionHeader>
+          <Group>
+            {notes.map((note) => {
+              const isOpen = openNote === note.breed;
+              return (
+                <PressableScale
+                  key={note.breed}
+                  onPress={() => setOpenNote(isOpen ? null : note.breed)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isOpen }}
+                  accessibilityLabel={`${note.breed} notes`}
+                >
+                  <View style={styles.note}>
+                    <View style={styles.noteHead}>
+                      <Text style={styles.noteBreed}>{note.breed}</Text>
+                      <Text style={styles.noteToggle}>{isOpen ? "Less" : "More"}</Text>
+                    </View>
+                    <Text numberOfLines={isOpen ? undefined : 3} style={styles.noteBody}>
+                      {note.intro}
+                    </Text>
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </Group>
+        </View>
       ) : null}
 
-      {/* Guides, as controls rather than as a line of coloured words. Every
-          item that has one also links to it from its own row, so this is the
-          index rather than the only door. */}
-      <Chapter label="Guides" tint={colors.label3}>
-        <View style={styles.index}>
-          {GUIDES.map((g) => (
-            <PageButton
-              key={g.id}
-              label={g.title}
-              tint={g.tint}
-              icon={g.icon}
-              chevron={false}
-              size="sm"
-              onPress={() => router.push(`/instructions/${g.id}`)}
-            />
-          ))}
-        </View>
-      </Chapter>
+      <SectionHeader>Guides</SectionHeader>
+      <View style={styles.grid}>
+        {GUIDES.map((g) => (
+          <View key={g.id} style={styles.gridCell}>
+            <PageButton label={g.title} tint={g.tint} icon={g.icon} full chevron={false} onPress={() => router.push(`/instructions/${g.id}`)} />
+          </View>
+        ))}
+        {GUIDES.length % 2 === 1 ? <View style={styles.gridFiller} /> : null}
+      </View>
 
-      {/* Colophon: the utilities. They belong to Care but they are not rhythms,
-          so putting them in a chapter would be a tile board wearing a rule. As
-          the last thing on the page they have to look like the exits they are. */}
-      <View style={styles.colophon}>
+      {!premium ? (
+        <Group style={styles.upsell}>
+          <Row
+            leading={<IconCircle icon="sparkles" tint={colors.accent} bg={colors.accentSoft} />}
+            title="PetPal+"
+            subtitle={pets.length === 1 ? `A vet-built plan for a ${pets[0].breed}` : "Vet-built plans for each breed"}
+            trailing={<Chevron />}
+            onPress={() => setPaywallOpen(true)}
+          />
+        </Group>
+      ) : null}
+
+      <SectionHeader>Tasks &amp; tools</SectionHeader>
+      <View style={styles.buttons}>
         <PageButton label="Medication" tint={colors.red} icon="pill" count={medCount} full onPress={() => router.push("/medications")} />
-        <PageButton
-          label="Inbox"
-          tint={colors.orange}
-          icon="bell"
-          count={openReminders}
-          full
-          onPress={() => router.push("/inbox")}
-        />
+        <PageButton label="Inbox" tint={colors.orange} icon="bell" count={openReminders} full onPress={() => router.push("/inbox")} />
         <PageButton label="Find a vet" tint={colors.vetTint} icon="cross" full onPress={() => router.push("/vets")} />
       </View>
+
+      {/* Which pet? — only for tiles whose pets disagree. Closes first, then
+          hands the chosen entry to the item sheet (one modal at a time). */}
+      {choice ? (
+        <Sheet
+          open={choiceOpen}
+          onClose={() => setChoiceOpen(false)}
+          onClosed={() => {
+            const entry = chosenRef.current;
+            chosenRef.current = null;
+            if (entry && choice) pick(choice.line, entry);
+          }}
+        >
+          <SheetTitle>{choice.line.label}</SheetTitle>
+          <View style={styles.choiceList}>
+            {choice.line.entries.map((entry, i) => (
+              <Row
+                key={entry.pet.id}
+                leading={<PetAvatar pet={entry.pet} size="sm" />}
+                title={entry.pet.name}
+                trailing={
+                  <View style={styles.choiceValueWrap}>
+                    <Text style={[styles.choiceValue, entry.suggested != null && { color: colors.accent }]}>{choice.values[i]}</Text>
+                    <Chevron />
+                  </View>
+                }
+                onPress={() => {
+                  chosenRef.current = entry;
+                  setChoiceOpen(false);
+                }}
+              />
+            ))}
+          </View>
+        </Sheet>
+      ) : null}
 
       {picked ? (
         <CareItemSheet
@@ -316,28 +366,20 @@ export default function CarePage() {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    standfirst: { marginTop: 10, maxWidth: 340, fontSize: 15, fontFamily: font.regular, lineHeight: 22, color: colors.label2 },
-    railAction: { marginTop: 18 },
-    chapterAction: { marginTop: 16 },
+    grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    gridCell: { flexBasis: "47%", flexGrow: 1 },
+    gridFiller: { flexBasis: "47%", flexGrow: 1 },
 
-    upgrade: { marginTop: 36 },
-    upgradeRule: { height: StyleSheet.hairlineWidth, backgroundColor: withAlpha(colors.accent, 0.3) },
-    upgradeTitle: { marginTop: 18, fontSize: 20, fontFamily: font.bold, letterSpacing: -0.35, color: colors.accent },
-    upgradeBody: { marginTop: 8, maxWidth: 360, fontSize: 14.5, fontFamily: font.regular, lineHeight: 22, color: colors.label2 },
-    upgradeCta: { marginTop: 20 },
+    note: { paddingHorizontal: 16, paddingVertical: 13 },
+    noteHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    noteBreed: { fontSize: 15, fontFamily: font.semibold, color: colors.label },
+    noteToggle: { fontSize: 13, fontFamily: font.medium, color: colors.accent },
+    noteBody: { marginTop: 4, fontSize: 13.5, fontFamily: font.regular, lineHeight: 20, color: colors.label2 },
 
-    note: { paddingTop: 14 },
-    noteBreed: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
-    noteBody: { marginTop: 3, fontSize: 13.5, fontFamily: font.regular, lineHeight: 20, color: colors.label2 },
-    noteAction: { marginTop: 10, alignSelf: "flex-start" },
+    buttons: { gap: 8 },
+    upsell: { marginTop: 28 },
 
-    index: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingTop: 12 },
-
-    colophon: {
-      marginTop: 36,
-      paddingTop: 20,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.sep,
-      gap: 8,
-    },
+    choiceList: { marginTop: 10 },
+    choiceValueWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+    choiceValue: { fontSize: 15, fontFamily: font.medium, color: colors.label2 },
   });

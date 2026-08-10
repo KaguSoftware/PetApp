@@ -12,7 +12,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/REPLACE_WITH_EAS_PROJECT_ID"
+      "url": "https://u.expo.dev/0a06b06f-28c0-4413-80e0-744083aede7d"
     },
     "ios": {
       "supportsTablet": false,
@@ -22,6 +22,7 @@
       }
     },
     "android": {
+      "package": "com.kagu.petpal",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

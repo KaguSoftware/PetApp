@@ -201,7 +201,7 @@ const makeStyles = (colors: Colors) =>
   StyleSheet.create({
     empty: { marginTop: 40, textAlign: "center", fontSize: 15, lineHeight: 22, fontFamily: font.regular, color: colors.label2 },
 
-    thesis: { paddingTop: 6, paddingHorizontal: 4, paddingBottom: 20 },
+    thesis: { paddingTop: 18, paddingHorizontal: 4, paddingBottom: 20 },
     thesisMark: { flexDirection: "row", alignItems: "center", gap: 9 },
     thesisRule: { width: 22, height: 2, borderRadius: 1, backgroundColor: colors.accent },
     thesisKicker: { fontSize: 11, fontFamily: font.bold, letterSpacing: 1.1, textTransform: "uppercase", color: colors.accent },

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Dimensions, LayoutChangeEvent, Platform, StyleSheet, Text, View } from "react-native";
+import { Dimensions, LayoutChangeEvent, Platform, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   cancelAnimation,
@@ -27,7 +27,6 @@ const SLOT = 92;
 /** The visible tile inside a slot (avatar disc + name). */
 const TILE = 76;
 const REEL_H = 88;
-const ADD_ZONE = 64;
 /** Hold this long on a pet to jump to its profile instead of selecting it. */
 const PROFILE_HOLD_MS = 500;
 /** Landing animation after a flick has coasted to a stop, or after a tap. */
@@ -83,16 +82,10 @@ export default function PetSelectorRow({
   pets,
   selectedId,
   onSelect,
-  onAdd,
 }: {
   pets: Pet[];
   selectedId: string;
   onSelect: (petId: string) => void;
-  /**
-   * Overrides what the pinned "+" does. It is always shown; without this it
-   * pushes the add-a-pet flow, which is what every screen wants.
-   */
-  onAdd?: () => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -335,22 +328,6 @@ export default function PetSelectorRow({
           ))}
         </View>
       </GestureDetector>
-      {/* Pinned to the far right, on top of the reel rather than in a lane of
-          its own — a lane would shift the reel's centre left of the page's
-          centre by half its width, which is the whole thing being centered
-          here. Opaque, so tiles rotating past simply disappear behind it. */}
-      <View style={styles.addZone} pointerEvents="box-none">
-        <PressableScale
-          haptic
-          onPress={onAdd ?? (() => router.push("/pet/new"))}
-          accessibilityRole="button"
-          accessibilityLabel="Add a pet"
-        >
-          <View style={styles.addCircle}>
-            <Text style={styles.addGlyph}>+</Text>
-          </View>
-        </PressableScale>
-      </View>
     </View>
   );
 }
@@ -480,25 +457,4 @@ const makeStyles = (colors: Colors) =>
       textAlign: "center",
     },
     nameSelected: { fontFamily: font.semibold, color: colors.label },
-    addZone: {
-      position: "absolute",
-      right: 0,
-      top: 0,
-      bottom: 0,
-      width: ADD_ZONE,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.card,
-      borderLeftWidth: StyleSheet.hairlineWidth,
-      borderLeftColor: colors.sep,
-    },
-    addCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: withAlpha(colors.accent, 0.1),
-    },
-    addGlyph: { fontSize: 22, lineHeight: 26, fontFamily: font.medium, color: colors.accent },
   });

@@ -12,11 +12,19 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mpsyprtnejjbnhyaiidn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wc3lwcnRuZWpqYm5oeWFpaWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NDg2NTUsImV4cCI6MjA5OTUyNDY1NX0.8Fv91EKMy2rrICtW7KYNEvD1hyQYMvGHC4lU8T8T7SA"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://mpsyprtnejjbnhyaiidn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wc3lwcnRuZWpqYm5oeWFpaWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5NDg2NTUsImV4cCI6MjA5OTUyNDY1NX0.8Fv91EKMy2rrICtW7KYNEvD1hyQYMvGHC4lU8T8T7SA"
+      }
     }
   },
   "submit": {
