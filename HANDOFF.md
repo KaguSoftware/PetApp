@@ -676,7 +676,7 @@ member can edit their own card but not someone else's (0040 guard).
 ## File map
 - `lib/store.tsx` — THE app state (ported web store, now with the multi-household/roles/invites layer). `lib/data.ts` — types + reference data. `lib/theme.ts` — all tokens (useColors()).
 - `lib/auth.ts` — THE client auth API (Apple/Google/email sign-in, OTP verify/reset, identity linking). `lib/pendingInvite.ts` — signed-out invite-link stash. `lib/authErrors.ts` — friendly copy.
-- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below); `components/logs/` — the Logs dashboard's tiles + summary; `components/plan/` — the Care document primitives (`Chapter`/`PageButton` are shared by Care, Inbox **and Home** — not plan-only); `components/inbox/` — the unified notifications+reminders page (see below); `components/home/` — the Home front page's four parts (see below); `components/pets/` — the dressing stage + the wardrobe gallery (see below).
+- `components/` — ui.tsx primitives, Screen.tsx scaffolds, Sheet, Icons, AuthProviderButtons, AddPetSheet (shared Pets tab + onboarding), Paywall, Toasts, NotificationSync, per-feature sheets; `components/family/` — the three Family-area sections + the `FamilyScreen` gate scaffold, its `lock.ts` and their shared bits; `components/pixel/` — sprite engine + Pet3D + PixelChart; `components/nutrition/` — the Care › Nutrition tab (see below); `components/logs/` — the Logs dashboard's tiles + summary; `components/plan/` — the Care document primitives (`Chapter`/`PageButton` are shared by Care, Inbox **and Home** — not plan-only); `components/inbox/` — the unified notifications+reminders page (see below); `components/home/` — the Home dashboard's parts (stage cards + ring, lever tiles, quick row, ahead peek — see the 2026-08-10 Home section); `components/pets/` — the dressing stage + the wardrobe gallery (see below).
 - `app/` — (auth) welcome/login/signup/forgot; (onboarding) index/create/first-pet/invite; (tabs) home/plan/logs/pets/community; pushed: inbox, pet/[id](+card), vets, join, verify, reset-password, auth-callback, settings/{family,household,pets,account,general,accessibility}. Root `_layout.tsx` holds the Stack.Protected session guards — new root routes MUST be registered there.
 - `providers/` — session, purchases. `lib/notifications.ts`, `lib/pushTokens.ts` (now invoked), `lib/a11y.tsx`.
 - `supabase/migrations/0015–0030`, `supabase/functions/{delete-account,send-due-reminders,rc-webhook}` (Deno; excluded from app tsconfig/eslint).
@@ -1005,8 +1005,80 @@ to swap to onAccent when the track is filled.
 - **Icon/splash are still stock Expo placeholders** — a real PETING. app icon (and the pale-blue
   `#E6F4FE` adaptive-icon background) is its own future design task.
 
+### Home is a PET-FIRST DASHBOARD now (2026-08-10, owner request, plan-mode collab ×2) — built, `tsc` + `eslint` clean, iOS bundle compiles (10.6 MB), NEEDS device walkthrough
+
+Full creative redo ("full freedom, make it seem like a real app"), which replaced the 2026-08-05
+"document" Home. Owner decisions locked in two rounds: **pet-first stage** structure (the animals ARE
+the page) · **warm & lively** tone · full freedom to cut sections — then, after seeing v1, the
+correction that defines the page: **"way too much text — a dashboard you read in an instant."** So
+v2's rule everywhere: a STATE is painted (ring, dot, tinted tile), a NAME or NUMBER is one word,
+sentences exist only in accessibility labels.
+
+Page order: header island (unchanged single-trailing-element contract) → snap-scroll **pet stage
+cards** → the selected pet's **lever tiles** → One tap (QuickRow) → Ahead (2-row peek + Inbox
+button) → colophon (3 exits). Cut entirely: standfirst, lede chapter, TodayRail, PetChapter prose
+rows, breed/age/weight meta + EditStatSheets (live on the pet profile), grooming/checkup/supplies
+notes line, breed-fact Endnote, QuickRow teach/edit-hint copy, Ahead empty-state prose.
+
+- **`lib/home.ts` (rewritten again, pure)** — `homeModel(pets, schedules, activities, reminders,
+  now)` → `{ cards, neediestId, ahead(≤2), openReminders }`. Everything still reads ONE
+  `summarizeLever` pass (`careDashboard.ts`) so Home can't disagree with Logs/Care/Inbox. Per pet:
+  `PetDayCard { progress (petDayProgress + fraction), tone (worst), tasks (STABLE lever order —
+  dots/tiles must not re-sort under a state change), a11ySummary }`; `PetTask.hot` is set only for
+  overdue/due ("late" / "due now" / "2 doses due"), `PetTask.progress` only mid-count ("1 of 3").
+- **`components/home/ProgressRing.tsx` (new)** — svg ring around the portrait; `useAnimatedProps`
+  on `strokeDashoffset` only, shared value seeded at first render (no entrance sweep), springs on
+  change, colour is a plain JS prop per tone. Worklet-rule-safe by construction.
+- **`components/home/PetStageCard.tsx` + `PetStageRow.tsx` (new)** — card = ring + `PetAvatar lg`
+  (idle ONLY while selected, stilled under reduce-motion) + name + a 7pt **state-dot strip** (one
+  dot per lever, same order as the tiles). Overdue/due card gets soft wash + tinted border; the
+  neediest pet is auto-selected. Row: snap-scrolling shelf, ~2.2 cards per screen, edge-bleed via
+  −16 margin; a single pet gets one full-width card. Selection emphasis = shared-value spring on
+  scale/opacity (boolean mirrored in an effect).
+- **`components/home/LeverTiles.tsx` (new)** — the doing surface: 56pt circular icon tiles
+  (`ACTION_ICON` icons), **bg/tint = state** (red/orange/accent/green/grey soft tokens), "!" badge
+  when late, corner check when done, one word under each, "1 of 3" where a count is midway, and at
+  most ONE hot line under the row ("Meals · late"). Tap: fed → `FeedPortionSheet`; meds/vet →
+  `/logs`; rest `logAction` in place + 1.1s green flash (pure-React setTimeout idiom — the ring's
+  spring fires off the same store update). Tile badges sit inside the pressable's padded bounds
+  (Android rasterization clips outside them).
+- **`app/(tabs)/home/index.tsx` (rewritten)** — selection is DERIVED, not effect-driven:
+  `selectedId` state starts null = "follow the neediest" (`neediestId ?? cards[0]`), pins after a
+  tap, falls back when the pet vanishes. Kept verbatim: StreakPill-in-`HeaderActions` island,
+  greeting, 60s tick, navLock spam-tap guard, pull-to-refresh, hydration/empty branches, Welcome,
+  StreakCalendarSheet, FeedPortionSheet target-outlives-open.
+- **Deleted**: `components/home/TodayRail.tsx`, `PetChapter.tsx`, `PetDayList.tsx` (v1
+  intermediate), `Endnote.tsx` (Home was sole consumer; `lib/breedFacts.ts` stays — Care still uses
+  `breedNotes` via carePlan).
+- **Needs a device pass on:** snap row vs card taps mid-deceleration (Android), dot/tile colours in
+  dark mode, ring spring on log, hat cosmetics inside card bounds, single-pet full-width card,
+  neediest auto-select flipping under the 60s tick, VoiceOver reading the a11y summaries.
+
+### 0042 broke coins/streak/premium writes — fixed by `0043_households_grant_fix.sql` (2026-08-10, owner device report) — **APPLIED 2026-08-10, all migrations now live**
+
+**The CLI blocker is GONE (2026-08-10): `supabase` CLI is logged in with access to project
+`mpsyprtnejjbnhyaiidn` and the repo is linked — `npx supabase db push` works.** Remote history was
+0015–0033; 0034–0043 were pushed this session (all idempotent; every `create policy` is preceded by
+`drop policy if exists`, keep it that way). Two discoveries: (1) 0037's `redeem_invite` needed a
+`drop function if exists` first — 0027's version returned uuid and `create or replace` can't change
+a return type (42P13); the file now carries the drop. (2) **0037–0041 had never actually been
+applied** (0042 had, out of order, via SQL editor) — so invite APPROVAL, reminder tags, pet
+measurements, pet transfer and chat moderation only became live server-side with this push.
+Degraded-mode toasts ("schedules stay local-only" etc.) should all be gone now.
+
+The owner's on-device report ("counter sync failed … 42501 permission denied for table households"
+on every log, coins misbehaving): the security pass `0042_households_column_privileges.sql` revoked
+table-wide UPDATE on `households` and re-granted only name/units/seen_welcome/current_member_id/
+country — cutting off the client writes the app makes **by design**: `coins`/`streak`/
+`last_streak_bonus` (the debounced rewards sync in store.tsx `writeCounters`), `last_seen_at`
+(hydration), `family_password_hash` (Settings › Family password), and `premium` (the MOCK Peting+
+purchase). The same backend serves the web demo, so its coin writes were broken too. Fix:
+`0043_households_grant_fix.sql` extends the column grant (grants are additive). Owner decision
+2026-08-10: `premium` stays client-writable **until the RevenueCat cutover**, then gets revoked
+(rc-webhook becomes the only writer) — noted in the EAS checklist step 5.
+
 ## Roadmap
-1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030 applied; 0031 STILL PENDING — invites stay broken until it lands**, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.
+1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations: **ALL applied through 0043 as of 2026-08-10** — remaining items are the dashboard steps: Apple/Google providers, redirect URLs incl. `peting://**`, email templates, manual linking — checklists in the 2026-07-25/26 and REBRAND sections above) then device-verifies the two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities and the 2026-08-10 Home dashboard pass.
 2. Web-demo follow-up patches (3 small ones listed in the accounts section) in the webdemo repo.
 3. **Make scheduling OPTIONAL** — the last open item from the owner's Phase-8 list:
    "for all the tasks that you schedule, you can also not schedule and just track it normal."
@@ -1022,7 +1094,7 @@ to swap to onAccent when the track is filled.
 2. Apply `supabase/migrations/0015_push_tokens.sql` to the shared project (`supabase migration list` first; verify web demo after).
 3. Deploy Edge Functions: `supabase functions deploy delete-account send-due-reminders rc-webhook`; set `CRON_SECRET`, `RC_WEBHOOK_SECRET`; schedule `send-due-reminders` via pg_cron (SQL in the function header). delete-account now REQUIRES migration 0028 applied first (it 409s otherwise, by design).
 4. ~~Call `registerPushToken(userId)` after sign-in~~ — DONE 2026-07-26 (`PushTokenRegistrar` in app/_layout.tsx; self-guards until eas init).
-5. RevenueCat: create app + `petpal_plus_monthly` product, `npx expo install react-native-purchases`, add `providers/purchases/revenuecat.ts` adapter (select it in `providers/purchases/index.tsx` when `Constants.appOwnership !== "expo"` && `EXPO_PUBLIC_RC_API_KEY` set — file must not exist before this step or Metro bundles it into Expo Go), configure with Supabase user id as app_user_id, wire the dashboard webhook → `rc-webhook`.
+5. **Revoke the client `premium` grant** (`revoke update (premium) on public.households from authenticated;` — see 0043's SCOPE note) at the same time as: RevenueCat: create app + `petpal_plus_monthly` product, `npx expo install react-native-purchases`, add `providers/purchases/revenuecat.ts` adapter (select it in `providers/purchases/index.tsx` when `Constants.appOwnership !== "expo"` && `EXPO_PUBLIC_RC_API_KEY` set — file must not exist before this step or Metro bundles it into Expo Go), configure with Supabase user id as app_user_id, wire the dashboard webhook → `rc-webhook`.
 6. Native Google Sign-In: add `android.package` to app.json, create native OAuth client IDs (iOS + Android w/ SHA-1), `npx expo install @react-native-google-signin/google-signin`, swap `signInWithGoogle()`'s internals in `lib/auth.ts` to one-tap + `signInWithIdToken` (the SCOPE(EAS cutover) comment marks the spot — UI doesn't change). Add `ios.usesAppleSignIn: true` + the expo-apple-authentication plugin for the build.
 7. `eas build --profile development --platform ios` (Apple Developer account required) → dev-build walkthrough → `preview`/`production` builds → TestFlight. Universal links for invite codes (associatedDomains) become possible here if a real domain is chosen.
 

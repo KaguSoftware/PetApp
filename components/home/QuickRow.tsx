@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import FeedPortionSheet from "@/components/FeedPortionSheet";
 import ShortcutBuilderSheet from "@/components/ShortcutBuilderSheet";
 import { PageButton } from "@/components/plan/Chapter";
 import { shortcutPets, shortcutTileLabel, type Pet, type Shortcut } from "@/lib/data";
 import { useStore } from "@/lib/store";
-import { font, useColors, type Colors } from "@/lib/theme";
+import { useColors, type Colors } from "@/lib/theme";
 import type { IconName } from "@/components/Icons";
 
 /** How long a run stays green before the button says its own name again. */
@@ -88,12 +88,6 @@ export default function QuickRow() {
 
   return (
     <View>
-      {shortcuts.length === 0 ? (
-        <Text style={styles.teach}>
-          Pin the combinations only your family knows — everyone fed at once, the evening dose, the after-work walk.
-        </Text>
-      ) : null}
-
       <View style={styles.row}>
         {shortcuts.map((s) => {
           const covered = shortcutPets(s, pets);
@@ -138,8 +132,6 @@ export default function QuickRow() {
         ) : null}
       </View>
 
-      {editing ? <Text style={styles.editHint}>Tap a shortcut to remove it.</Text> : null}
-
       <ShortcutBuilderSheet open={builderOpen} onClose={() => setBuilderOpen(false)} />
 
       {/* The target outlives `open` so the sheet can slide away instead of
@@ -158,7 +150,5 @@ export default function QuickRow() {
 
 const makeStyles = (colors: Colors) =>
   StyleSheet.create({
-    teach: { paddingTop: 12, maxWidth: 360, fontSize: 14.5, fontFamily: font.regular, lineHeight: 21, color: colors.label2 },
     row: { marginTop: 14, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-    editHint: { marginTop: 10, fontSize: 12.5, fontFamily: font.medium, color: colors.red },
   });

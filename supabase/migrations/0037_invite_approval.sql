@@ -39,6 +39,10 @@ create policy "see own or admin" on household_join_requests
 -- Brand-new redeems now file a pending request instead of joining outright.
 -- Returns jsonb: {"household_id": uuid, "status": "active"|"pending"}.
 
+-- 0027's version returns uuid; `create or replace` cannot change a return
+-- type (42P13), so the old signature must go first.
+drop function if exists public.redeem_invite(text);
+
 create or replace function public.redeem_invite(invite_code text)
 returns jsonb
 language plpgsql
