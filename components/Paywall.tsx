@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/Icons";
+import { BRAND_PLUS } from "@/lib/brand";
 import Sheet from "@/components/Sheet";
 import { AccentButton, Footnote, IconCircle } from "@/components/ui";
 import { useStore } from "@/lib/store";
@@ -53,7 +54,7 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
       if (result.plusActive) {
         setPremium(true);
         onClose();
-        toast("sparkles", "Welcome to PetPal+", "Care plans and smart reminders unlocked");
+        toast("sparkles", `Welcome to ${BRAND_PLUS}`, "Care plans and smart reminders unlocked");
       }
     } finally {
       setBusy(false);
@@ -64,9 +65,9 @@ export default function Paywall({ open, onClose }: { open: boolean; onClose: () 
     <Sheet open={open} onClose={onClose}>
       <View style={styles.hero}>
         <LinearGradient colors={[colors.accent, colors.accentDeep]} style={styles.heroTile}>
-          <Icon name="sparkles" size={32} color={colors.white} />
+          <Icon name="sparkles" size={32} color={colors.onAccent} />
         </LinearGradient>
-        <Text style={styles.title}>PetPal+</Text>
+        <Text style={styles.title}>{BRAND_PLUS}</Text>
         <Text style={styles.tagline}>A vet in your pocket. We tell you what your pet needs — before you have to think about it.</Text>
       </View>
 

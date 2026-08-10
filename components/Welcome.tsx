@@ -5,6 +5,7 @@ import { Icon, type IconName } from "@/components/Icons";
 import { InitialAvatar } from "@/components/PetAvatar";
 import PixelPet from "@/components/pixel/PixelPet";
 import { AccentButton, PressableScale } from "@/components/ui";
+import { BRAND_MARK } from "@/lib/brand";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, withAlpha, HIT, type Colors } from "@/lib/theme";
 
@@ -50,7 +51,7 @@ export default function Welcome() {
                 <PixelPet pet={catPet} size={92} idle />
                 {dogPet ? <PixelPet pet={dogPet} size={92} idle /> : null}
               </View>
-              <Text style={styles.brandTitle}>PetPal</Text>
+              <Text style={styles.brandTitle}>{BRAND_MARK}</Text>
               <Text style={styles.brandBody}>
                 The family hub for taking care of your pets — together. Let&apos;s take a quick look.
               </Text>

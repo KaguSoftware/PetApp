@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hasSupabaseEnv, supabase } from "@/lib/supabase";
 import { ACTIONS, ActionType, Activity, ALERT_KIND_TAG, AppState, CareSchedule, CosmeticSlot, HouseholdAccount, HouseholdInvite, HouseholdRole, JoinRequest, Med, Member, Pet, PetTransfer, RepeatKind, Reminder, Shortcut, Vaccination, VET, VetVisit, ageYearsFromBirthDate, cosmetic, dailyGramTarget, dailyTarget, firstName, nextRepeatDue } from "./data";
 import { ACTION_ICON, type IconName } from "@/components/Icons";
+import { BRAND_PLUS } from "@/lib/brand";
 import { DEFAULT_MEMBER_EMOJI, MEMBER_GRADIENTS } from "@/lib/memberCard";
 import { colors } from "@/lib/theme";
 
@@ -370,7 +371,7 @@ async function createHouseholdFallback(
     .select()
     .single();
   if (hErr || !household) {
-    console.error("[petpal] create household fallback failed:", describeErr(hErr) ?? hErr);
+    console.error("[peting] create household fallback failed:", describeErr(hErr) ?? hErr);
     errRef.current = hErr?.code === "23505" ? "23505" : (describeErr(hErr) ?? "insert returned no row");
     return null;
   }
@@ -559,7 +560,7 @@ function asThemeMode(v: unknown): ThemeMode | null {
 const THEME_MODE_LAST_KEY = "petpal.themeMode.last";
 function writeShortcutsLocal(householdId: string, list: Shortcut[]) {
   AsyncStorage.setItem(shortcutsLocalKey(householdId), JSON.stringify(list)).catch((e) =>
-    console.error("[petpal] shortcuts local cache write failed:", e)
+    console.error("[peting] shortcuts local cache write failed:", e)
   );
 }
 
@@ -591,7 +592,7 @@ function writeSnapshot(userId: string, snapshot: AppState) {
       ? { ...snapshot, activities: snapshot.activities.slice(0, SNAPSHOT_ACTIVITY_LIMIT) }
       : snapshot;
   AsyncStorage.setItem(snapshotKey(userId), JSON.stringify({ v: SNAPSHOT_VERSION, state: trimmed })).catch((e) =>
-    console.error("[petpal] snapshot write failed:", e)
+    console.error("[peting] snapshot write failed:", e)
   );
 }
 
@@ -605,7 +606,7 @@ async function readSnapshot(userId: string): Promise<AppState | null> {
     // snapshot predates, and every screen would then read it as undefined.
     return { ...EMPTY_STATE, ...parsed.state };
   } catch (e) {
-    console.error("[petpal] snapshot read failed:", e);
+    console.error("[peting] snapshot read failed:", e);
     return null;
   }
 }
@@ -664,14 +665,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // value resolves.
       AsyncStorage.setItem(THEME_MODE_LAST_KEY, mode).catch(() => {});
       const uid = userIdRef.current;
-      if (uid) AsyncStorage.setItem(themeModeLocalKey(uid), mode).catch((e) => console.error("[petpal] themeMode local cache failed:", e));
+      if (uid) AsyncStorage.setItem(themeModeLocalKey(uid), mode).catch((e) => console.error("[peting] themeMode local cache failed:", e));
       if (uid && !themeModeSchemaRef.current) {
         supabase
           .from("user_profiles")
           .upsert({ user_id: uid, theme_mode: mode })
           .then(({ error }) => {
             if (error) {
-              console.warn("[petpal] user_profiles.theme_mode unavailable — apply migration 0025; syncing on-device only for now");
+              console.warn("[peting] user_profiles.theme_mode unavailable — apply migration 0025; syncing on-device only for now");
               themeModeSchemaRef.current = true;
             }
           });
@@ -815,7 +816,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     inFlightWritesRef.current += 1;
     op.then(({ error }) => {
       inFlightWritesRef.current -= 1;
-      if (error) console.error(`[petpal] ${what} failed:`, error);
+      if (error) console.error(`[peting] ${what} failed:`, error);
     });
   }, []);
 
@@ -830,7 +831,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         inFlightWritesRef.current -= 1;
         const failed = results.find((r) => r && r.error);
         if (!failed) return;
-        console.error("[petpal] write failed:", failed.error);
+        console.error("[peting] write failed:", failed.error);
         o.rollback();
         toast("alert", o.message, "That change didn't save — reverted");
       });
@@ -894,7 +895,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .eq("id", h)
         .then(({ error }) => {
           if (error) {
-            console.error("[petpal] counter sync failed:", error);
+            console.error("[peting] counter sync failed:", error);
             toast("alert", "Progress didn't save", "Coins may reset on reload — try again");
           }
         });
@@ -986,7 +987,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       silentReloadRearmsRef.current = 0;
       lastSilentReloadAtRef.current = Date.now();
       loadReasonRef.current = "realtime";
-      if (__DEV__) console.log(`[petpal] silent reload (${reason})`);
+      if (__DEV__) console.log(`[peting] silent reload (${reason})`);
       setReloadNonce((n) => n + 1);
     }, delay);
   }, []);
@@ -1103,7 +1104,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           // the 0023 dedupe index doing its job — another device already
           // raised this exact alert today, so losing ours is the point.
           if (error) {
-            if ((error as { code?: string }).code !== "23505") console.error("[petpal] health alert insert failed:", error);
+            if ((error as { code?: string }).code !== "23505") console.error("[peting] health alert insert failed:", error);
             setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== id) }));
           }
         });
@@ -1152,7 +1153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           // 23505 = the 0023 dedupe index rejected a cross-device duplicate
           // raise — expected, not an error. Everything else still logs.
           if (error) {
-            if ((error as { code?: string }).code !== "23505") console.error("[petpal] care alert insert failed:", error);
+            if ((error as { code?: string }).code !== "23505") console.error("[peting] care alert insert failed:", error);
             setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== id) }));
           }
         });
@@ -1315,12 +1316,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         const msg = res.error.message ?? "";
         if (!themeModeSchemaRef.current && /theme_mode/i.test(msg)) {
-          console.warn("[petpal] user_profiles.theme_mode unavailable — apply migration 0025; syncing on-device only for now");
+          console.warn("[peting] user_profiles.theme_mode unavailable — apply migration 0025; syncing on-device only for now");
           themeModeSchemaRef.current = true;
           continue;
         }
         if (!welcomeProfileSchemaRef.current && /seen_welcome/i.test(msg)) {
-          console.warn("[petpal] user_profiles.seen_welcome unavailable — apply migration 0030; welcome flag stays household-scoped");
+          console.warn("[peting] user_profiles.seen_welcome unavailable — apply migration 0030; welcome flag stays household-scoped");
           welcomeProfileSchemaRef.current = true;
           continue;
         }
@@ -1340,7 +1341,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // Transient failure — do NOT treat as "no households" (that would dump
         // an existing user into first-run onboarding). membershipsKnown stays
         // false, so the onboarding redirect never fires off this state.
-        console.error("[petpal] memberships fetch failed:", describeErr(membershipsErr) ?? membershipsErr);
+        console.error("[peting] memberships fetch failed:", describeErr(membershipsErr) ?? membershipsErr);
         if (!cancelled) {
           setHydrated(true);
           resolvePendingRefreshes();
@@ -1405,7 +1406,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const fetchHousehold = async (id: string) => {
         let res = await supabase.from("households").select(HOUSEHOLD_SELECT).eq("id", id).maybeSingle<HouseholdRow>();
         if (res.error && /vaccinations|vet_visits/i.test(res.error.message ?? "")) {
-          console.warn("[petpal] health tables missing — apply migrations 0013/0014; loading without them for now");
+          console.warn("[peting] health tables missing — apply migrations 0013/0014; loading without them for now");
           legacySchemaRef.current = true;
           res = await supabase.from("households").select(LEGACY_HOUSEHOLD_SELECT).eq("id", id).maybeSingle<HouseholdRow>();
         }
@@ -1418,7 +1419,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const fetchSchedules = async (id: string): Promise<CareSchedule[]> => {
         const res = await supabase.from("care_schedules").select("*").eq("household_id", id);
         if (res.error) {
-          console.warn("[petpal] care_schedules unavailable — apply migration 0017; schedules disabled for now");
+          console.warn("[peting] care_schedules unavailable — apply migration 0017; schedules disabled for now");
           scheduleSchemaRef.current = true;
           return [];
         }
@@ -1432,13 +1433,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const fetchShortcuts = async (id: string): Promise<Shortcut[]> => {
         const res = await supabase.from("shortcuts").select("*").eq("household_id", id);
         if (res.error) {
-          console.warn("[petpal] shortcuts table unavailable — apply migration 0018; using on-device cache for now");
+          console.warn("[peting] shortcuts table unavailable — apply migration 0018; using on-device cache for now");
           shortcutSchemaRef.current = true;
           try {
             const raw = await AsyncStorage.getItem(shortcutsLocalKey(id));
             return raw ? (JSON.parse(raw) as Shortcut[]) : [];
           } catch (e) {
-            console.error("[petpal] shortcuts local cache read failed:", e);
+            console.error("[peting] shortcuts local cache read failed:", e);
             return [];
           }
         }
@@ -1475,7 +1476,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {
           // Keep the cache so the lift retries next load; the rows we already
           // have still render this session.
-          console.error("[petpal] shortcuts local→shared lift failed (will retry):", e);
+          console.error("[peting] shortcuts local→shared lift failed (will retry):", e);
         }
         return rows.sort((a, b) => a.sort - b.sort);
       };
@@ -1488,7 +1489,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .select("user_id, role, joined_at, member_id")
           .eq("household_id", id);
         if (res.error || !res.data) {
-          console.error("[petpal] household accounts fetch failed:", describeErr(res.error) ?? res.error);
+          console.error("[peting] household accounts fetch failed:", describeErr(res.error) ?? res.error);
           return [];
         }
         return res.data.map((r: { user_id: string; role: HouseholdRole; joined_at: string; member_id: string | null }) => ({
@@ -1517,7 +1518,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         shortcuts = cuts;
         accounts = accs;
       }
-      if (householdErr) console.error("[petpal] household fetch failed:", describeErr(householdErr) ?? householdErr);
+      if (householdErr) console.error("[peting] household fetch failed:", describeErr(householdErr) ?? householdErr);
 
       // Membership rows exist (checked above), so a missing household here is
       // a transient fetch failure — surface it and retry on the next event
@@ -1773,7 +1774,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             .insert({ id: rid, household_id: h.id, pet_id: p.id, title: reminder.title, emoji: "💉", due: v.nextDue, done: false, source: "manual", vaccination_id: v.id, ...(tagSchemaRef.current ? {} : { tag: "Vet" }) })
             .then(({ error }) => {
               if (error) {
-                console.error("[petpal] vaccine reminder insert failed:", error);
+                console.error("[peting] vaccine reminder insert failed:", error);
                 setState((prev) => ({ ...prev, reminders: prev.reminders.filter((r) => r.id !== rid) }));
               }
             });
@@ -1918,7 +1919,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const onOther = (table: string) => (payload: { eventType?: string }) => {
       if (__DEV__ && !seenTables.has(table)) {
         seenTables.add(table);
-        console.log(`[petpal] realtime: first ${table} event (${payload.eventType ?? "?"}) — 0032 is live`);
+        console.log(`[peting] realtime: first ${table} event (${payload.eventType ?? "?"}) — 0032 is live`);
       }
       scheduleSilentReload(table);
     };
@@ -2005,7 +2006,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // elsewhere in this file — a reconnect loop must not spam the console.
       if (!realtimeWarnedRef.current) {
         realtimeWarnedRef.current = true;
-        console.warn("[petpal] realtime unavailable — falling back to refresh-on-foreground:", err ?? status);
+        console.warn("[peting] realtime unavailable — falling back to refresh-on-foreground:", err ?? status);
       }
       realtimeFailuresRef.current += 1;
       const backoff = Math.min(60_000, 5_000 * 2 ** (realtimeFailuresRef.current - 1));
@@ -2021,7 +2022,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       try {
         await supabase.realtime.setAuth();
       } catch (e) {
-        console.warn("[petpal] realtime setAuth failed:", e);
+        console.warn("[peting] realtime setAuth failed:", e);
       }
       if (cancelled) return;
       chHousehold.subscribe(onStatus);
@@ -2109,7 +2110,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       Promise.all(ops).then((results) => {
         const failed = results.find((r) => r && r.error);
-        if (failed) console.error("[petpal] undo log failed:", failed.error);
+        if (failed) console.error("[peting] undo log failed:", failed.error);
       });
       toast(ACTION_ICON[removed.type].icon, "Log removed", `${pet?.name ?? "Pet"} — entry undone`);
     },
@@ -2257,13 +2258,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .then((res) => {
             const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
             if (res.error && row.duration_minutes != null && msg.includes("duration_minutes")) {
-              console.warn("[petpal] activities.duration_minutes unavailable — apply migration 0022; logging without duration");
+              console.warn("[peting] activities.duration_minutes unavailable — apply migration 0022; logging without duration");
               durationSchemaRef.current = true;
               const { duration_minutes: _omit, ...rest } = row;
               return insertWithFallback(rest);
             }
             if (res.error && row.user_id != null && msg.includes("user_id")) {
-              console.warn("[petpal] activities.user_id unavailable — apply migration 0030; logging without account attribution");
+              console.warn("[peting] activities.user_id unavailable — apply migration 0030; logging without account attribution");
               attributionSchemaRef.current = true;
               const { user_id: _omit, ...rest } = row;
               return insertWithFallback(rest);
@@ -2352,7 +2353,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (h)
         persist(supabase.from("households").update({ premium: on }).eq("id", h), {
           rollback: () => setState((p) => ({ ...p, premium: prev })),
-          message: "Couldn't update PetPal+",
+          message: `Couldn't update ${BRAND_PLUS}`,
         });
     },
     [supabase, persist]
@@ -2471,7 +2472,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .then((res) => {
             const msg = res.error ? `${(res.error as { message?: string }).message ?? ""}` : "";
             if (res.error && insertRow.tag != null && msg.includes("tag")) {
-              console.warn("[petpal] reminders.tag unavailable — apply migration 0038; saving without a tag");
+              console.warn("[peting] reminders.tag unavailable — apply migration 0038; saving without a tag");
               tagSchemaRef.current = true;
               const { tag: _omit, ...rest } = insertRow;
               return insertWithFallback(rest);
@@ -2614,7 +2615,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const { name, species, breed, gender, ageYears, weightKg, cupGrams, heightCm, lengthCm, customPlan } = input;
       const h = hid();
       if (!h) {
-        console.error("[petpal] addPet called before household loaded");
+        console.error("[peting] addPet called before household loaded");
         toast("alert", "Couldn't add pet", "Your household hasn't finished loading — try again in a moment");
         return;
       }
@@ -2665,7 +2666,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           custom_plan: customPlan ?? null,
         });
         if (petError) {
-          console.error("[petpal] pet insert failed:", petError);
+          console.error("[peting] pet insert failed:", petError);
           toast("alert", `${name} wasn't saved`, "It'll disappear on reload — please try again");
           rollback();
           return;
@@ -2675,7 +2676,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           supabase.from("supplies").insert(supplies.map((s) => ({ pet_id: id, supply_key: s.id, name: s.name, icon: s.icon, level: s.level }))),
         ]);
         if (weightError || supplyError) {
-          console.error("[petpal] pet setup insert failed:", weightError ?? supplyError);
+          console.error("[peting] pet setup insert failed:", weightError ?? supplyError);
           toast("alert", `${name} wasn't saved`, "Setup didn't finish — please try again");
           // Undo the pet too so the partial row doesn't linger without supplies.
           await supabase.from("pets").delete().eq("id", id);
@@ -2871,7 +2872,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         .insert({ id, household_id: h, name, emoji, role, gradient_from: gradient[0], gradient_to: gradient[1] })
         .then(({ error }) => {
           if (error) {
-            console.error("[petpal] member insert failed:", error);
+            console.error("[peting] member insert failed:", error);
             toast("alert", `${name} wasn't saved`, "It'll disappear on reload — please try again");
             setState((prev) => ({ ...prev, members: prev.members.filter((m) => m.id !== id) }));
             return;
@@ -3395,7 +3396,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .update({ seen_welcome: seen })
           .eq("id", h)
           .then(({ error }) => {
-            if (error) console.error("[petpal] seen_welcome update failed:", error);
+            if (error) console.error("[peting] seen_welcome update failed:", error);
           });
       // Also per-account (0030) so the flag follows the person across
       // households. Upsert touches only the provided columns (0025 precedent).
@@ -3406,10 +3407,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           .upsert({ user_id: uid, seen_welcome: seen })
           .then(({ error }) => {
             if (error && /seen_welcome/i.test(error.message ?? "")) {
-              console.warn("[petpal] user_profiles.seen_welcome unavailable — apply migration 0030");
+              console.warn("[peting] user_profiles.seen_welcome unavailable — apply migration 0030");
               welcomeProfileSchemaRef.current = true;
             } else if (error) {
-              console.error("[petpal] per-user seen_welcome update failed:", error);
+              console.error("[peting] per-user seen_welcome update failed:", error);
             }
           });
     },
@@ -3483,7 +3484,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // Same 0033 members_write_guard block as redeemInvite — join_household
         // always joins as 'member', so this path is broken until 0040 lands.
         if (errCode === "42501") {
-          console.error("[petpal] join_household blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
+          console.error("[peting] join_household blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
           toast("alert", "Joining needs the next backend update", "Apply migration 0040 — new members can't be added until then");
           return false;
         }
@@ -3501,7 +3502,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const uid = userIdRef.current;
       if (uid) {
         const { error: profileErr } = await supabase.from("user_profiles").upsert({ user_id: uid, active_household_id: target });
-        if (profileErr) console.error("[petpal] active household update after join failed:", profileErr);
+        if (profileErr) console.error("[peting] active household update after join failed:", profileErr);
       }
       toast("home", "Joined household", "Loading it now…");
       // Full re-hydration so the store loads the newly-active household.
@@ -3552,7 +3553,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         newId = created.id;
       } else {
-        console.error("[petpal] create_household failed:", describeErr(error) ?? error);
+        console.error("[peting] create_household failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't create household", "Please try again");
         return false;
       }
@@ -3597,7 +3598,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         } else if ((error as { code?: string }).code === "42501") {
           toast("alert", "Owners can't leave", "Transfer ownership or delete the household first");
         } else {
-          console.error("[petpal] leave_household failed:", describeErr(error) ?? error);
+          console.error("[peting] leave_household failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't leave the household", "Please try again");
         }
         return false;
@@ -3619,7 +3620,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         } else if ((error as { code?: string }).code === "42501") {
           toast("alert", "Not allowed", "Only the owner can delete a household");
         } else {
-          console.error("[petpal] delete_household failed:", describeErr(error) ?? error);
+          console.error("[peting] delete_household failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't delete the household", "Please try again");
         }
         return false;
@@ -3644,7 +3645,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (isMissingFunction(error)) toast("alert", "Removing members needs the next backend update", "Apply migration 0028 to unlock this");
         else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can remove an admin");
         else {
-          console.error("[petpal] remove_household_member failed:", describeErr(error) ?? error);
+          console.error("[peting] remove_household_member failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't remove that member", "Please try again");
         }
         return false;
@@ -3667,7 +3668,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (isMissingFunction(error)) toast("alert", "Role changes need the next backend update", "Apply migration 0028 to unlock this");
         else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can change roles");
         else {
-          console.error("[petpal] set_member_role failed:", describeErr(error) ?? error);
+          console.error("[peting] set_member_role failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't change that role", "Please try again");
         }
         return false;
@@ -3687,7 +3688,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (isMissingFunction(error)) toast("alert", "Transfers need the next backend update", "Apply migration 0028 to unlock this");
         else if ((error as { code?: string }).code === "42501") toast("alert", "Not allowed", "Only the owner can transfer ownership");
         else {
-          console.error("[petpal] transfer_ownership failed:", describeErr(error) ?? error);
+          console.error("[peting] transfer_ownership failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't transfer ownership", "Please try again");
         }
         return false;
@@ -3739,13 +3740,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           // but can't reach pgcrypto. Same user-visible outcome as a missing
           // RPC: degrade to the legacy Family-ID share instead of pretending a
           // retry might help.
-          if (isBrokenFunctionBody(error)) console.error("[petpal] create_invite failed:", describeErr(error) ?? error);
+          if (isBrokenFunctionBody(error)) console.error("[peting] create_invite failed:", describeErr(error) ?? error);
           invitesSchemaRef.current = true;
           toast("alert", "Invite codes need the next backend update", "Sharing the Family ID still works meanwhile");
         } else if ((error as { code?: string } | null)?.code === "42501") {
           toast("alert", "Not allowed", /admin invites/i.test(error?.message ?? "") ? "Only the owner can create admin invites" : "Only the owner or an admin can invite");
         } else {
-          console.error("[petpal] create_invite failed:", describeErr(error) ?? error);
+          console.error("[peting] create_invite failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't create the invite", "Please try again");
         }
         return null;
@@ -3767,7 +3768,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .order("created_at", { ascending: false });
     if (error) {
       if (/household_invites/i.test(error.message ?? "")) invitesSchemaRef.current = true;
-      else console.error("[petpal] invites fetch failed:", describeErr(error) ?? error);
+      else console.error("[peting] invites fetch failed:", describeErr(error) ?? error);
       return [];
     }
     return (data ?? []).map(mapInviteRow);
@@ -3777,7 +3778,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (inviteId: string) => {
       const { error } = await supabase.rpc("revoke_invite", { invite_id: inviteId });
       if (error) {
-        console.error("[petpal] revoke_invite failed:", describeErr(error) ?? error);
+        console.error("[peting] revoke_invite failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't revoke that invite", "Please try again");
         return false;
       }
@@ -3808,10 +3809,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // the membership row inserted moments earlier) go through. Migration
         // 0040 fixes it; say so instead of "please try again".
         if (errCode === "42501") {
-          console.error("[petpal] redeem_invite blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
+          console.error("[peting] redeem_invite blocked by members_write_guard — apply migration 0040:", describeErr(error) ?? error);
           return { ok: false, reason: "blocked" };
         }
-        console.error("[petpal] redeem_invite failed:", describeErr(error) ?? error);
+        console.error("[peting] redeem_invite failed:", describeErr(error) ?? error);
         return { ok: false, reason: "error" };
       }
       const status = (data as { status?: "active" | "pending" } | null)?.status ?? "active";
@@ -3833,7 +3834,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.rpc("list_join_requests", { hid: h });
     if (error) {
       if (isMissingFunction(error)) invitesSchemaRef.current = true;
-      else console.error("[petpal] list_join_requests failed:", describeErr(error) ?? error);
+      else console.error("[peting] list_join_requests failed:", describeErr(error) ?? error);
       return [];
     }
     return (data ?? []).map((r: { id: string; role: "member" | "admin"; requester_name: string | null; created_at: string }) => ({
@@ -3848,7 +3849,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (requestId: string) => {
       const { error } = await supabase.rpc("approve_join_request", { request_id: requestId });
       if (error) {
-        console.error("[petpal] approve_join_request failed:", describeErr(error) ?? error);
+        console.error("[peting] approve_join_request failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't approve that request", "Please try again");
         return false;
       }
@@ -3862,7 +3863,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (requestId: string) => {
       const { error } = await supabase.rpc("reject_join_request", { request_id: requestId });
       if (error) {
-        console.error("[petpal] reject_join_request failed:", describeErr(error) ?? error);
+        console.error("[peting] reject_join_request failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't reject that request", "Please try again");
         return false;
       }
@@ -3900,7 +3901,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           toast("alert", "Not allowed", "Only the owner or an admin can move a pet");
           return { ok: false, reason: "notAllowed" as const };
         }
-        console.error("[petpal] request_pet_transfer failed:", describeErr(error) ?? error);
+        console.error("[peting] request_pet_transfer failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't start that transfer", "Please try again");
         return { ok: false, reason: "error" as const };
       }
@@ -3918,7 +3919,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (isMissingFunction(error)) petTransferSchemaRef.current = true;
       // 42501 just means this account isn't an owner/admin here — not an error.
       else if ((error as { code?: string }).code !== "42501")
-        console.error("[petpal] list_pet_transfers failed:", describeErr(error) ?? error);
+        console.error("[peting] list_pet_transfers failed:", describeErr(error) ?? error);
       return [];
     }
     return (data ?? []).map(
@@ -3963,7 +3964,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         } else if (code === "22023" || code === "P0002") {
           toast("alert", "That transfer is no longer valid", "The pet may have already moved");
         } else {
-          console.error("[petpal] accept_pet_transfer failed:", describeErr(error) ?? error);
+          console.error("[peting] accept_pet_transfer failed:", describeErr(error) ?? error);
           toast("alert", "Couldn't accept that transfer", "Please try again");
         }
         return false;
@@ -3983,7 +3984,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (requestId: string) => {
       const { error } = await supabase.rpc("reject_pet_transfer", { request_id: requestId });
       if (error) {
-        console.error("[petpal] reject_pet_transfer failed:", describeErr(error) ?? error);
+        console.error("[peting] reject_pet_transfer failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't decline that transfer", "Please try again");
         return false;
       }
@@ -3997,7 +3998,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (requestId: string) => {
       const { error } = await supabase.rpc("cancel_pet_transfer", { request_id: requestId });
       if (error) {
-        console.error("[petpal] cancel_pet_transfer failed:", describeErr(error) ?? error);
+        console.error("[peting] cancel_pet_transfer failed:", describeErr(error) ?? error);
         toast("alert", "Couldn't cancel that transfer", "Please try again");
         return false;
       }

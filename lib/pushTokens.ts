@@ -26,6 +26,6 @@ export async function registerPushToken(userId: string): Promise<void> {
       updated_at: new Date().toISOString(),
     });
   } catch (e) {
-    console.warn("[petpal] push token registration skipped:", e);
+    console.warn("[peting] push token registration skipped:", e);
   }
 }

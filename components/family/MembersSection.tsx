@@ -30,6 +30,7 @@ import {
   type JoinRequest,
   type Member,
 } from "@/lib/data";
+import { BRAND } from "@/lib/brand";
 import { copyInviteCode, inviteExpiryLabel, shareInvite } from "@/lib/inviteShare";
 import { DEFAULT_MEMBER_EMOJI, MEMBER_GRADIENTS } from "@/lib/memberCard";
 import { useStore } from "@/lib/store";
@@ -38,9 +39,9 @@ import { confirmDestructive, Field, RoleBadge, ROLE_LABEL, useFamilyStyles } fro
 
 const CAREGIVER_TERMS_TEXT = `By assigning the Pet caregiver role to a household member, you acknowledge and agree to the following:
 
-PetPal is a coordination tool that connects people who already share responsibility for a pet's care. We do not vet, supervise, screen, or guarantee the conduct of any caregiver, family member, or other person you choose to add to your household.
+${BRAND} is a coordination tool that connects people who already share responsibility for a pet's care. We do not vet, supervise, screen, or guarantee the conduct of any caregiver, family member, or other person you choose to add to your household.
 
-PetPal and its operators are not responsible or liable for any theft, loss, damage, injury, or other harm that results — directly or indirectly — from granting someone the Pet caregiver role, or from any actions taken by a caregiver, whether inside or outside the app.
+${BRAND} and its operators are not responsible or liable for any theft, loss, damage, injury, or other harm that results — directly or indirectly — from granting someone the Pet caregiver role, or from any actions taken by a caregiver, whether inside or outside the app.
 
 You are solely responsible for deciding who you trust with this role. Only assign it to people you already know and trust with your pets, your home, and your belongings.
 
@@ -299,7 +300,7 @@ export default function MembersSection() {
         {canManage ? (
           <Row
             onPress={openInvite}
-            leading={<IconCircle icon="plus" tint={colors.white} bg={colors.accent} size={38} />}
+            leading={<IconCircle icon="plus" tint={colors.onAccent} bg={colors.accent} size={38} />}
             title="Invite someone"
             subtitle="Share a code so they can join this household"
             trailing={<Chevron />}
@@ -307,7 +308,7 @@ export default function MembersSection() {
         ) : null}
       </Group>
       <Text style={shared.footnote}>
-        Everyone here has their own PetPal account. Roles are enforced — only the owner and admins can invite or manage.
+        Everyone here has their own {BRAND} account. Roles are enforced — only the owner and admins can invite or manage.
       </Text>
 
       {/* Pending invite redemptions — must be approved before they get access. */}

@@ -49,7 +49,7 @@ function NameField({
 }
 
 /**
- * Invite landing + manual code entry. Reached from petpal://join?code=XXXX-XXXX
+ * Invite landing + manual code entry. Reached from peting://join?code=XXXX-XXXX
  * deep links (replayed across sign-in by the root layout when needed), the
  * onboarding "Join with a code" card, and Settings ▸ Family. Legacy
  * ?f=<household uuid> links from the web demo still work via join_household.
@@ -102,7 +102,7 @@ export default function JoinPage() {
     );
   }
 
-  // --- Legacy web invite link: petpal://join?f=<uuid> ------------------------
+  // --- Legacy web invite link: peting://join?f=<uuid> ------------------------
   if (legacyFamilyId) {
     const valid = UUID_RE.test(legacyFamilyId);
     const alreadyIn = valid && state.households.some((h) => h.id === legacyFamilyId);

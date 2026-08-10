@@ -465,7 +465,7 @@ const makeStyles = (colors: Colors) =>
     daySelected: { backgroundColor: colors.accent },
     dayToday: { borderWidth: 2, borderColor: colors.accent },
     dayLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
-    dayLabelSelected: { color: colors.white },
+    dayLabelSelected: { color: colors.onAccent },
     dayLabelDisabled: { color: withAlpha(colors.label3, 0.4) },
 
     // Shared by the month and year drill-out grids — same 3×4 shape.
@@ -480,7 +480,7 @@ const makeStyles = (colors: Colors) =>
     },
     pillSelected: { backgroundColor: colors.accent },
     pillLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label },
-    pillLabelSelected: { color: colors.white },
+    pillLabelSelected: { color: colors.onAccent },
 
     chipRow: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
   });

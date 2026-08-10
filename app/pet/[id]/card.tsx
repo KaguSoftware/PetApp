@@ -9,6 +9,7 @@ import ShareStyleSheet from "@/components/ShareStyleSheet";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Footnote, PRESS_SCALE_SMALL, PressableScale, Segmented } from "@/components/ui";
+import { BRAND } from "@/lib/brand";
 import { VET, VETS, formatAge, formatWeight, nextAnniversary, nextBirthday } from "@/lib/data";
 import { capturePetCard, petCaption, sharePetCardImage } from "@/lib/petShare";
 import { PET_THEME_ID, type InkTone } from "@/lib/shareTheme";
@@ -153,7 +154,7 @@ export default function PetCardPage() {
     subtitle,
     ...(variant === "emergency" && pet.allergies ? [`⚠ Allergies/alerts: ${pet.allergies}`] : []),
     ...fields.map((f) => `${f.label}: ${f.value}`),
-    "— shared from PetPal",
+    `— shared from ${BRAND}`,
   ].join("\n");
 
   const share = async () => {
@@ -166,7 +167,7 @@ export default function PetCardPage() {
       setStyleOpen(false);
       await new Promise((r) => setTimeout(r, 280));
       await sharePetCardImage(uri, {
-        dialogTitle: `${pet.name} — PetPal card`,
+        dialogTitle: `${pet.name} — ${BRAND} card`,
         caption,
         // The clipboard write is invisible otherwise, and the caption is only
         // useful if the user knows it's there to paste.
@@ -177,7 +178,7 @@ export default function PetCardPage() {
       // text card is still worth sharing, so fall back rather than fail.
       try {
         setStyleOpen(false);
-        await Share.share({ title: `${pet.name} — PetPal card`, message: shareText });
+        await Share.share({ title: `${pet.name} — ${BRAND} card`, message: shareText });
       } catch {
         // User dismissed the share sheet — nothing to do.
       }

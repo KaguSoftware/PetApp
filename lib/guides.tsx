@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import Svg, { Circle, Ellipse, Line, Path, Rect } from "react-native-svg";
 import { StyleSheet, Text, View } from "react-native";
 import type { IconName } from "@/components/Icons";
+import { BRAND } from "@/lib/brand";
 import { font, useColors, withAlpha, type Colors } from "@/lib/theme";
 
 /**
@@ -41,7 +42,7 @@ export const GUIDES: Guide[] = [
           "Step on your bathroom scale and note your own weight.",
           "Pick your pet up, weigh yourself holding them, and subtract.",
           "For pets under ~5 kg use a kitchen scale with a towel-lined bowl.",
-          "Log the number in PetPal so you can watch the trend.",
+          `Log the number in ${BRAND} so you can watch the trend.`,
         ],
       },
       {
@@ -173,7 +174,7 @@ export const GUIDES: Guide[] = [
         ],
       },
     ],
-    tip: "PetPal's Care Plan calculates exact grams per meal for your pet — use it as your baseline.",
+    tip: `${BRAND}'s Care Plan calculates exact grams per meal for your pet — use it as your baseline.`,
   },
   {
     id: "vet-visits",

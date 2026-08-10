@@ -214,9 +214,9 @@ export default function CostEngine({ pet }: { pet: Pet }) {
               accessibilityLabel={`${FORMAT_LABEL[id]}${hasPrice ? ", priced" : ", no price yet"}`}
             >
               <View style={[s.formatTab, on && s.formatTabOn]}>
-                <Icon name={FORMAT_ICON[id]} size={15} color={on ? colors.white : colors.label2} strokeWidth={2.2} />
+                <Icon name={FORMAT_ICON[id]} size={15} color={on ? colors.onAccent : colors.label2} strokeWidth={2.2} />
                 <Text style={[s.formatTabLabel, on && s.formatTabLabelOn]}>{FORMAT_LABEL[id]}</Text>
-                {hasPrice ? <View style={[s.formatDot, on && { backgroundColor: colors.white }]} /> : null}
+                {hasPrice ? <View style={[s.formatDot, on && { backgroundColor: colors.onAccent }]} /> : null}
               </View>
             </PressableScale>
           );
@@ -634,7 +634,7 @@ const makeStyles = (colors: Colors) =>
     },
     formatTabOn: { backgroundColor: colors.accent, borderColor: colors.accent },
     formatTabLabel: { fontSize: 14, fontFamily: font.semibold, color: colors.label2 },
-    formatTabLabelOn: { color: colors.white },
+    formatTabLabelOn: { color: colors.onAccent },
     formatDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
 
     inputCard: {

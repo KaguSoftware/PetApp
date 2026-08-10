@@ -3,6 +3,7 @@ import * as Sharing from "expo-sharing";
 import { Share } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { CARD_H, CARD_W, SHARE_SCALE } from "@/components/PetShareCard";
+import { BRAND } from "@/lib/brand";
 import type { Pet } from "@/lib/data";
 
 /**
@@ -28,12 +29,12 @@ import type { Pet } from "@/lib/data";
  * Deliberately no link: there's no App Store listing yet, and a dead URL in a
  * caption is worse than none. `SIGNOFF` is the single place to add one later.
  */
-const SIGNOFF = "Made with PetPal";
+const SIGNOFF = `Made with ${BRAND}`;
 
 /** Hashtags are how pet posts actually get found; kept short and non-spammy. */
 const TAGS: Record<"emergency" | "profile", string[]> = {
-  emergency: ["#lostpet", "#helpmefindmyway", "#petpal"],
-  profile: ["#petpal", "#petsofinstagram"],
+  emergency: ["#lostpet", "#helpmefindmyway", "#peting"],
+  profile: ["#peting", "#petsofinstagram"],
 };
 
 export function petCaption(pet: Pet, variant: "emergency" | "profile", subtitle: string): string {

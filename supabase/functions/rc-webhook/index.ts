@@ -21,10 +21,10 @@ const INACTIVE_EVENTS = new Set(["CANCELLATION", "EXPIRATION", "BILLING_ISSUE"])
  * money.
  */
 const COIN_PACK_COINS: Record<string, number> = {
-  petpal_coins_500: 500,
-  petpal_coins_1500: 1500,
-  petpal_coins_4000: 4000,
-  petpal_coins_10000: 10000,
+  peting_coins_500: 500,
+  peting_coins_1500: 1500,
+  peting_coins_4000: 4000,
+  peting_coins_10000: 10000,
 };
 
 const json = (body: unknown, status = 200) =>

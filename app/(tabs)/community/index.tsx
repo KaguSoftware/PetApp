@@ -172,7 +172,7 @@ export default function Community() {
           setMessages((prev) => (prev && !prev.some((p) => p.id === m.id) ? [...prev, m] : prev));
         });
       } catch (e) {
-        console.error("[petpal] chat room load failed:", e);
+        console.error("[peting] chat room load failed:", e);
         setMessages([]);
         toast("alert", "Couldn't load chat", "Pull to refresh to try again");
       }
@@ -288,7 +288,7 @@ export default function Community() {
         }
       }, 150);
     } catch (e) {
-      console.error("[petpal] chat send failed:", e);
+      console.error("[peting] chat send failed:", e);
       toast("alert", "Couldn't send", "That message didn't go through");
       setDraft(body);
     } finally {
@@ -344,7 +344,7 @@ export default function Community() {
               accessibilityLabel="Send"
             >
               <View style={[styles.sendButton, (!draft.trim() || !room || sending) && styles.sendButtonDisabled]}>
-                <Icon name="arrow-up" size={16} color={colors.white} />
+                <Icon name="arrow-up" size={16} color={colors.onAccent} />
               </View>
             </PressableScale>
           </View>
@@ -469,7 +469,7 @@ const makeStyles = (colors: Colors) =>
     bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: 4 },
     bubbleAuthor: { fontSize: 11.5, fontFamily: font.semibold, color: colors.accent, marginBottom: 2 },
     bubbleBody: { fontSize: 15, fontFamily: font.regular, color: colors.label, lineHeight: 20 },
-    bubbleBodyMine: { color: colors.white },
+    bubbleBodyMine: { color: colors.onAccent },
     bubbleTime: { marginTop: 3, fontSize: 11, fontFamily: font.regular, color: colors.label3 },
     bubbleTimeMine: { textAlign: "right" },
 

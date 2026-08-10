@@ -3,13 +3,15 @@ import { useMemo } from "react";
 import { useStore } from "@/lib/store";
 
 /**
- * PetPal design tokens — exact sRGB conversions of the web demo's oklch
+ * Peting design tokens — exact sRGB conversions of the web demo's oklch
  * palette (globals.css), accent hue 285. RN has no oklch(); these values were
  * generated with culori from the source tokens. Screens must pull from here,
  * never hardcode colors.
  *
  * Light/dark are both tone ramps against the same accent hue, kept the same
  * shape so `useColors()` can swap between them without callers changing.
+ * Anything drawn ON an accent fill should use `onAccent` rather than `white`,
+ * so a future accent change can't strand white-on-light labels.
  */
 export const lightColors = {
   bg: "#f4f3f8", // grouped background, faint warm tint — oklch(0.966 0.006 292)
@@ -22,6 +24,7 @@ export const lightColors = {
   accent: "#6b55df", // warm indigo/violet — oklch(0.55 0.2 285)
   accentSoft: "rgba(107, 85, 223, 0.12)",
   accentDeep: "#544ec5",
+  onAccent: "#ffffff", // ink drawn ON an accent fill (CTA labels, tags)
   green: "#00a45c",
   greenSoft: "rgba(0, 164, 92, 0.13)",
   red: "#e23242",
@@ -50,6 +53,7 @@ export const darkColors = {
   accent: "#8f7cf0", // brighter indigo/violet for contrast on dark
   accentSoft: "rgba(143, 124, 240, 0.18)",
   accentDeep: "#a597ff",
+  onAccent: "#ffffff", // ink drawn ON an accent fill (CTA labels, tags)
   green: "#37c983",
   greenSoft: "rgba(55, 201, 131, 0.16)",
   red: "#ff5d6c",

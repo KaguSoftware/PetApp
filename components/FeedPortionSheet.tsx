@@ -27,7 +27,7 @@ function WaterCheck({ checked, onToggle }: { checked: boolean; onToggle: () => v
         </View>
         <Text style={styles.waterLabel}>Drank water too</Text>
         <View style={[styles.box, checked && styles.boxOn]}>
-          {checked ? <Icon name="check" size={13} color={colors.white} /> : null}
+          {checked ? <Icon name="check" size={13} color={colors.onAccent} /> : null}
         </View>
       </View>
     </PressableScale>

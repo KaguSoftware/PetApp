@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { AccentButton, SmallButton } from "@/components/ui";
+import { BRAND } from "@/lib/brand";
 import { copyInviteCode, shareFamilyIdLink, shareInvite } from "@/lib/inviteShare";
 import { useStore } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
@@ -40,7 +41,7 @@ export default function OnboardingInviteScreen() {
       </View>
       <Text style={styles.title}>Invite your family</Text>
       <Text style={styles.subtitle}>
-        PetPal is built for sharing — everyone logs care, sees what{"'"}s done, and nothing gets double-fed. Invites can also be
+        {BRAND} is built for sharing — everyone logs care, sees what{"'"}s done, and nothing gets double-fed. Invites can also be
         created later from Settings.
       </Text>
       {invite ? (

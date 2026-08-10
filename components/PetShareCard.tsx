@@ -1,6 +1,7 @@
 import PixelPet from "@/components/pixel/PixelPet";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { CAT_SPRITE } from "@/components/pixel/petSprites";
+import { BRAND_MARK } from "@/lib/brand";
 import type { Pet } from "@/lib/data";
 import { INK_COLORS, PET_THEME_ID, resolveTheme, scrimAlphaAt, type InkTone } from "@/lib/shareTheme";
 import { font, radius } from "@/lib/theme";
@@ -196,7 +197,7 @@ export default function PetShareCard({
       <View style={styles.header}>
         <GlassPlate fill={INK.plate} border={INK.plateBorder}>
           <PixelSprite sprite={CAT_SPRITE} size={14} />
-          <Text style={[styles.headerWord, { color: INK.primary }]}>PetPal</Text>
+          <Text style={[styles.headerWord, { color: INK.primary }]}>{BRAND_MARK}</Text>
           <View style={[styles.headerRule, { backgroundColor: INK.plateBorder }]} />
           <Text style={[styles.headerKind, { color: INK.secondary }]}>{emergency ? "EMERGENCY & ID" : "PET PROFILE"}</Text>
         </GlassPlate>

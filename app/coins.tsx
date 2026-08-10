@@ -105,7 +105,7 @@ export default function CoinsScreen() {
                   <ActivityIndicator color={colors.label3} />
                 ) : (
                   <View style={[styles.priceTag, p.best && styles.priceTagBest]}>
-                    <Text style={[styles.priceText, p.best && { color: colors.white }]}>{p.priceLabel}</Text>
+                    <Text style={[styles.priceText, p.best && { color: colors.onAccent }]}>{p.priceLabel}</Text>
                   </View>
                 )
               }

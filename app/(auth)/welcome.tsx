@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthProviderButtons from "@/components/AuthProviderButtons";
 import BrandMark from "@/components/BrandMark";
 import LegalFootnote from "@/components/LegalFootnote";
+import { BRAND } from "@/lib/brand";
 import { AccentButton } from "@/components/ui";
 import { font, useColors, type Colors } from "@/lib/theme";
 
@@ -40,7 +41,7 @@ export default function WelcomeScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
       <View style={styles.footer}>
-        <Text style={styles.footerText}>New to PetPal? </Text>
+        <Text style={styles.footerText}>New to {BRAND}? </Text>
         <Link href="/(auth)/signup" style={styles.footerLink}>
           Create an account
         </Link>

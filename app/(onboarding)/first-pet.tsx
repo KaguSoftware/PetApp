@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/Icons";
 import { AccentButton } from "@/components/ui";
+import { BRAND } from "@/lib/brand";
 import { useStore } from "@/lib/store";
 import { font, useColors, type Colors } from "@/lib/theme";
 
@@ -22,7 +23,7 @@ export default function FirstPetScreen() {
       <Text style={styles.kicker}>{householdName} is ready</Text>
       <Text style={styles.title}>Add your first pet</Text>
       <Text style={styles.subtitle}>
-        Pets are the heart of PetPal — feeding, walks, meds and vet visits all hang off them. You can always add more later.
+        Pets are the heart of {BRAND} — feeding, walks, meds and vet visits all hang off them. You can always add more later.
       </Text>
       <View style={styles.cta}>
         <AccentButton onPress={() => router.push("/pet/new?onboarding=1")}>Add a pet</AccentButton>

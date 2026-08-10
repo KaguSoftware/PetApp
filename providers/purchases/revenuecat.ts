@@ -82,7 +82,7 @@ export class RevenueCatPurchases implements PurchasesGateway {
         return { plusActive: false, source: "none", cancelled: true };
       }
       const message = (e as { message?: string })?.message;
-      console.warn("[petpal] purchase failed:", e);
+      console.warn("[peting] purchase failed:", e);
       return { plusActive: false, source: "none", error: message ?? "The purchase didn't go through." };
     }
   }
@@ -92,7 +92,7 @@ export class RevenueCatPurchases implements PurchasesGateway {
       const customerInfo = await Purchases.restorePurchases();
       return entitlementFrom(customerInfo);
     } catch (e) {
-      console.warn("[petpal] restore failed:", e);
+      console.warn("[peting] restore failed:", e);
       return { plusActive: false, source: "none", error: "Couldn't restore purchases." };
     }
   }
@@ -102,7 +102,7 @@ export class RevenueCatPurchases implements PurchasesGateway {
       const customerInfo = await Purchases.getCustomerInfo();
       return entitlementFrom(customerInfo);
     } catch (e) {
-      console.warn("[petpal] getEntitlement failed:", e);
+      console.warn("[peting] getEntitlement failed:", e);
       return { plusActive: false, source: "none", error: "Couldn't load subscription details." };
     }
   }

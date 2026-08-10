@@ -7,7 +7,7 @@ import { useColors } from "@/lib/theme";
 import { useSession } from "@/providers/session";
 
 /**
- * Landing pad for every auth redirect — OAuth (petpal://auth-callback?code=…)
+ * Landing pad for every auth redirect — OAuth (peting://auth-callback?code=…)
  * AND the links inside Supabase's confirmation / recovery / email-change
  * emails (?token_hash=…&type=…).
  *

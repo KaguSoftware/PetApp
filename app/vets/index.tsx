@@ -6,6 +6,7 @@ import { PushedScreen } from "@/components/Screen";
 import VetBookingSheet from "@/components/VetBookingSheet";
 import { Icon } from "@/components/Icons";
 import { Footnote, PressableScale, SmallButton } from "@/components/ui";
+import { BRAND } from "@/lib/brand";
 import { VETS, type Vet } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { cardShadow, font, radius, withAlpha, useColors, type Colors } from "@/lib/theme";
@@ -73,7 +74,7 @@ export default function VetsPage() {
             </PressableScale>
           );
         })}
-        <Footnote>Sponsored clinics pay to appear here — that&apos;s how PetPal stays free.</Footnote>
+        <Footnote>Sponsored clinics pay to appear here — that&apos;s how {BRAND} stays free.</Footnote>
       </View>
 
       <VetBookingSheet vet={selected} onClose={() => setSelected(null)} />

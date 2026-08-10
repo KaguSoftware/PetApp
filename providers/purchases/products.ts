@@ -9,7 +9,7 @@
  * only: a client that decided its own grant could mint currency.
  */
 
-export const PLUS_MONTHLY_ID = "petpal_plus_monthly";
+export const PLUS_MONTHLY_ID = "peting_plus_monthly";
 
 export interface CoinPackMeta {
   id: string;
@@ -20,10 +20,10 @@ export interface CoinPackMeta {
 
 /** Ordered smallest → largest; the UI renders them in this order. */
 export const COIN_PACKS: CoinPackMeta[] = [
-  { id: "petpal_coins_500", coins: 500 },
-  { id: "petpal_coins_1500", coins: 1500, bonus: "+10%" },
-  { id: "petpal_coins_4000", coins: 4000, bonus: "+25%", best: true },
-  { id: "petpal_coins_10000", coins: 10000, bonus: "+40%" },
+  { id: "peting_coins_500", coins: 500 },
+  { id: "peting_coins_1500", coins: 1500, bonus: "+10%" },
+  { id: "peting_coins_4000", coins: 4000, bonus: "+25%", best: true },
+  { id: "peting_coins_10000", coins: 10000, bonus: "+40%" },
 ];
 
 export function coinPackMeta(productId: string): CoinPackMeta | undefined {

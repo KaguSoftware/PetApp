@@ -22,12 +22,12 @@ const termsEn: LegalDoc = {
   title: "Terms of Service",
   updated: "Last updated: July 31, 2026",
   intro: [
-    "These Terms of Service (“Terms”) govern your use of the PetPal mobile application and related services (together, the “Service”), provided by Kagu Software (“Kagu Software”, “we”, “us”). By creating an account or using the Service, you agree to these Terms. If you do not agree, please do not use the Service.",
+    "These Terms of Service (“Terms”) govern your use of the Peting mobile application and related services (together, the “Service”), provided by Kagu Software (“Kagu Software”, “we”, “us”). By creating an account or using the Service, you agree to these Terms. If you do not agree, please do not use the Service.",
     "These Terms are written in English and also provided in Turkish for convenience. If the two versions conflict, the English version controls to the extent permitted by applicable law.",
   ],
   sections: [
     {
-      heading: "1. Who can use PetPal",
+      heading: "1. Who can use Peting",
       body: [
         "You must be at least 13 years old to create an account. If you are under the age required by the law of your country to consent to online services, a parent or legal guardian must set up and supervise your use of the Service.",
         "You are responsible for the accuracy of the information you provide and for keeping your sign-in credentials secure. Let us know right away if you believe your account has been accessed without your permission.",
@@ -36,7 +36,7 @@ const termsEn: LegalDoc = {
     {
       heading: "2. Households and shared data",
       body: [
-        "PetPal is built for families. When you join a household, the content in that household — pets, care logs, reminders, health records, and similar data — is shared with the other members of that household, according to each member's role (owner, admin, or member).",
+        "Peting is built for families. When you join a household, the content in that household — pets, care logs, reminders, health records, and similar data — is shared with the other members of that household, according to each member's role (owner, admin, or member).",
         "Only invite people you trust. If you leave a household, data you contributed to it may remain part of the household's shared history.",
       ],
     },
@@ -47,7 +47,7 @@ const termsEn: LegalDoc = {
       ],
     },
     {
-      heading: "4. PetPal is not veterinary advice",
+      heading: "4. Peting is not veterinary advice",
       body: [
         "Care guides, plans, reminders, insights, and any other pet-care content in the Service are provided for general information only. They are not veterinary advice, diagnosis, or treatment, and they are no substitute for a qualified veterinarian.",
         "Always consult a veterinarian about your pet's health, and contact one immediately in an emergency. You are responsible for the care decisions you make for your pet.",
@@ -60,9 +60,9 @@ const termsEn: LegalDoc = {
       ],
     },
     {
-      heading: "6. Subscriptions (PetPal+)",
+      heading: "6. Subscriptions (Peting+)",
       body: [
-        "Parts of the Service require a paid subscription (“PetPal+”). Subscriptions are purchased through the Apple App Store or Google Play and renew automatically until cancelled.",
+        "Parts of the Service require a paid subscription (“Peting+”). Subscriptions are purchased through the Apple App Store or Google Play and renew automatically until cancelled.",
         "• Prices are shown before you purchase and may vary by region.",
         "• You can cancel any time in your App Store or Google Play subscription settings; cancellation takes effect at the end of the current billing period.",
         "• Refunds are handled by Apple or Google under their store policies. Nothing in these Terms limits any statutory refund rights you have as a consumer.",
@@ -137,12 +137,12 @@ const termsTr: LegalDoc = {
   title: "Kullanım Koşulları",
   updated: "Son güncelleme: 31 Temmuz 2026",
   intro: [
-    "Bu Kullanım Koşulları (“Koşullar”), Kagu Software (“Kagu Software”, “biz”) tarafından sunulan PetPal mobil uygulaması ve ilgili hizmetlerin (birlikte “Hizmet”) kullanımını düzenler. Hesap oluşturarak veya Hizmeti kullanarak bu Koşulları kabul etmiş olursunuz. Kabul etmiyorsanız lütfen Hizmeti kullanmayın.",
+    "Bu Kullanım Koşulları (“Koşullar”), Kagu Software (“Kagu Software”, “biz”) tarafından sunulan Peting mobil uygulaması ve ilgili hizmetlerin (birlikte “Hizmet”) kullanımını düzenler. Hesap oluşturarak veya Hizmeti kullanarak bu Koşulları kabul etmiş olursunuz. Kabul etmiyorsanız lütfen Hizmeti kullanmayın.",
     "Bu Koşullar İngilizce yazılmış olup kolaylık açısından Türkçe olarak da sunulmaktadır. İki sürüm arasında çelişki olması halinde, yürürlükteki hukukun izin verdiği ölçüde İngilizce sürüm geçerlidir.",
   ],
   sections: [
     {
-      heading: "1. PetPal'ı kimler kullanabilir",
+      heading: "1. Peting'i kimler kullanabilir",
       body: [
         "Hesap oluşturmak için en az 13 yaşında olmanız gerekir. Ülkenizin hukukuna göre çevrim içi hizmetlere rıza gösterme yaşının altındaysanız, Hizmeti bir ebeveyn veya yasal vasinin kurması ve gözetiminde kullanmanız gerekir.",
         "Sağladığınız bilgilerin doğruluğundan ve giriş bilgilerinizin güvenliğinden siz sorumlusunuz. Hesabınıza izinsiz erişildiğini düşünüyorsanız lütfen hemen bize bildirin.",
@@ -151,7 +151,7 @@ const termsTr: LegalDoc = {
     {
       heading: "2. Aileler (haneler) ve paylaşılan veriler",
       body: [
-        "PetPal aileler için tasarlanmıştır. Bir haneye katıldığınızda, o hanedeki içerik — evcil hayvanlar, bakım kayıtları, hatırlatıcılar, sağlık kayıtları ve benzeri veriler — her üyenin rolüne göre (sahip, yönetici veya üye) diğer hane üyeleriyle paylaşılır.",
+        "Peting aileler için tasarlanmıştır. Bir haneye katıldığınızda, o hanedeki içerik — evcil hayvanlar, bakım kayıtları, hatırlatıcılar, sağlık kayıtları ve benzeri veriler — her üyenin rolüne göre (sahip, yönetici veya üye) diğer hane üyeleriyle paylaşılır.",
         "Yalnızca güvendiğiniz kişileri davet edin. Bir haneden ayrılırsanız, katkıda bulunduğunuz veriler hanenin ortak geçmişinin bir parçası olarak kalabilir.",
       ],
     },
@@ -162,7 +162,7 @@ const termsTr: LegalDoc = {
       ],
     },
     {
-      heading: "4. PetPal veteriner tavsiyesi değildir",
+      heading: "4. Peting veteriner tavsiyesi değildir",
       body: [
         "Hizmetteki bakım rehberleri, planlar, hatırlatıcılar, içgörüler ve diğer evcil hayvan bakım içerikleri yalnızca genel bilgilendirme amacıyla sunulur. Bunlar veteriner tavsiyesi, teşhisi veya tedavisi değildir ve uzman bir veteriner hekimin yerini tutmaz.",
         "Evcil hayvanınızın sağlığıyla ilgili her zaman bir veteriner hekime danışın; acil durumlarda derhal bir veterinere başvurun. Evcil hayvanınız için aldığınız bakım kararlarından siz sorumlusunuz.",
@@ -175,9 +175,9 @@ const termsTr: LegalDoc = {
       ],
     },
     {
-      heading: "6. Abonelikler (PetPal+)",
+      heading: "6. Abonelikler (Peting+)",
       body: [
-        "Hizmetin bazı bölümleri ücretli abonelik (“PetPal+”) gerektirir. Abonelikler Apple App Store veya Google Play üzerinden satın alınır ve iptal edilene kadar otomatik olarak yenilenir.",
+        "Hizmetin bazı bölümleri ücretli abonelik (“Peting+”) gerektirir. Abonelikler Apple App Store veya Google Play üzerinden satın alınır ve iptal edilene kadar otomatik olarak yenilenir.",
         "• Fiyatlar satın almadan önce gösterilir ve bölgeye göre değişebilir.",
         "• App Store veya Google Play abonelik ayarlarından istediğiniz zaman iptal edebilirsiniz; iptal, mevcut fatura döneminin sonunda geçerli olur.",
         "• İadeler, Apple veya Google tarafından kendi mağaza politikalarına göre yürütülür. Bu Koşullardaki hiçbir hüküm, tüketici olarak sahip olduğunuz yasal iade haklarını sınırlamaz.",
@@ -252,7 +252,7 @@ const privacyEn: LegalDoc = {
   title: "Privacy Policy",
   updated: "Last updated: July 31, 2026",
   intro: [
-    "This Privacy Policy explains what personal data Kagu Software (“we”, “us”) collects when you use the PetPal app, how we use it, and the choices you have. We keep it simple: we collect what the app needs to work, we don't run ads or analytics trackers, and we never sell your data.",
+    "This Privacy Policy explains what personal data Kagu Software (“we”, “us”) collects when you use the Peting app, how we use it, and the choices you have. We keep it simple: we collect what the app needs to work, we don't run ads or analytics trackers, and we never sell your data.",
     "This Policy is written in English and also provided in Turkish for convenience. If the two versions conflict, the English version controls to the extent permitted by applicable law.",
   ],
   sections: [
@@ -262,7 +262,7 @@ const privacyEn: LegalDoc = {
         "• Account data: your name, email address, and password (stored as a secure hash), or your Apple / Google sign-in identity if you use those.",
         "• Pet and care data you add: pet profiles, care logs, reminders, schedules, weights, medications, vaccinations, vet visits, supplies, and notes.",
         "• Household data: which households you belong to, your role, and invites you create or redeem.",
-        "• Purchase status: whether you have PetPal+ and which in-app purchases you made — handled by Apple/Google and RevenueCat; we never see your card details.",
+        "• Purchase status: whether you have Peting+ and which in-app purchases you made — handled by Apple/Google and RevenueCat; we never see your card details.",
         "• App data: a push-notification token if you enable notifications, your in-app preferences (units, appearance, accessibility), and coins/streak progress.",
         "• Support: anything you send us when you email support.",
         "We do not collect your precise location, contacts, or advertising identifiers, and the app contains no ads, analytics, or tracking SDKs.",
@@ -318,7 +318,7 @@ const privacyEn: LegalDoc = {
     {
       heading: "8. Children",
       body: [
-        "PetPal accounts require users to be at least 13 years old. We do not knowingly collect data from children below that age; if you believe a child has created an account, contact us and we will delete it.",
+        "Peting accounts require users to be at least 13 years old. We do not knowingly collect data from children below that age; if you believe a child has created an account, contact us and we will delete it.",
       ],
     },
     {
@@ -340,7 +340,7 @@ const privacyTr: LegalDoc = {
   title: "Gizlilik Politikası",
   updated: "Son güncelleme: 31 Temmuz 2026",
   intro: [
-    "Bu Gizlilik Politikası, PetPal uygulamasını kullandığınızda Kagu Software'in (“biz”) hangi kişisel verileri topladığını, bunları nasıl kullandığını ve sahip olduğunuz seçenekleri açıklar. Yaklaşımımız basit: yalnızca uygulamanın çalışması için gerekenleri toplarız, reklam veya analiz izleyicileri kullanmayız ve verilerinizi asla satmayız.",
+    "Bu Gizlilik Politikası, Peting uygulamasını kullandığınızda Kagu Software'in (“biz”) hangi kişisel verileri topladığını, bunları nasıl kullandığını ve sahip olduğunuz seçenekleri açıklar. Yaklaşımımız basit: yalnızca uygulamanın çalışması için gerekenleri toplarız, reklam veya analiz izleyicileri kullanmayız ve verilerinizi asla satmayız.",
     "Bu Politika İngilizce yazılmış olup kolaylık açısından Türkçe olarak da sunulmaktadır. İki sürüm arasında çelişki olması halinde, yürürlükteki hukukun izin verdiği ölçüde İngilizce sürüm geçerlidir.",
   ],
   sections: [
@@ -350,7 +350,7 @@ const privacyTr: LegalDoc = {
         "• Hesap verileri: adınız, e-posta adresiniz ve parolanız (güvenli özet/hash olarak saklanır) veya kullanıyorsanız Apple / Google giriş kimliğiniz.",
         "• Eklediğiniz evcil hayvan ve bakım verileri: evcil hayvan profilleri, bakım kayıtları, hatırlatıcılar, programlar, kilo takibi, ilaçlar, aşılar, veteriner ziyaretleri, malzemeler ve notlar.",
         "• Hane verileri: hangi hanelere üye olduğunuz, rolünüz ve oluşturduğunuz veya kullandığınız davetler.",
-        "• Satın alma durumu: PetPal+ aboneliğinizin olup olmadığı ve hangi uygulama içi satın almaları yaptığınız — Apple/Google ve RevenueCat tarafından yürütülür; kart bilgilerinizi hiçbir zaman görmeyiz.",
+        "• Satın alma durumu: Peting+ aboneliğinizin olup olmadığı ve hangi uygulama içi satın almaları yaptığınız — Apple/Google ve RevenueCat tarafından yürütülür; kart bilgilerinizi hiçbir zaman görmeyiz.",
         "• Uygulama verileri: bildirimleri açarsanız bir anlık bildirim jetonu, uygulama içi tercihleriniz (birimler, görünüm, erişilebilirlik) ve coin/seri ilerlemeniz.",
         "• Destek: destek e-postası gönderdiğinizde bize ilettiğiniz her şey.",
         "Hassas konumunuzu, kişilerinizi veya reklam tanımlayıcılarınızı toplamayız; uygulamada reklam, analiz veya izleme SDK'sı bulunmaz.",
@@ -406,7 +406,7 @@ const privacyTr: LegalDoc = {
     {
       heading: "8. Çocuklar",
       body: [
-        "PetPal hesapları için kullanıcıların en az 13 yaşında olması gerekir. Bu yaşın altındaki çocuklardan bilerek veri toplamayız; bir çocuğun hesap oluşturduğunu düşünüyorsanız bize ulaşın, hesabı sileriz.",
+        "Peting hesapları için kullanıcıların en az 13 yaşında olması gerekir. Bu yaşın altındaki çocuklardan bilerek veri toplamayız; bir çocuğun hesap oluşturduğunu düşünüyorsanız bize ulaşın, hesabı sileriz.",
       ],
     },
     {

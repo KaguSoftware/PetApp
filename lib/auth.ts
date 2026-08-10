@@ -24,13 +24,13 @@ export interface AuthResult {
 
 /** Where the OAuth browser flow returns to. In Expo Go this is an exp:// URL
  * (add it to the Supabase redirect allowlist while developing); in real
- * builds it's petpal://auth-callback. */
+ * builds it's peting://auth-callback. */
 function authRedirectUrl(): string {
-  // In a real build this is `petpal://auth-callback` — stable, IP-free, and
+  // In a real build this is `peting://auth-callback` — stable, IP-free, and
   // the one string that needs allowlisting forever.
   //
   // In EXPO GO it must stay the `exp://<lan-ip>:8081/--/auth-callback` form,
-  // because a `petpal://` link cannot reopen Expo Go (Expo Go owns `exp://`).
+  // because a `peting://` link cannot reopen Expo Go (Expo Go owns `exp://`).
   // That URL changes with the network, so it has to be re-allowlisted whenever
   // the LAN IP or tunnel changes — when it doesn't match, Supabase silently
   // falls back to Site URL and the user lands on `localhost:3000/?code=…`
@@ -39,8 +39,8 @@ function authRedirectUrl(): string {
   const url =
     Constants.appOwnership === "expo"
       ? Linking.createURL("auth-callback")
-      : Linking.createURL("auth-callback", { scheme: "petpal" });
-  console.log("[petpal] OAuth redirectTo =", url, "— this EXACT string must be in Supabase's Redirect URLs");
+      : Linking.createURL("auth-callback", { scheme: "peting" });
+  console.log("[peting] OAuth redirectTo =", url, "— this EXACT string must be in Supabase's Redirect URLs");
   return url;
 }
 
@@ -95,7 +95,7 @@ export async function signInWithApple(): Promise<AuthResult> {
 // --------------------------------------------------------------- Google ----
 
 /** Pulls a query param out of a redirect URL. Uses expo-linking's parser, NOT
- * `new URL()`: for a custom scheme like `petpal://auth-callback?code=…` the
+ * `new URL()`: for a custom scheme like `peting://auth-callback?code=…` the
  * WHATWG parser treats "auth-callback" as the host and does not reliably
  * expose the query, so `searchParams.get("code")` comes back null and a
  * perfectly good sign-in looks like a failure. */
@@ -157,7 +157,7 @@ async function completeBrowserOAuth(url: string, redirectTo: string): Promise<Au
     }
   } catch (e) {
     // openAuthSessionAsync throws when no browser can handle the intent.
-    console.warn("[petpal] browser auth session failed, falling back to deep link:", e);
+    console.warn("[peting] browser auth session failed, falling back to deep link:", e);
     try {
       await Linking.openURL(url);
       redirectUrl = await waitForLink(5 * 60 * 1000);
@@ -284,14 +284,14 @@ export async function resendCode(email: string, purpose: OtpPurpose): Promise<Au
 export interface EmailLinkResult extends AuthResult {
   purpose: OtpPurpose;
   /** No auth params in the URL at all — not an email link (e.g. a bare
-   * petpal://auth-callback open). The caller should just redirect. */
+   * peting://auth-callback open). The caller should just redirect. */
   ignored?: boolean;
 }
 
 const OTP_PURPOSES: OtpPurpose[] = ["signup", "recovery", "email_change"];
 
 /**
- * Completes an emailed auth link that landed on petpal://auth-callback.
+ * Completes an emailed auth link that landed on peting://auth-callback.
  *
  * Supabase sends one of two shapes depending on the flow and GoTrue version:
  *   ?token_hash=…&type=signup|recovery|email_change|magiclink  → verifyOtp

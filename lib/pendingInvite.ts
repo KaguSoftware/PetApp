@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
- * An invite deep link (petpal://join?code=…) tapped while signed OUT can't
+ * An invite deep link (peting://join?code=…) tapped while signed OUT can't
  * open /join — the route is session-guarded. The code parks here across the
  * sign-in/sign-up round trip and the root layout consumes it right after
  * hydration, so the invitee lands on the join screen they were promised.
@@ -18,7 +18,7 @@ export async function setPendingInvite(invite: PendingInvite): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, `${invite.kind}:${invite.value}`);
   } catch (e) {
-    console.error("[petpal] pending invite stash failed:", e);
+    console.error("[peting] pending invite stash failed:", e);
   }
 }
 

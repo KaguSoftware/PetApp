@@ -252,7 +252,7 @@ function canonFor(title: string): { id: string; label: string; icon: IconName; g
 /**
  * What the plan recommends, before any family override.
  *
- * `vetPlans` is the PetPal+ switch. Off, the whole document is still built —
+ * `vetPlans` is the Peting+ switch. Off, the whole document is still built —
  * from the species defaults the free app already tracks against — so nobody
  * gets a wall where their routine should be. On, the breed's vet-built numbers
  * and cadences replace them line for line.
@@ -265,7 +265,7 @@ function suggestedCount(pet: Pet, action: ActionType, vetPlans: boolean): number
 function suggestedGrams(pet: Pet, vetPlans: boolean): number | undefined {
   const meals = suggestedCount(pet, "fed", vetPlans);
   if (!vetPlans) return meals != null ? meals * pet.cupGrams : undefined;
-  // The age/gender weight guide is the sharpest number PetPal has, so it leads.
+  // The age/gender weight guide is the sharpest number Peting has, so it leads.
   const guide = weightFeedingEntry(pet)?.kibbleGramsRange;
   if (guide) return Math.round((guide[0] + guide[1]) / 2);
   const fromPlan = CARE_PLANS[pet.breed]?.items.find((i) => i.action === "fed")?.perDayGrams;

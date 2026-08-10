@@ -161,7 +161,7 @@ export function DoneRow({ title, petName, onReopen, last }: { title: string; pet
         >
           <View style={styles.leadZone}>
             <View style={[styles.check, styles.checkDone]}>
-              <Icon name="check" size={14} color={colors.white} strokeWidth={2.6} />
+              <Icon name="check" size={14} color={colors.onAccent} strokeWidth={2.6} />
             </View>
           </View>
         </PressableScale>

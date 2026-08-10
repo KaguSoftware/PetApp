@@ -142,7 +142,7 @@ function InboundLinkWatcher() {
     const handle = (url: string | null) => {
       if (!url) return;
       const parsed = Linking.parse(url);
-      // `petpal://join?code=…` puts "join" in the URL's HOST, leaving path
+      // `peting://join?code=…` puts "join" in the URL's HOST, leaving path
       // empty — only the Expo Go shape (exp://host/--/join?code=…) fills path.
       // Checking path alone silently dropped every real-build invite link.
       const path = (parsed.path ?? "").replace(/^\/+|\/+$/g, "");
@@ -192,7 +192,7 @@ function PushTokenRegistrar() {
   const { session } = useSession();
   const uid = session?.user?.id ?? null;
   useEffect(() => {
-    if (uid) registerPushToken(uid).catch((e) => console.warn("[petpal] push token registration failed:", e));
+    if (uid) registerPushToken(uid).catch((e) => console.warn("[peting] push token registration failed:", e));
   }, [uid]);
   return null;
 }

@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import PixelSprite from "@/components/pixel/PixelSprite";
 import { CAT_SPRITE } from "@/components/pixel/petSprites";
+import { BRAND_MARK } from "@/lib/brand";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 /**
- * The PetPal brand lockup for auth screens: the pixel mascot (the one place
+ * The Peting brand lockup for auth screens: the pixel mascot (the one place
  * pixel art belongs — the pets) over a clean wordmark.
  */
 export default function BrandMark() {
@@ -14,7 +15,7 @@ export default function BrandMark() {
   return (
     <View style={styles.wrap}>
       <PixelSprite sprite={CAT_SPRITE} size={48} />
-      <Text style={styles.wordmark}>PetPal</Text>
+      <Text style={styles.wordmark}>{BRAND_MARK}</Text>
     </View>
   );
 }

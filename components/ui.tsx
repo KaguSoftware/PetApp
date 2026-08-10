@@ -291,7 +291,7 @@ export function AccentButton({
         tinted: { backgroundColor: colors.accentSoft },
         gray: { backgroundColor: colors.fill },
       }[variant];
-  const labelColor = off ? colors.label3 : { primary: colors.white, tinted: colors.accent, gray: colors.label }[variant];
+  const labelColor = off ? colors.label3 : { primary: colors.onAccent, tinted: colors.accent, gray: colors.label }[variant];
   return (
     <PressableScale
       onPress={onPress}

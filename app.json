@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "PetPal",
+    "name": "PETING.",
     "slug": "PetApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "petpal",
+    "scheme": "peting",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "runtimeVersion": {
@@ -16,13 +16,13 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.kagu.petpal",
+      "bundleIdentifier": "com.kagu.peting",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.kagu.petpal",
+      "package": "com.kagu.peting",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

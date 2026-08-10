@@ -109,7 +109,7 @@ export default function InboxScreen() {
         hitSlop={6}
         style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.6 }]}
       >
-        <Icon name="filter" size={isIOS ? 22 : 17} color={isIOS ? colors.accent : colors.white} />
+        <Icon name="filter" size={isIOS ? 22 : 17} color={isIOS ? colors.accent : colors.onAccent} />
         {filter.activeCount > 0 ? <View style={styles.filterDot} /> : null}
       </Pressable>
       {/* Plain Pressable with an opacity dim, NOT PressableScale: this renders
@@ -122,7 +122,7 @@ export default function InboxScreen() {
         hitSlop={6}
         style={({ pressed }) => [styles.headerButton, pressed && { opacity: 0.6 }]}
       >
-        <Icon name="plus" size={isIOS ? 25 : 17} color={isIOS ? colors.accent : colors.white} />
+        <Icon name="plus" size={isIOS ? 25 : 17} color={isIOS ? colors.accent : colors.onAccent} />
       </Pressable>
     </View>
   );

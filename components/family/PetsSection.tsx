@@ -131,7 +131,7 @@ export default function PetsSection() {
             here instead of sending people back out to the Pets tab. */}
         <Row
           onPress={() => router.push("/pet/new")}
-          leading={<IconCircle icon="plus" tint={colors.white} bg={colors.accent} size={38} />}
+          leading={<IconCircle icon="plus" tint={colors.onAccent} bg={colors.accent} size={38} />}
           title="Add a pet"
           subtitle="Everyone in this household can care for them"
           trailing={<Chevron />}

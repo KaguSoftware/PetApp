@@ -15,6 +15,7 @@ import CareStatTile, { type TilePetValue } from "@/components/plan/CareStatTile"
 import { PageButton } from "@/components/plan/Chapter";
 import NutritionHero from "@/components/plan/NutritionHero";
 import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader, SheetTitle } from "@/components/ui";
+import { BRAND_PLUS } from "@/lib/brand";
 import { carePlanDocument, breedNotes, type PlanChapter, type PlanEntry, type PlanLine, type Rhythm } from "@/lib/carePlan";
 import { type ActionType, type Pet } from "@/lib/data";
 import { GUIDES } from "@/lib/guides";
@@ -282,7 +283,7 @@ export default function CarePage() {
         <Group style={styles.upsell}>
           <Row
             leading={<IconCircle icon="sparkles" tint={colors.accent} bg={colors.accentSoft} />}
-            title="PetPal+"
+            title={BRAND_PLUS}
             subtitle={pets.length === 1 ? `A vet-built plan for a ${pets[0].breed}` : "Vet-built plans for each breed"}
             trailing={<Chevron />}
             onPress={() => setPaywallOpen(true)}

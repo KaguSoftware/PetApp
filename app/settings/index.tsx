@@ -10,6 +10,7 @@ import Paywall from "@/components/Paywall";
 import { PushedScreen } from "@/components/Screen";
 import { Icon } from "@/components/Icons";
 import { Chevron, Group, IconCircle, PressableScale, Row, SectionHeader } from "@/components/ui";
+import { BRAND, BRAND_PLUS } from "@/lib/brand";
 import { useStore } from "@/lib/store";
 import { font, radius, useColors, withAlpha, type Colors } from "@/lib/theme";
 
@@ -45,7 +46,7 @@ export default function SettingsPage() {
   async function emailSupport() {
     const url =
       "mailto:support@kagu.app?subject=" +
-      encodeURIComponent("PetPal support") +
+      encodeURIComponent(`${BRAND} support`) +
       "&body=" +
       encodeURIComponent("\n\n—\nTell us what's going on and we'll help.");
     const ok = await Linking.canOpenURL(url);
@@ -61,14 +62,14 @@ export default function SettingsPage() {
 
   return (
     <PushedScreen title="Settings">
-      {/* PetPal+ status / upgrade */}
+      {/* Peting+ status / upgrade */}
       {state.premium ? (
         <Group>
           <Row
             onPress={() => router.push("/settings/subscription")}
             leading={
               <LinearGradient colors={[colors.accent, colors.accentDeep]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.plusTile}>
-                <Icon name="sparkles" size={18} color={colors.white} />
+                <Icon name="sparkles" size={18} color={colors.onAccent} />
               </LinearGradient>
             }
             title="Peting Subscription"
@@ -81,13 +82,13 @@ export default function SettingsPage() {
           <LinearGradient colors={[colors.accent, colors.accentDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.upgradeCard}>
             <View style={styles.upgradeRow}>
               <View style={styles.upgradeIcon}>
-                <Icon name="sparkles" size={20} color={colors.white} />
+                <Icon name="sparkles" size={20} color={colors.onAccent} />
               </View>
               <View style={styles.upgradeText}>
-                <Text style={styles.upgradeTitle}>Upgrade to PetPal+</Text>
+                <Text style={styles.upgradeTitle}>Upgrade to {BRAND_PLUS}</Text>
                 <Text style={styles.upgradeBody}>Vet-built plans · smart reminders · booking</Text>
               </View>
-              <Icon name="chevron-right" size={16} color={withAlpha(colors.white, 0.7)} />
+              <Icon name="chevron-right" size={16} color={withAlpha(colors.onAccent, 0.7)} />
             </View>
           </LinearGradient>
         </PressableScale>
@@ -177,7 +178,7 @@ export default function SettingsPage() {
           onPress={() => router.push({ pathname: "/legal/[doc]", params: { doc: "terms" } })}
           leading={<IconCircle icon="list" tint={colors.label2} bg={colors.fill} />}
           title="Terms of Service"
-          subtitle="The rules for using PetPal"
+          subtitle={`The rules for using ${BRAND}`}
           trailing={<Chevron />}
         />
         <Row
@@ -211,11 +212,11 @@ const makeStyles = (colors: Colors) =>
       width: 40,
       height: 40,
       borderRadius: radius.sm,
-      backgroundColor: withAlpha(colors.white, 0.15),
+      backgroundColor: withAlpha(colors.onAccent, 0.15),
       alignItems: "center",
       justifyContent: "center",
     },
     upgradeText: { flex: 1, minWidth: 0 },
-    upgradeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.white },
-    upgradeBody: { fontSize: 13, fontFamily: font.medium, color: withAlpha(colors.white, 0.8) },
+    upgradeTitle: { fontSize: 16, fontFamily: font.bold, color: colors.onAccent },
+    upgradeBody: { fontSize: 13, fontFamily: font.medium, color: withAlpha(colors.onAccent, 0.8) },
   });

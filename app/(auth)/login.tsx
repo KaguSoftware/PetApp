@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AuthProviderButtons from "@/components/AuthProviderButtons";
 import { AccentButton, TextField } from "@/components/ui";
 import { resendCode, signInWithEmail } from "@/lib/auth";
+import { BRAND } from "@/lib/brand";
 import { font, useColors, type Colors } from "@/lib/theme";
 
 export default function LoginScreen() {
@@ -88,7 +89,7 @@ export default function LoginScreen() {
           <AuthProviderButtons onError={setError} disabled={loading} />
         </View>
         <View style={styles.footer}>
-          <Text style={styles.footerText}>New to PetPal? </Text>
+          <Text style={styles.footerText}>New to {BRAND}? </Text>
           <Link href="/(auth)/signup" style={styles.footerLink}>
             Create an account
           </Link>

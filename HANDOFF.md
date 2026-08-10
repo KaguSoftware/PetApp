@@ -1,7 +1,9 @@
-# PetPal Mobile — Handoff
+# Peting Mobile — Handoff (formerly PetPal)
 
-> Read this first when starting a fresh chat. The web demo (feature reference, still live) is
-> `KaguSoftware/myPet-webdemo`. This repo: `https://github.com/KaguSoftware/PetApp`, branch `main`.
+> Read this first when starting a fresh chat. The web demo (feature reference, still live, still
+> branded **PetPal**) is `KaguSoftware/myPet-webdemo`. This repo:
+> `https://github.com/KaguSoftware/PetApp`, branch `main`. The mobile app rebranded to **PETING.**
+> on 2026-08-10 — brand strings live in `lib/brand.ts`; see that dated section below.
 
 ## Working style
 - **Collaborate**: the owner (Parsa) confirms direction before significant/user-facing decisions.
@@ -960,6 +962,48 @@ containers deep for something you buy with play money, and a flat 12–14pt scal
 - **Needs a device pass on:** `Pet3D`'s pan versus the page scroll now that the stage has no card
   around it (unchanged code, new neighbours), the vignette in dark mode, the 4-column grid on a
   320pt-wide phone, and whether the purchase confirm feels like friction in the earn loop.
+
+### REBRAND: PetPal → PETING. (2026-08-10, plan-mode collab) — built, `tsc` + `eslint` clean, NEEDS Supabase dashboard steps + device pass
+
+The app is now **PETING.** — a coined verb (the act of taking care of a pet); the trailing period is
+part of the mark. Owner decisions: mark = "PETING." (logo/titles/standalone), prose = "Peting"
+(never ".?" collisions), premium tier = "Peting+", internals renamed too.
+
+**⚠ The ink-black accent was built AND REVERTED the same day** — the owner's team vetoed it, so the
+violet palette (`#6b55df`/`#8f7cf0`, hue 285) is back exactly as it was. Don't "helpfully" re-apply
+a black accent. Two things survived the revert on purpose, both visually identical to before:
+the **`onAccent` theme token** (white in both modes — use it instead of `colors.white` for anything
+drawn ON an accent fill, so a future accent change can't strand labels; ~15 call sites already use
+it), and the neutral-glow/categorical learnings recorded here only as notes: if the accent ever
+goes dark, the accent glows (settings upgrade card, Paywall hero, inbox Android buttons) and the
+categorical accents (water, dental, "due"/"open" states) need real hues, and the toggle knob needs
+to swap to onAccent when the track is filled.
+
+- **`lib/brand.ts` (new)** — `BRAND_MARK` ("PETING.") / `BRAND` ("Peting") / `BRAND_PLUS`
+  ("Peting+"): the ONLY place the name is spelled out besides app.json. All ~45 display strings,
+  legal.ts (EN+TR, Turkish accusative "Peting'i" hand-fixed), share/invite copy, hashtags
+  (#peting) and the 71 `[petpal]`→`[peting]` log prefixes flow from it or were renamed.
+- **app.json**: `name` "PETING.", `scheme` "peting", bundle/package `com.kagu.peting`. Slug/EAS
+  projectId untouched. `lib/auth.ts` + `lib/inviteShare.ts` build `peting://` links now.
+- **Product IDs**: `peting_plus_monthly`, `peting_coins_*` in `providers/purchases/products.ts` AND
+  `supabase/functions/rc-webhook/index.ts` (lockstep; RevenueCat dashboard doesn't exist yet, so
+  these were still free to rename).
+- **Deliberately still `petpal`** (invisible, externally coupled — do NOT "finish" the rename):
+  AsyncStorage keys (`petpal.*` — renaming wipes testers' prefs/snapshot/shortcuts), realtime
+  channel names (`petpal:household/pets/chat:*`), applied SQL migrations' GUC/lock names
+  (0026/0028), and `lib/supabase.ts`'s comment about the (still-PetPal) web demo.
+- **⚠ OWNER — Supabase dashboard (2026-08-10, not yet done):**
+  1. Auth ▸ URL Configuration: add `peting://**` (drop `petpal://**` once no test links matter).
+  2. Auth ▸ Providers ▸ Apple: Client IDs → `host.exp.Exponent,com.kagu.peting`.
+  3. Auth ▸ Email Templates: "Your PetPal code: {{ .Token }}" → "Your Peting code: {{ .Token }}".
+  Until 1–2 are done, Google OAuth + emailed links bounce and Apple sign-in in a real build would
+  fail; Expo Go Apple sign-in (host.exp.Exponent) still works. Old shared `petpal://` invite links
+  are dead by design; hand-typed codes still work.
+- **Device pass**: home-screen label "PETING.", auth wordmark, Welcome intro, paywall/settings
+  "Peting+", share card "PETING." lockup + "Made with Peting" caption, invite share → join
+  end-to-end after dashboard step 1. Colors are untouched — nothing visual to re-verify there.
+- **Icon/splash are still stock Expo placeholders** — a real PETING. app icon (and the pale-blue
+  `#E6F4FE` adaptive-icon background) is its own future design task.
 
 ## Roadmap
 1. **← ACTIVE: owner runs the ACCOUNTS/AUTH setup checklist** (migrations **0017/0018 + 0022–0025 + 0026–0030 applied; 0031 STILL PENDING — invites stay broken until it lands**, Apple/Google providers, redirect URLs, email templates, manual linking — the full checklist is in the 2026-07-25/26 section above) then device-verifies that batch's two-phone walkthrough plus the still-pending 2026-07-23/24 + dark-mode priorities.

@@ -5,6 +5,7 @@ import PageLoading from "@/components/PageLoading";
 import Paywall from "@/components/Paywall";
 import { PushedScreen } from "@/components/Screen";
 import { Footnote, Group, IconCircle, Row, SectionHeader, SmallButton } from "@/components/ui";
+import { BRAND_PLUS } from "@/lib/brand";
 import { useStore } from "@/lib/store";
 import { useColors } from "@/lib/theme";
 import { usePurchases } from "@/providers/purchases";
@@ -61,7 +62,7 @@ export default function SubscriptionPage() {
       <Group>
         <Row
           leading={<IconCircle icon="sparkles" tint={colors.accent} bg={colors.accentSoft} />}
-          title="PetPal+"
+          title={BRAND_PLUS}
           subtitle="Care plans, smart reminders & vet booking"
         />
         <Row
@@ -110,7 +111,7 @@ export default function SubscriptionPage() {
                   tone="gray"
                   onPress={() => {
                     setPremium(false);
-                    toast("sparkles", "PetPal+ deactivated", "You can re-enable it anytime");
+                    toast("sparkles", `${BRAND_PLUS} deactivated`, "You can re-enable it anytime");
                   }}
                 />
               }

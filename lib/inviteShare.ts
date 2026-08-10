@@ -9,7 +9,7 @@ import type { HouseholdInvite } from "@/lib/data";
  */
 
 export function inviteLink(code: string) {
-  return `petpal://join?code=${code}`;
+  return `peting://join?code=${code}`;
 }
 
 export function inviteExpiryLabel(invite: HouseholdInvite) {
@@ -29,8 +29,8 @@ export async function shareInvite(invite: Pick<HouseholdInvite, "code" | "expire
   const expiry = inviteExpiryLabel(invite as HouseholdInvite);
   try {
     await Share.share({
-      title: "Join our PetPal household",
-      message: `Join our PetPal household. Your invite code is ${invite.code} — valid ${expiry}. Enter it in PetPal under Settings ▸ Household ▸ Join a household, or tap: ${inviteLink(invite.code)}`,
+      title: "Join our Peting household",
+      message: `Join our Peting household. Your invite code is ${invite.code} — valid ${expiry}. Enter it in Peting under Settings ▸ Household ▸ Join a household, or tap: ${inviteLink(invite.code)}`,
       url: inviteLink(invite.code),
     });
   } catch {
@@ -48,9 +48,9 @@ export async function copyInviteCode(code: string) {
 export async function shareFamilyIdLink(familyId: string) {
   try {
     await Share.share({
-      title: "Join our PetPal household",
-      message: `Join our PetPal household to share pet care: petpal://join?f=${familyId}`,
-      url: `petpal://join?f=${familyId}`,
+      title: "Join our Peting household",
+      message: `Join our Peting household to share pet care: peting://join?f=${familyId}`,
+      url: `peting://join?f=${familyId}`,
     });
   } catch {
     // cancelled

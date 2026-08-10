@@ -27,7 +27,7 @@ function selectGateway(): PurchasesGateway {
     return new mod.RevenueCatPurchases();
   } catch (e) {
     // Never let a purchases problem take the whole app down.
-    console.warn("[petpal] RevenueCat unavailable, using the mock gateway:", e);
+    console.warn("[peting] RevenueCat unavailable, using the mock gateway:", e);
     return new MockPurchases();
   }
 }
@@ -41,7 +41,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // looks the buyer up by it to decide which household to credit.
   useEffect(() => {
     if (!userId) return;
-    gateway.configure(userId).catch((e) => console.warn("[petpal] purchases configure failed:", e));
+    gateway.configure(userId).catch((e) => console.warn("[peting] purchases configure failed:", e));
   }, [gateway, userId]);
 
   return <Ctx.Provider value={gateway}>{children}</Ctx.Provider>;
