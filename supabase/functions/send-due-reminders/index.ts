@@ -17,11 +17,16 @@ const WINDOW_MS = 5 * 60 * 1000;
 
 Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("CRON_SECRET");
-  if (cronSecret && req.headers.get("Authorization") !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error("[send-due-reminders] CRON_SECRET is not set — refusing to run");
+    return new Response("Server misconfigured", { status: 500 });
+  }
+  if (req.headers.get("Authorization") !== `Bearer ${cronSecret}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  // ... geri kalanı aynı
   const now = Date.now();
 
   const { data: due, error } = await admin
