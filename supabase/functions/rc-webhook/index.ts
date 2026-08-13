@@ -105,7 +105,8 @@ Deno.serve(async (req) => {
     if (grantError) {
       // 23505 = already granted. Anything else is a real failure worth a retry.
       if (grantError.code === "23505") return json({ ok: true, duplicate: true, transaction: txId });
-      return new Response(grantError.message, { status: 500 });
+      console.error("[rc-webhook] coin grant insert failed:", grantError);
+      return new Response("Internal error", { status: 500 });
     }
 
     // RELATIVE increment via RPC — the clients write coins as an absolute value
@@ -115,7 +116,8 @@ Deno.serve(async (req) => {
     if (creditError) {
       // Roll the ledger row back so a retry can credit properly.
       await admin.from("coin_grants").delete().eq("rc_transaction_id", txId);
-      return new Response(creditError.message, { status: 500 });
+      console.error("[rc-webhook] grant_household_coins failed:", creditError);
+      return new Response("Internal error", { status: 500 });
     }
     return json({ ok: true, coins, household: householdId, transaction: txId });
   }
@@ -132,7 +134,10 @@ Deno.serve(async (req) => {
   const householdId = await activeHouseholdId(admin, userId);
   if (!householdId) return json({ ok: false, reason: "no_household" });
   const { error } = await admin.from("households").update({ premium }).eq("id", householdId);
-  if (error) return new Response(error.message, { status: 500 });
+  if (error) {
+    console.error("[rc-webhook] households update failed:", error);
+    return new Response("Internal error", { status: 500 });
+  }
 
   return json({ ok: true, premium, household: householdId });
 });

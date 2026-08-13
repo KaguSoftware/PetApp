@@ -26,7 +26,6 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  // ... geri kalanı aynı
   const now = Date.now();
 
   const { data: due, error } = await admin
@@ -35,7 +34,10 @@ Deno.serve(async (req) => {
     .eq("done", false)
     .gte("due", now - WINDOW_MS)
     .lte("due", now);
-  if (error) return new Response(error.message, { status: 500 });
+  if (error) {
+    console.error("[send-due-reminders] reminders query failed:", error);
+    return new Response("Internal error", { status: 500 });
+  }
   if (!due || due.length === 0) return new Response(JSON.stringify({ sent: 0 }), { headers: { "Content-Type": "application/json" } });
 
   const householdIds = [...new Set(due.map((r) => r.household_id))];
