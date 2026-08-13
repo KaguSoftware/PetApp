@@ -14,8 +14,15 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 Deno.serve(async (req) => {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -28,7 +35,7 @@ Deno.serve(async (req) => {
     data: { user },
     error: userErr,
   } = await asCaller.auth.getUser();
-  if (userErr || !user) return new Response("Unauthorized", { status: 401 });
+  if (userErr || !user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
   const admin = createClient(supabaseUrl, serviceKey);
 
@@ -43,12 +50,12 @@ Deno.serve(async (req) => {
           ? "backend migration 0028 required before account deletion"
           : `could not prepare deletion: ${prepErr.message}`,
       }),
-      { status: missing ? 409 : 500, headers: { "Content-Type": "application/json" } }
+      { status: missing ? 409 : 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 
   const { error } = await admin.auth.admin.deleteUser(user.id);
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
 
-  return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
 });
