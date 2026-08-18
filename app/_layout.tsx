@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Appearance, LogBox, Platform, View } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
+import HouseholdSwitchOverlay from "@/components/HouseholdSwitchOverlay";
 import NotificationSync from "@/components/NotificationSync";
 import { useNativeHeaderOptions } from "@/components/Screen";
 import Toasts from "@/components/Toasts";
@@ -232,6 +233,7 @@ function ThemedApp() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <RootStack />
+      <HouseholdSwitchOverlay />
       <Toasts />
       <NotificationSync />
       <PendingInviteRunner />

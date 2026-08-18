@@ -109,6 +109,15 @@ function mapActivityRow(a: {
 
 /** Trailing debounce on a realtime-triggered re-hydrate. */
 const SILENT_RELOAD_DEBOUNCE_MS = 600;
+// Safety net for the household-switch overlay: if load() somehow never
+// reaches a terminal state (a wedged fetch), drop the overlay anyway rather
+// than trapping the user behind it.
+const HOUSEHOLD_SWITCH_TIMEOUT_MS = 15000;
+// Hold the completed overlay briefly so the progress bar is SEEN reaching
+// 100%. Without it the teardown fires on the same commit that reports the
+// final stage, and the bar is unmounted mid-fill — the work finished, but the
+// user never sees it finish.
+const HOUSEHOLD_SWITCH_SETTLE_MS = 260;
 /** Floor between two realtime-triggered re-hydrates, however many events land. */
 const SILENT_RELOAD_MIN_GAP_MS = 3000;
 
@@ -133,6 +142,19 @@ export interface Toast {
 interface Store {
   state: AppState;
   hydrated: boolean;
+  /** 0..1 progress of the in-flight household switch, stepped as each stage of
+   *  the load actually completes (profile → memberships → the parallel
+   *  household/schedules/shortcuts/accounts fetches → mapped into state).
+   *  Meaningless unless `switchingHousehold` is non-null. */
+  switchProgress: number;
+  /** Non-null from the moment a household switch/join/create/leave is
+   *  committed until the resulting re-hydration settles; the string is the
+   *  destination household's name where we know it (`""` when we don't).
+   *  `hydrated` deliberately stays true across a switch (screens keep their
+   *  layout, routing doesn't bounce), which means every screen would otherwise
+   *  render the OUTGOING household's pets and logs for the length of a round
+   *  trip. Drives the full-screen switch overlay in ThemedApp. */
+  switchingHousehold: string | null;
   userEmail: string | null;
   /** Auth user id of the signed-in user, or null when signed out. */
   userId: string | null;
@@ -617,6 +639,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // window.location.reload() after joining/switching households).
   const [reloadNonce, setReloadNonce] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  // See Store.switchingHousehold. Set by the household mutations below, and
+  // cleared wherever load() reaches a terminal state (see beginHouseholdSwitch).
+  const [switchingHousehold, setSwitchingHousehold] = useState<string | null>(null);
+  // Real load progress, 0..1. Bumped from load() as each stage lands, so the
+  // bar reflects work actually finished rather than an indeterminate sweep.
+  const [switchProgress, setSwitchProgress] = useState(0);
+  // Mirrors switchingHousehold so the timeout callback and endHouseholdSwitch
+  // can test "is a switch still in flight?" without either being re-created
+  // (and re-scheduled) on every render.
+  const switchingHouseholdRef = useRef(false);
+  const switchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The household we switched AWAY from. The teardown effect watches for the
+  // active household becoming anything else — which is the one signal that
+  // holds for every outcome (target reached, landed household-less, signed
+  // out), and needs no knowledge of a destination id the server may not have
+  // minted yet.
+  const fromHouseholdIdRef = useRef<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -767,6 +806,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     pendingRefreshResolversRef.current.forEach((resolve) => resolve());
     pendingRefreshResolversRef.current.clear();
   };
+
+  /**
+   * Drop the household-switch overlay. Deliberately NOT hung off
+   * resolvePendingRefreshes: several of load()'s exits sit behind
+   * `if (cancelled)` / `if (!cancelled)`, and bumping reloadNonce (which is how
+   * a switch starts) tears the effect down and sets `cancelled` on the
+   * in-flight load — so the very load being replaced can exit without ever
+   * reaching those calls, stranding the overlay until the timeout.
+   */
+  /**
+   * Report a completed load stage. Guarded on an in-flight switch so ordinary
+   * background reloads (realtime, hourly token refresh) don't drive a bar
+   * nobody is looking at, and monotonic so an out-of-order call can't make the
+   * bar jump backwards.
+   */
+  const reportSwitchProgress = useCallback((value: number) => {
+    if (!switchingHouseholdRef.current) return;
+    setSwitchProgress((prev) => (value > prev ? value : prev));
+  }, []);
+
+  const endHouseholdSwitch = useCallback(() => {
+    if (!switchingHouseholdRef.current) return;
+    switchingHouseholdRef.current = false;
+    setSwitchingHousehold(null);
+    if (switchTimeoutRef.current) {
+      clearTimeout(switchTimeoutRef.current);
+      switchTimeoutRef.current = null;
+    }
+  }, []);
+
   const hid = () => householdIdRef.current;
   // The signed-in member currently "active" in the UI — notification prefs
   // are per-member, not per-household, so gating checks read off of this.
@@ -921,11 +990,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const h = hid();
     if (h) writeCounters(h);
   }, [writeCounters]);
+
+  /**
+   * Raise the switch overlay and flush pending counter writes against the
+   * OUTGOING household, then let the caller bump reloadNonce. Every household
+   * mutation that re-hydrates into a different household funnels through here.
+   *
+   * The timeout is a safety net, not the normal teardown: a load() that never
+   * reaches a terminal state (a wedged fetch) must not leave the user staring
+   * at a permanent overlay with no way back.
+   */
+  const beginHouseholdSwitch = useCallback(
+    (targetName = "") => {
+      flushCounters();
+      // Snapshot where we're leaving FROM — the teardown signal.
+      fromHouseholdIdRef.current = stateRef.current.activeHouseholdId;
+      setSwitchProgress(0);
+      switchingHouseholdRef.current = true;
+      setSwitchingHousehold(targetName);
+      if (switchTimeoutRef.current) clearTimeout(switchTimeoutRef.current);
+      switchTimeoutRef.current = setTimeout(() => {
+        switchTimeoutRef.current = null;
+        switchingHouseholdRef.current = false;
+        setSwitchingHousehold(null);
+      }, HOUSEHOLD_SWITCH_TIMEOUT_MS);
+    },
+    [flushCounters]
+  );
   useEffect(
     () => () => {
       if (countersTimerRef.current) clearTimeout(countersTimerRef.current);
       if (silentReloadTimerRef.current) clearTimeout(silentReloadTimerRef.current);
       if (realtimeRetryTimerRef.current) clearTimeout(realtimeRetryTimerRef.current);
+      if (switchTimeoutRef.current) clearTimeout(switchTimeoutRef.current);
       if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current);
     },
     []
@@ -1197,6 +1294,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   // effect would only ever see the pre-login (signed-out) session — the
   // onAuthStateChange subscription is what picks up a login that happens
   // without a full page reload.
+  // Drop the overlay once the store actually reflects a settled load. This
+  // runs on every commit rather than from inside load(), so it fires no matter
+  // which exit that load took — including the `cancelled` ones a switch itself
+  // causes. `hydrated` gates it so the very first paint of a fresh sign-in
+  // can't tear down an overlay that a switch raised a moment later.
+  useEffect(() => {
+    // `!== null`, not a falsy check: "" is a legitimate active value (a switch
+    // whose destination name we don't know yet).
+    if (switchingHousehold === null) return;
+    if (!hydrated) return;
+    // Settled = the household on screen is no longer the one we left. That
+    // covers arriving at the intended target, arriving somewhere else (the
+    // server picked a different household), landing household-less after
+    // leaving/deleting the last one, and signing out mid-switch (which resets
+    // to EMPTY_STATE). Testing "arrived at target" instead would strand the
+    // overlay on every one of those but the first.
+    if (state.activeHouseholdId === fromHouseholdIdRef.current) return;
+    // Let the bar paint its final frame at 100% before the overlay goes.
+    const t = setTimeout(endHouseholdSwitch, HOUSEHOLD_SWITCH_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [state.activeHouseholdId, hydrated, switchingHousehold, endHouseholdSwitch]);
+
   useEffect(() => {
     let cancelled = false;
     // Completed-load dedupe, keyed by user AND household — a change to either
@@ -1222,6 +1341,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         data: { session },
       } = await supabase.auth.getSession();
       const user = session?.user ?? null;
+      reportSwitchProgress(0.08);
       if (!user) {
         lastLoadedKey = null;
         inFlightUserId = null;
@@ -1345,6 +1465,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setHydrated(true);
           resolvePendingRefreshes();
+          // The switch (if any) failed — drop the overlay immediately so the
+          // toast is visible and the user isn't held behind it for the timeout.
+          endHouseholdSwitch();
           toast("alert", "Couldn't load your households", "Pull to refresh to try again");
         }
         // BOTH must clear, or the in-flight guard above swallows every later
@@ -1363,6 +1486,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // supabase-js types the `households(...)` embed as an array even though
       // the FK makes it a single object at runtime — hence the unknown hop.
       const membershipList: MembershipRow[] = (memberships as unknown as MembershipRow[] | null) ?? [];
+      reportSwitchProgress(0.3);
 
       // Zero memberships = a fresh account (post-0029 signups aren't demo-
       // seeded). Land on the create-or-join onboarding instead of seeding
@@ -1506,11 +1630,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       let shortcuts: Shortcut[] = [];
       let accounts: HouseholdAccount[] = [];
       if (activeId) {
+        // Each of the four reports as IT lands (they resolve independently),
+        // so the bar keeps moving through the longest phase of the load
+        // rather than freezing until the whole Promise.all settles.
+        let landed = 0;
+        const step = <T,>(p: Promise<T>): Promise<T> =>
+          p.then((v) => {
+            landed += 1;
+            reportSwitchProgress(0.3 + (0.85 - 0.3) * (landed / 4));
+            return v;
+          });
         const [res, sched, cuts, accs] = await Promise.all([
-          fetchHousehold(activeId),
-          fetchSchedules(activeId),
-          fetchShortcuts(activeId),
-          fetchAccounts(activeId),
+          step(fetchHousehold(activeId)),
+          step(fetchSchedules(activeId)),
+          step(fetchShortcuts(activeId)),
+          step(fetchAccounts(activeId)),
         ]);
         household = res.data;
         householdErr = res.error;
@@ -1527,6 +1661,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setHydrated(true);
           resolvePendingRefreshes();
+          endHouseholdSwitch();
           toast("alert", "Couldn't load your household", describeErr(householdErr) ?? "Pull to refresh to try again");
         }
         lastLoadedKey = null;
@@ -1686,6 +1821,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         membershipsKnown: true,
       });
       setHydrated(true);
+      // Everything is on screen — the switch is complete.
+      reportSwitchProgress(1);
       resolvePendingRefreshes();
       if (computedStreak !== h.streak || (lastStreakBonus != null && lastStreakBonus !== storedMarker)) {
         bestEffort(
@@ -1807,7 +1944,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
       clearInterval(careAlertTimer);
     };
-  }, [toast, notifyRecentActivity, raiseFeedingAlert, checkCareAlerts, notifyCareWarnings, reloadNonce, bestEffort]);
+  }, [toast, notifyRecentActivity, raiseFeedingAlert, checkCareAlerts, notifyCareWarnings, reloadNonce, bestEffort, endHouseholdSwitch, reportSwitchProgress]);
 
   // ==========================================================================
   // Realtime
@@ -3506,11 +3643,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
       toast("home", "Joined household", "Loading it now…");
       // Full re-hydration so the store loads the newly-active household.
-      flushCounters();
+      beginHouseholdSwitch();
       setReloadNonce((n) => n + 1);
       return true;
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const setActiveHousehold = useCallback(
@@ -3522,10 +3659,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         toast("alert", "Couldn't switch household", "Please try again");
         return;
       }
-      flushCounters();
+      // The membership list still holds BOTH households at this point, so the
+      // overlay can name the one we're heading to rather than showing a bare
+      // spinner.
+      beginHouseholdSwitch(stateRef.current.households.find((h) => h.id === householdId)?.name ?? "");
       setReloadNonce((n) => n + 1);
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const createHousehold = useCallback(
@@ -3565,12 +3705,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // screen — without this, hid() still returns the old (or null) id and
       // those writes silently target nothing.
       // Flush FIRST, while hid() still names the outgoing household.
-      flushCounters();
+      beginHouseholdSwitch(hname);
       householdIdRef.current = newId;
       setReloadNonce((n) => n + 1);
       return true;
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const renameHousehold = useCallback(
@@ -3604,11 +3744,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       toast("home", "Left the household", "");
-      flushCounters();
+      beginHouseholdSwitch();
       setReloadNonce((n) => n + 1);
       return true;
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const deleteHousehold = useCallback(
@@ -3626,11 +3766,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       toast("check", "Household deleted", "");
-      flushCounters();
+      beginHouseholdSwitch();
       setReloadNonce((n) => n + 1);
       return true;
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const removeHouseholdMember = useCallback(
@@ -3821,11 +3961,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return { ok: true, status: "pending" };
       }
       toast("home", "Joined household", "Loading it now…");
-      flushCounters();
+      beginHouseholdSwitch();
       setReloadNonce((n) => n + 1);
       return { ok: true, status: "active" };
     },
-    [supabase, toast, flushCounters]
+    [supabase, toast, beginHouseholdSwitch]
   );
 
   const fetchJoinRequests = useCallback(async (): Promise<JoinRequest[]> => {
@@ -4051,6 +4191,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       value={{
         state,
         hydrated,
+        switchingHousehold,
+        switchProgress,
         userEmail,
         userId,
         toasts,
