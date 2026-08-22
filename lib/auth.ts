@@ -40,7 +40,7 @@ function authRedirectUrl(): string {
     Constants.appOwnership === "expo"
       ? Linking.createURL("auth-callback")
       : Linking.createURL("auth-callback", { scheme: "peting" });
-  console.log("[peting] OAuth redirectTo =", url, "— this EXACT string must be in Supabase's Redirect URLs");
+  if (__DEV__) console.log("[peting] OAuth redirectTo =", url, "— this EXACT string must be in Supabase's Redirect URLs");
   return url;
 }
 
