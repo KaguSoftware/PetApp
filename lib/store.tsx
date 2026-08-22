@@ -3572,19 +3572,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (newPassword: string | null, currentPassword?: string) => {
       const h = hid();
       if (!h) return false;
-      if (stateRef.current.familyPasswordSet) {
-        const { data } = await supabase.from("households").select("family_password_hash").eq("id", h).single();
-        const storedHash = data?.family_password_hash ?? null;
-        const providedHash = currentPassword ? await sha256Hex(currentPassword) : null;
-        if (!storedHash || storedHash !== providedHash) {
-          toast("lock", "Incorrect current password", "");
-          return false;
-        }
-      }
+      // The old password is checked by the server (0047). It used to be
+      // compared here, which meant a single REST call could skip it entirely.
       const newHash = newPassword ? await sha256Hex(newPassword) : null;
-      const { error } = await supabase.from("households").update({ family_password_hash: newHash }).eq("id", h);
+      const currentHash = currentPassword ? await sha256Hex(currentPassword) : null;
+      const { error } = await supabase.rpc("set_family_password", {
+        hid: h,
+        new_hash: newHash,
+        current_hash: currentHash,
+      });
       if (error) {
-        toast("alert", "Couldn't update the family password", "");
+        // 28P01 is the RPC's "incorrect current password"; anything else is a
+        // real failure and should not be reported as a wrong password.
+        if ((error as { code?: string }).code === "28P01") {
+          toast("lock", "Incorrect current password", "");
+        } else {
+          toast("alert", "Couldn't update the family password", "");
+        }
         return false;
       }
       setState((prev) => ({ ...prev, familyPasswordSet: !!newHash }));
@@ -3602,10 +3606,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const h = hid();
       if (!h) return false;
       if (!stateRef.current.familyPasswordSet) return true;
-      const { data } = await supabase.from("households").select("family_password_hash").eq("id", h).single();
-      const storedHash = data?.family_password_hash ?? null;
-      if (!storedHash) return true;
-      return storedHash === (await sha256Hex(input));
+      // Compared on the server (0047) — the hash is no longer pulled down and
+      // matched here, where anyone could simply skip the comparison.
+      const { data, error } = await supabase.rpc("verify_family_password", {
+        hid: h,
+        input_hash: await sha256Hex(input),
+      });
+      if (error) return false;
+      return data === true;
     },
     [supabase]
   );
