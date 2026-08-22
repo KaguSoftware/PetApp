@@ -275,7 +275,7 @@ interface Store {
   /** Redeem an invite code (XXXX-XXXX). Existing members switch immediately; new members file a pending request instead. */
   redeemInvite: (
     code: string
-  ) => Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "error" }>;
+  ) => Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "throttled" | "error" }>;
   /** Create an invite code for the active household (admin+; admin-role invites owner-only). */
   createInvite: (input: { role: "member" | "admin"; targetMemberId?: string; ttlHours?: number; maxUses?: number }) => Promise<HouseholdInvite | null>;
   /** The active household's live (unrevoked, unexpired) invites. */
@@ -3584,8 +3584,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         // 28P01 is the RPC's "incorrect current password"; anything else is a
         // real failure and should not be reported as a wrong password.
-        if ((error as { code?: string }).code === "28P01") {
+        const code = (error as { code?: string }).code;
+        if (code === "28P01") {
           toast("lock", "Incorrect current password", "");
+        } else if (code === "P0004") {
+          toast("lock", "Too many attempts", "Wait a few minutes and try again.");
         } else {
           toast("alert", "Couldn't update the family password", "");
         }
@@ -3612,10 +3615,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         hid: h,
         input_hash: await sha256Hex(input),
       });
-      if (error) return false;
+      if (error) {
+        // P0004 is the attempt limiter, not a wrong password. Say so here —
+        // FamilyScreen awaits this without a catch, so throwing would take the
+        // screen down, and its own "Incorrect password" would be a lie.
+        if ((error as { code?: string }).code === "P0004") {
+          toast("lock", "Too many attempts", "Wait a few minutes and try again.");
+        }
+        return false;
+      }
       return data === true;
     },
-    [supabase]
+    [supabase, toast]
   );
 
   const joinHousehold = useCallback(
@@ -3939,7 +3950,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const redeemInvite = useCallback(
     async (
       code: string
-    ): Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "error" }> => {
+    ): Promise<{ ok: boolean; status?: "active" | "pending"; reason?: "notFound" | "expired" | "unavailable" | "blocked" | "throttled" | "error" }> => {
       const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
       if (normalized.length !== 8) return { ok: false, reason: "notFound" };
       const { data, error } = await supabase.rpc("redeem_invite", { invite_code: normalized });
@@ -3951,6 +3962,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         if (errCode === "P0002") return { ok: false, reason: "notFound" };
         if (errCode === "P0003") return { ok: false, reason: "expired" };
+        // P0004 — 0048's attempt limiter. Distinct from "wrong code" on
+        // purpose: the user needs to know waiting fixes it, not retyping.
+        if (errCode === "P0004") return { ok: false, reason: "throttled" };
         // 42501 raised from INSIDE redeem_invite means the DB still carries
         // 0033's members_write_guard, which blocks a joiner minting their own
         // card — so MEMBER invites fail while ADMIN ones (already privileged by

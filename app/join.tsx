@@ -212,8 +212,10 @@ export default function JoinPage() {
       return;
     }
     setError(
-      result.reason === "notFound"
-        ? "That code doesn't match any invite. Double-check it and try again."
+      result.reason === "throttled"
+        ? "Too many attempts. Wait a few minutes before trying another code."
+        : result.reason === "notFound"
+          ? "That code doesn't match any invite. Double-check it and try again."
         : result.reason === "expired"
           ? "This invite expired or was revoked — ask your family for a fresh one."
           : // 42501 from the members_write_guard: the household's backend is
