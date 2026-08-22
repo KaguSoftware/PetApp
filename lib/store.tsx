@@ -390,7 +390,9 @@ async function createHouseholdFallback(
   const { data: household, error: hErr } = await supabase
     .from("households")
     .insert({ owner_id: userId, name: householdName, coins: 0, xp: 0, streak: 0, units: "kg" })
-    .select()
+    // Explicit list, not a bare `.select()` — that expands to `*`, which 0049's
+    // column-level SELECT grant refuses. Also excessive-data-exposure.md item 1.
+    .select("id, name, owner_id, coins, xp, streak, units, current_member_id, country")
     .single();
   if (hErr || !household) {
     console.error("[peting] create household fallback failed:", describeErr(hErr) ?? hErr);
@@ -454,8 +456,18 @@ type PetRow = {
 // -> members.id, and members.household_id -> households.id — so PostgREST
 // can't infer which one to embed through and errors with PGRST201 (ambiguous
 // embed) without it.
+// Explicit column list, not `*` — 0049 revokes table-wide SELECT on households
+// so that `family_password_hash` stays server-side, and a bare `*` would then
+// fail with 42501. `family_password_set` is the generated boolean that replaces
+// it. Taken from information_schema.columns on 2026-08-23; if a column is added
+// to households later it must be added here too, or it simply won't hydrate.
+const HOUSEHOLD_COLUMNS =
+  "id, owner_id, current_member_id, premium, coins, xp, streak, units, " +
+  "seen_welcome, created_at, last_seen_at, name, last_streak_bonus, country, " +
+  "family_password_set";
+
 const HOUSEHOLD_SELECT = `
-  *,
+  ${HOUSEHOLD_COLUMNS},
   members!members_household_id_fkey(*),
   pets(*, weights(*), supplies(*), meds(*), vaccinations(*), vet_visits(*)),
   activities(*),
@@ -467,7 +479,7 @@ const HOUSEHOLD_SELECT = `
 // 0013/0014 not applied), the embed above errors — retry without them so the
 // app still hydrates. Health features stay inert until the SQL is run.
 const LEGACY_HOUSEHOLD_SELECT = `
-  *,
+  ${HOUSEHOLD_COLUMNS},
   members!members_household_id_fkey(*),
   pets(*, weights(*), supplies(*), meds(*)),
   activities(*),
@@ -491,7 +503,8 @@ type HouseholdRow = {
   seen_welcome: boolean;
   units: "kg" | "lb";
   last_seen_at: number | null;
-  family_password_hash: string | null;
+  /** Generated column (0049) — the hash itself never leaves the server. */
+  family_password_set: boolean | null;
   members: {
     id: string;
     name: string;
@@ -1813,7 +1826,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           : (profile?.seen_welcome ?? false) || h.seen_welcome,
         units: h.units,
         familyId: h.id,
-        familyPasswordSet: !!h.family_password_hash,
+        familyPasswordSet: !!h.family_password_set,
         households: householdsList,
         activeHouseholdId: h.id,
         myRole,
@@ -2021,7 +2034,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (typeof row.country === "string" || row.country === null) next.country = row.country as string | null;
       if (row.units === "kg" || row.units === "lb") next.units = row.units;
       if (typeof row.seen_welcome === "boolean") next.seenWelcome = row.seen_welcome;
-      next.familyPasswordSet = row.family_password_hash != null;
+      next.familyPasswordSet = row.family_password_set === true;
       if (typeof row.name === "string" && row.id === prev.activeHouseholdId) {
         next.households = prev.households.map((h) => (h.id === row.id ? { ...h, name: row.name as string } : h));
       }
