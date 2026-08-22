@@ -46,3 +46,10 @@ supabase/.temp/
 
 # Stray media dropped into the project folder
 *.mp4
+
+# Security audit working files — NEVER commit while this repo is public.
+# These enumerate unfixed weaknesses; publishing them hands an attacker a map.
+# Keep them local and back them up somewhere private instead.
+SECURITY-PLAN.md
+security/
+Pet_Security/

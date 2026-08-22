@@ -1,0 +1,10 @@
+# Suppressions for `gitleaks detect`. Each line must be justified here.
+#
+# eas.json:18 / eas.json:26 — EXPO_PUBLIC_SUPABASE_ANON_KEY.
+# This is the Supabase ANON key, not a secret. Decoding the JWT gives
+# "role":"anon"; the key ships inside every app binary by design and grants
+# nothing on its own — Row Level Security is what protects the data behind it.
+# Suppressed so a real leak is never lost in the noise of a known-clean finding.
+# Re-verify with:  echo <jwt> | cut -d. -f2 | base64 -d
+c49c9943e1a5d48d11ac75cb51d06a19b4eec2b8:eas.json:jwt:18
+c49c9943e1a5d48d11ac75cb51d06a19b4eec2b8:eas.json:jwt:26
