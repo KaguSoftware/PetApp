@@ -41,11 +41,11 @@ Deno.serve(async (req) => {
   const { error: prepErr } = await admin.rpc("prepare_account_deletion", { target_user: user.id });
   if (prepErr) {
     const missing = /could not find the function|PGRST202/i.test(`${prepErr.code ?? ""} ${prepErr.message ?? ""}`);
+    // Log the database error server-side only; the client gets a generic message.
+    console.error("[delete-account] prepare_account_deletion failed:", prepErr);
     return new Response(
       JSON.stringify({
-        error: missing
-          ? "backend migration 0028 required before account deletion"
-          : `could not prepare deletion: ${prepErr.message}`,
+        error: missing ? "backend migration 0028 required before account deletion" : "Could not delete account",
       }),
       { status: missing ? 409 : 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );

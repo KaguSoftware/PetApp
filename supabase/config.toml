@@ -1,0 +1,14 @@
+# Supabase CLI project config. Only the settings this repo depends on are
+# pinned here; everything else uses the CLI defaults.
+project_id = "mpsyprtnejjbnhyaiidn"
+
+# delete-account authenticates the caller from their user JWT.
+[functions.delete-account]
+verify_jwt = true
+
+# rc-webhook is called by RevenueCat with its own bearer secret, not a Supabase
+# JWT. It is DORMANT while premium is out of scope — do not deploy it until the
+# hardening listed in HANDOFF.md (timing-safe secret check, environment check,
+# entitlement gating, event ordering) has landed.
+[functions.rc-webhook]
+verify_jwt = false
