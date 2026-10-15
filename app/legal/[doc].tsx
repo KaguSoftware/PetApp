@@ -1,69 +1,60 @@
 import { useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { PushedScreen } from "@/components/Screen";
-import { Segmented } from "@/components/ui";
+import { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { isLegalDocId, LEGAL_DOCS, type LegalLang } from "@/lib/legal";
-import { font, useColors, type Colors } from "@/lib/theme";
+import { Chip, Screen, Text, spacing } from "@/ui";
 
 /**
- * Renders one legal document (`/legal/terms` or `/legal/privacy`) with an
- * English ⇄ Turkish toggle. Reachable both signed-in (Settings › Legal) and
- * signed-out (the auth screens' consent footnote) — the route is registered
- * OUTSIDE the root layout's Protected blocks for exactly that reason.
+ * One legal document (`/legal/terms` or `/legal/privacy`) with an English /
+ * Turkish toggle. Reachable signed in (Settings) and signed out (the consent
+ * footnote), hence registered outside the root Protected blocks.
  */
 export default function LegalDocScreen() {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { doc: docParam } = useLocalSearchParams<{ doc: string }>();
   const docId = isLegalDocId(docParam) ? docParam : "terms";
   const [lang, setLang] = useState<LegalLang>("en");
   const doc = LEGAL_DOCS[docId][lang];
 
   return (
-    <PushedScreen title={doc.title}>
-      <Segmented
-        options={[
-          { value: "en", label: "English" },
-          { value: "tr", label: "Türkçe" },
-        ]}
-        value={lang}
-        onChange={setLang}
-      />
-      <Text style={styles.updated}>{doc.updated}</Text>
+    <Screen title={doc.title} back>
+      <View style={styles.langs}>
+        <Chip label="English" selected={lang === "en"} onPress={() => setLang("en")} />
+        <Chip label="Türkçe" selected={lang === "tr"} onPress={() => setLang("tr")} />
+      </View>
+      <Text variant="caption" tone="ink3">
+        {doc.updated}
+      </Text>
       {doc.intro.map((p, i) => (
-        <Text key={i} style={styles.paragraph}>
+        <Text key={i} tone="ink2">
           {p}
         </Text>
       ))}
       {doc.sections.map((section) => (
         <View key={section.heading} style={styles.section}>
-          <Text style={styles.heading}>{section.heading}</Text>
+          <Text variant="heading">{section.heading}</Text>
           {section.body.map((p, i) =>
             p.startsWith("• ") ? (
-              <View key={i} style={styles.bulletRow}>
-                <Text style={styles.bulletDot}>•</Text>
-                <Text style={[styles.paragraph, styles.bulletText]}>{p.slice(2)}</Text>
+              <View key={i} style={styles.bullet}>
+                <Text tone="ink3">•</Text>
+                <Text tone="ink2" style={styles.bulletText}>
+                  {p.slice(2)}
+                </Text>
               </View>
             ) : (
-              <Text key={i} style={styles.paragraph}>
+              <Text key={i} tone="ink2">
                 {p}
               </Text>
             ),
           )}
         </View>
       ))}
-    </PushedScreen>
+    </Screen>
   );
 }
 
-const makeStyles = (colors: Colors) =>
-  StyleSheet.create({
-    updated: { marginTop: 16, fontSize: 13, fontFamily: font.medium, color: colors.label3 },
-    section: { marginTop: 8 },
-    heading: { marginTop: 16, fontSize: 17, fontFamily: font.semibold, color: colors.label },
-    paragraph: { marginTop: 10, fontSize: 15, lineHeight: 22, fontFamily: font.regular, color: colors.label2 },
-    bulletRow: { flexDirection: "row", gap: 8, paddingLeft: 4 },
-    bulletDot: { marginTop: 10, fontSize: 15, lineHeight: 22, fontFamily: font.regular, color: colors.label3 },
-    bulletText: { flex: 1 },
-  });
+const styles = StyleSheet.create({
+  langs: { flexDirection: "row", gap: spacing.sm },
+  section: { gap: spacing.sm, marginTop: spacing.sm },
+  bullet: { flexDirection: "row", gap: spacing.sm, paddingLeft: spacing.xs },
+  bulletText: { flex: 1 },
+});

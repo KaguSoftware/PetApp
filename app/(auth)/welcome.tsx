@@ -1,69 +1,60 @@
-import { Link, router } from "expo-router";
-import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AuthProviderButtons from "@/components/AuthProviderButtons";
-import BrandMark from "@/components/BrandMark";
-import LegalFootnote from "@/components/LegalFootnote";
-import { BRAND } from "@/lib/brand";
-import { AccentButton } from "@/components/ui";
-import { font, useColors, type Colors } from "@/lib/theme";
+import { AuthProviderButtons } from "@/components/auth/AuthProviderButtons";
+import { AuthLink, ErrorText, OrDivider } from "@/components/auth/AuthBits";
+import { LegalFootnote } from "@/components/auth/LegalFootnote";
+import { BRAND, BRAND_MARK } from "@/lib/brand";
+import { Icon, PillButton, Text, spacing, useTheme } from "@/ui";
 
-/**
- * First screen for signed-out users: pick a way in. Apple/Google resolve
- * entirely here (session listener navigates); email continues to login.
- */
+/** First screen for signed-out users: a pastel hero, then a way in. */
 export default function WelcomeScreen() {
-  const colors = useColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [error, setError] = useState<string | null>(null);
 
   return (
     <ScrollView
-      style={styles.flex}
+      style={{ backgroundColor: colors.bg }}
       alwaysBounceVertical={false}
-      contentContainerStyle={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}
       keyboardShouldPersistTaps="handled"
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
     >
-      <View style={styles.header}>
-        <BrandMark />
-        <Text style={styles.subtitle}>Care for your pets, together</Text>
+      <View style={styles.hero}>
+        <View style={[styles.blobBig, { backgroundColor: colors.tones.butter.bg }]}>
+          <View style={[styles.blobSmall, { backgroundColor: colors.tones.pink.bg, left: -8, top: 20 }]} />
+          <View style={[styles.blobSmall, { backgroundColor: colors.tones.ice.bg, right: -8, bottom: 30, width: 56, height: 56, borderRadius: 28 }]} />
+          <Icon name="walk" size={96} color={colors.tones.butter.fg} strokeWidth={2} />
+        </View>
+        <Text variant="display" style={styles.center}>
+          {BRAND_MARK}
+        </Text>
+        <Text tone="ink2" style={styles.center}>
+          Little moments of care for your pet, all in one place.
+        </Text>
       </View>
+
       <View style={styles.form}>
         <AuthProviderButtons onError={setError} />
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerLabel}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        <AccentButton onPress={() => router.push("/(auth)/login")}>Continue with email</AccentButton>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <OrDivider />
+        <PillButton label="Continue with email" variant="secondary" icon="note" onPress={() => router.push("/(auth)/login")} />
+        <ErrorText message={error} />
       </View>
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>New to {BRAND}? </Text>
-        <Link href="/(auth)/signup" style={styles.footerLink}>
-          Create an account
-        </Link>
+
+      <View>
+        <AuthLink prefix={`New to ${BRAND}?`} label="Create an account" onPress={() => router.push("/(auth)/signup")} />
+        <LegalFootnote />
       </View>
-      <LegalFootnote />
     </ScrollView>
   );
 }
 
-const makeStyles = (colors: Colors) =>
-  StyleSheet.create({
-    flex: { flex: 1, backgroundColor: colors.bg },
-    container: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 },
-    header: { alignItems: "center", marginBottom: 40 },
-    subtitle: { marginTop: 6, fontSize: 15, fontFamily: font.regular, color: colors.label2 },
-    form: { gap: 12 },
-    dividerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 4 },
-    dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.sep },
-    dividerLabel: { fontSize: 13, fontFamily: font.medium, color: colors.label3 },
-    error: { color: colors.red, fontSize: 14, fontFamily: font.medium, paddingHorizontal: 4 },
-    footer: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 12 },
-    footerText: { fontSize: 15, fontFamily: font.regular, color: colors.label2 },
-    // Padding lifts the link's tap target to >=44pt without shifting the baseline row.
-    footerLink: { fontSize: 15, fontFamily: font.semibold, color: colors.accent, paddingVertical: 14, paddingHorizontal: 8 },
-  });
+const styles = StyleSheet.create({
+  content: { flexGrow: 1, justifyContent: "space-between", paddingHorizontal: spacing["2xl"], gap: spacing["2xl"] },
+  hero: { alignItems: "center", gap: spacing.md, paddingTop: spacing["2xl"] },
+  blobBig: { width: 200, height: 200, borderRadius: 100, alignItems: "center", justifyContent: "center", marginBottom: spacing.lg },
+  blobSmall: { position: "absolute", width: 72, height: 72, borderRadius: 36 },
+  center: { textAlign: "center" },
+  form: { gap: spacing.md },
+});
