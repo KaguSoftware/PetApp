@@ -5,6 +5,7 @@ import {
   dateToMs,
   medPatchRow,
   msToDate,
+  parseTimestamptz,
   petInsertRow,
   petPatchRow,
   toCareLog,
@@ -121,5 +122,20 @@ describe("sharing and units", () => {
     expect(unitsFromDb("lb")).toBe("imperial");
     expect(unitsFromDb("kg")).toBe("metric");
     expect(unitsToDb("imperial")).toBe("lb");
+  });
+});
+
+describe("parseTimestamptz", () => {
+  const ms = Date.UTC(2024, 0, 2, 3, 4, 5, 678);
+  it("truncates microseconds and understands +00:00", () => {
+    expect(parseTimestamptz("2024-01-02T03:04:05.678912+00:00")).toBe(ms);
+    expect(parseTimestamptz("2024-01-02 03:04:05.678+00")).toBe(ms);
+  });
+  it("pads short fractions and keeps real offsets", () => {
+    expect(parseTimestamptz("2024-01-02T03:04:05.6+00:00")).toBe(ms - 78);
+    expect(parseTimestamptz("2024-01-02T05:04:05.678+02:00")).toBe(ms);
+  });
+  it("is NaN for junk", () => {
+    expect(parseTimestamptz(null)).toBeNaN();
   });
 });

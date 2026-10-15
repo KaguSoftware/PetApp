@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { showToast, signOut, useSession } from "@/data";
 import { supabase } from "@/lib/supabase";
@@ -10,6 +10,13 @@ import { Row, Section } from "./parts";
 export function AccountSection() {
   const { session } = useSession();
   const [deleting, setDeleting] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   function confirmSignOut() {
     Alert.alert("Sign out?", "You can sign back in any time.", [
@@ -20,15 +27,23 @@ export function AccountSection() {
 
   async function deleteAccount() {
     setDeleting(true);
+    let deleted = false;
     try {
       const { error } = await supabase.functions.invoke("delete-account", { method: "POST" });
       if (error) throw error;
-      await signOut();
+      deleted = true;
     } catch {
       showToast({ kind: "error", text: "Couldn't delete your account. Please try again." });
-    } finally {
-      setDeleting(false);
     }
+    if (deleted) {
+      // The account is gone; a failed local sign-out must not read as a failed delete.
+      try {
+        await signOut();
+      } catch {
+        showToast({ kind: "info", text: "Your account was deleted. Please close and reopen the app." });
+      }
+    }
+    if (mounted.current) setDeleting(false);
   }
 
   function confirmDelete() {

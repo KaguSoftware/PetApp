@@ -232,7 +232,7 @@ export async function signUpWithEmail(
     // (app/auth-callback.tsx finishes the verification). The 6-digit code from
     // the same email stays the primary path; the link is the backstop for users
     // who tap it out of habit — or when the email template has no {{ .Token }}.
-    options: { data: { name: name || "You", seed_demo: false }, emailRedirectTo: authRedirectUrl() },
+    options: { data: { ...(name.trim() ? { name: name.trim() } : {}), seed_demo: false }, emailRedirectTo: authRedirectUrl() },
   });
   if (error) return { error: friendlyAuthError(error.message), needsVerification: false };
   // With email confirmation on, signing up with an ALREADY-REGISTERED address

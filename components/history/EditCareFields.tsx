@@ -3,7 +3,6 @@ import { clockTime, dayLabel } from "@/lib/format";
 import { HIT, Icon, PressableScale, radius, spacing, Text, TextField, useTheme } from "@/ui";
 
 const HOUR = 3_600_000;
-const DAY = 86_400_000;
 
 function Step({ label, delta, onStep }: { label: string; delta: number; onStep: (d: number) => void }) {
   const { colors } = useTheme();
@@ -39,6 +38,12 @@ export interface EditCareFieldsProps {
 export function EditCareFields({ value, onChange, showGrams, showDuration, now }: EditCareFieldsProps) {
   const { colors } = useTheme();
   const nudge = (d: number) => onChange({ ...value, ts: Math.min(now, value.ts + d) });
+  // Calendar math, so a day across a DST change keeps the same wall-clock time.
+  const nudgeDays = (n: number) => {
+    const d = new Date(value.ts);
+    d.setDate(d.getDate() + n);
+    onChange({ ...value, ts: Math.min(now, d.getTime()) });
+  };
   return (
     <View style={styles.wrap}>
       <View style={styles.timeRow}>
@@ -48,12 +53,12 @@ export function EditCareFields({ value, onChange, showGrams, showDuration, now }
         </Text>
       </View>
       <View style={styles.steps}>
-        <Step label="-1 day" delta={-DAY} onStep={nudge} />
+        <Step label="-1 day" delta={-1} onStep={nudgeDays} />
         <Step label="-1 h" delta={-HOUR} onStep={nudge} />
         <Step label="-15 min" delta={-15 * 60_000} onStep={nudge} />
         <Step label="+15 min" delta={15 * 60_000} onStep={nudge} />
         <Step label="+1 h" delta={HOUR} onStep={nudge} />
-        <Step label="+1 day" delta={DAY} onStep={nudge} />
+        <Step label="+1 day" delta={1} onStep={nudgeDays} />
       </View>
       {showGrams ? (
         <TextField label="Amount (grams)" keyboardType="number-pad" value={value.grams} onChangeText={(grams) => onChange({ ...value, grams })} />

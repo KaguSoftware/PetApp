@@ -23,11 +23,14 @@ export const CARE: Record<CareType, CareMeta> = {
 const ORDER: CareType[] = ["fed", "water", "walk", "litter", "groomed", "meds", "vet"];
 const LITTER_SPECIES: Species[] = ["cat", "rabbit", "hamster", "other"];
 
-/** Daily care types shown when logging for these species (walk: dogs; litter: cats and small pets). */
+/** Whether a species has this daily care type (walk: dogs; litter: cats and small pets). */
+export function supportsCare(species: Species, type: CareType): boolean {
+  if (type === "walk") return species === "dog";
+  if (type === "litter") return LITTER_SPECIES.includes(species);
+  return true;
+}
+
+/** Daily care types shown when logging for these species. */
 export function careTypesFor(species: Species[]): CareMeta[] {
-  return ORDER.filter((t) => {
-    if (t === "walk") return species.includes("dog");
-    if (t === "litter") return species.some((s) => LITTER_SPECIES.includes(s));
-    return true;
-  }).map((t) => CARE[t]);
+  return ORDER.filter((t) => species.some((s) => supportsCare(s, t))).map((t) => CARE[t]);
 }

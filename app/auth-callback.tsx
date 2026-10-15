@@ -1,9 +1,10 @@
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSession } from "@/data";
 import { completeEmailLink } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/ui";
 
 /**
@@ -26,6 +27,12 @@ export default function AuthCallback() {
   const url = Linking.useURL();
   // One shot: verifying creates a session, which re-renders this screen.
   const handled = useRef(false);
+  // Set once the link is done; Home is entered from an effect so the root guards have the session first.
+  const [goHome, setGoHome] = useState(false);
+
+  useEffect(() => {
+    if (goHome && session) router.replace("/home");
+  }, [goHome, session]);
 
   useEffect(() => {
     if (handled.current || !ready) return;
@@ -37,7 +44,16 @@ export default function AuthCallback() {
         router.replace(session ? "/home" : "/(auth)/welcome");
         return;
       }
-      const { error, purpose, ignored } = await completeEmailLink(opened, !!session);
+      // A bare ?code= is usually the in-app OAuth round trip, which may already be exchanging it:
+      // give that up to ~2s to produce a session before spending the one-time code here.
+      let signedIn = !!session;
+      if (!signedIn && /[?&]code=/.test(opened) && !/[?&]token_hash=/.test(opened)) {
+        for (let i = 0; i < 8 && !signedIn; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          signedIn = !!(await supabase.auth.getSession()).data.session;
+        }
+      }
+      const { error, purpose, ignored } = await completeEmailLink(opened, signedIn);
 
       if (error) {
         // Never dead-end: hand over to the code screen, where the user can type
@@ -49,7 +65,11 @@ export default function AuthCallback() {
         router.replace("/reset-password");
         return;
       }
-      router.replace("/home");
+      if (ignored && !signedIn) {
+        router.replace("/(auth)/welcome");
+        return;
+      }
+      setGoHome(true);
     })();
   }, [url, ready, session]);
 

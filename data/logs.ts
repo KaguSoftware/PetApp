@@ -3,7 +3,7 @@ import { useEffect, useMemo } from "react";
 import { cache, useTable } from "./cache";
 import { supabase } from "./client";
 import { allPages } from "./fetch";
-import { careLogPatchRow, careLogRow, toCareLog } from "./mappers";
+import { careLogPatchRow, careLogRow, createdAtMs, maxFinite, toCareLog, type Row } from "./mappers";
 import { optimisticDelete, optimisticInsert, optimisticUpdate } from "./persist";
 import { getMyLink, householdStore, requireHouseholdId, sessionStore } from "./state";
 import { useStore } from "./store";
@@ -15,12 +15,9 @@ const CURSOR = "activities";
 
 const columns = (householdId: string) => supabase.from("activities").select("*").eq("household_id", householdId);
 
-function ingest(rows: ReturnType<typeof toCareLog>[], ep: number) {
-  if (cache.epoch() !== ep) return false;
-  cache.upsertMany("activities", rows);
-  for (const r of rows) cache.bumpMeta(CURSOR, r.ts);
-  return true;
-}
+// The resync cursor is the newest server-set created_at seen (epoch ms), not ts:
+// ts is client-chosen, so a back-dated or offline-queued log would slip under a ts cursor.
+const cursorOf = (rows: Row[], floor: number) => maxFinite(rows.map(createdAtMs), floor);
 
 /** Initial load: the last 60 days, paginated. */
 export async function loadLogs(householdId: string): Promise<void> {
@@ -30,19 +27,22 @@ export async function loadLogs(householdId: string): Promise<void> {
     columns(householdId).gte("ts", since).order("ts", { ascending: false }).order("id").range(from, to)
   );
   if (cache.epoch() !== ep) return;
-  cache.replaceAll("activities", rows.map(toCareLog));
-  cache.setMeta(FLOOR, since);
-  cache.setMeta(CURSOR, Math.max(since, ...rows.map((r) => Number(r.ts))));
+  // Only the reloaded window is authoritative; older history already cached stays.
+  cache.replaceAll("activities", rows.map(toCareLog), (l) => l.ts >= since);
+  cache.setMeta(FLOOR, Math.min(cache.getMeta(FLOOR) ?? since, since));
+  cache.bumpMeta(CURSOR, cursorOf(rows, since));
 }
 
-/** Reconnect / foreground: only rows newer than the last one seen. */
+/** Reconnect / foreground: only rows created since the last one seen. */
 export async function resyncLogs(householdId: string): Promise<void> {
   const ep = cache.epoch();
   const cursor = cache.getMeta(CURSOR) ?? Date.now() - DEFAULT_WINDOW_MS;
   const rows = await allPages((from, to) =>
-    columns(householdId).gt("ts", cursor).order("ts", { ascending: false }).order("id").range(from, to)
+    columns(householdId).gt("created_at", new Date(cursor).toISOString()).order("created_at", { ascending: false }).order("id").range(from, to)
   );
-  ingest(rows.map(toCareLog), ep);
+  if (cache.epoch() !== ep) return;
+  cache.upsertMany("activities", rows.map(toCareLog));
+  cache.bumpMeta(CURSOR, cursorOf(rows, cursor));
 }
 
 let older: Promise<void> = Promise.resolve();
@@ -104,11 +104,13 @@ export async function logCare(
     medId: extra.medId ?? null,
     durationMinutes: extra.durationMinutes ?? null,
   };
+  // The cache insert is synchronous (instant UI); the write waits for a just-created pet/med row.
   return optimisticInsert(
     "activities",
     log,
     () => supabase.from("activities").insert(careLogRow(log, householdId, userId)),
-    "Couldn't save that log"
+    "Couldn't save that log",
+    log.medId ? [petId, log.medId] : [petId]
   );
 }
 

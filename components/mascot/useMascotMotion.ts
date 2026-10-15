@@ -14,6 +14,7 @@ import {
   type AnimatedStyle,
   type SharedValue,
 } from 'react-native-reanimated';
+import { useReduceMotion } from '@/lib/a11y';
 import { eyesAlwaysClosed } from './face';
 import type { SpeciesArt } from './species';
 import type { MascotMood, MascotReaction, MascotReactionType } from './types';
@@ -85,7 +86,8 @@ function tailCycleMs(art: SpeciesArt, mood: MascotMood): number {
 /** All Mascot animation lives here: shared values + animated styles, no React state. */
 export function useMascotMotion({ art, isCat, mood, reaction, unit, animated }: Options): MascotMotion {
   const systemReduce = useReducedMotion();
-  const reduce = systemReduce || !animated;
+  const appReduce = useReduceMotion();
+  const reduce = systemReduce || appReduce || !animated;
 
   const breath = useSharedValue(0);
   const tail = useSharedValue(0);

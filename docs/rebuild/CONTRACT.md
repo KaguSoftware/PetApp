@@ -89,7 +89,16 @@ export function setUnits(u: "metric" | "imperial"): Promise<void>;
 // (via the existing create_household RPC from 0028/0044) when useHousehold().householdId is null,
 // then the user adds their first pet. Also sends the device timezone (Intl) once — see setTimezone.
 export function createHousehold(name?: string): Promise<string /* householdId */>;
-export function setTimezone(tz: string): Promise<void>; // households.timezone (column added by migration 0051+); no-op on 42703
+// Refuses (toast "Still loading your family — try again in a moment" + MutationError) while the household load is unfinished or failed (loadError); concurrent calls share one RPC.
+export function setTimezone(tz: string, householdId?: string): Promise<void>; // households.timezone (column added by migration 0051+); no-op on 42703; householdId only needed during the initial load
+// A failed household load leaves householdId null AND useHousehold().loadError set (that is not "no household"). Offer this as the retry.
+export function retryHouseholdLoad(): Promise<void>; // same as reloadHousehold
+// Streak after a lapse: yesterday is computed in households.timezone (device zone fallback).
+export function liveStreak(streak: unknown, streakDay: unknown, timeZone?: string | null): number;
+// Postgres timestamptz -> epoch ms (truncates microseconds, normalizes +00:00).
+export function parseTimestamptz(s: unknown): number;
+// Notes: addNote rejects an empty or >4000-char body with a toast + MutationError (never truncates).
+// Meds: Med.active is always true (no column); editMed({active}) alone is a no-op.
 
 
 // Toasts (data layer raises errors through this; UI renders them)

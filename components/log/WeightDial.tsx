@@ -13,19 +13,24 @@ import { Text, haptic, radius, spacing, useTheme } from "@/ui";
 
 /** Pixels the ruler moves per 0.1 step. */
 const STEP_PX = 14;
-const MIN = 1;
+/** Lowest step on the dial: never 0. */
+export const WEIGHT_MIN_STEPS = 1;
+const MIN = WEIGHT_MIN_STEPS;
 const MAX = 9999;
 
 const clamp = (v: number) => Math.min(MAX, Math.max(MIN, v));
 
 interface WeightDialProps {
-  /** Value in tenths of the display unit (so 12.3 kg is 123). */
-  tenths: number;
-  onChange: (tenths: number) => void;
+  /** Value in steps of the display unit: tenths (perUnit 10, so 12.3 kg is 123) or hundredths (perUnit 100). */
+  steps: number;
+  /** Steps per whole unit: 10 or 100. Change it by remounting (key). */
+  perUnit: 10 | 100;
+  onChange: (steps: number) => void;
 }
 
-/** A horizontal ruler you spin with a finger: drag left to go up, right to go down, 0.1 per tick. */
-export function WeightDial({ tenths, onChange }: WeightDialProps) {
+/** A horizontal ruler you spin with a finger: drag left to go up, right to go down, one step per tick. */
+export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps) {
+  const decimals = perUnit === 100 ? 2 : 1;
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const [shown, setShown] = useState(tenths);
@@ -63,6 +68,8 @@ export function WeightDial({ tenths, onChange }: WeightDialProps) {
   const pan = useMemo(
     () =>
       Gesture.Pan()
+        .activeOffsetX([-6, 6])
+        .failOffsetY([-14, 14])
         .onBegin(() => {
           startPos.value = pos.value;
         })
@@ -70,8 +77,8 @@ export function WeightDial({ tenths, onChange }: WeightDialProps) {
           pos.value = Math.min(MAX, Math.max(MIN, startPos.value - e.translationX / STEP_PX));
         })
         .onEnd((e) => {
-          pos.value = withDecay({ velocity: -e.velocityX / STEP_PX, clamp: [MIN, MAX] }, () => {
-            pos.value = withSpring(Math.round(pos.value), { damping: 20, stiffness: 260 });
+          pos.value = withDecay({ velocity: -e.velocityX / STEP_PX, clamp: [MIN, MAX] }, (finished) => {
+            if (finished) pos.value = withSpring(Math.round(pos.value), { damping: 20, stiffness: 260 });
           });
         }),
     [pos, startPos],
@@ -86,7 +93,7 @@ export function WeightDial({ tenths, onChange }: WeightDialProps) {
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel="Weight dial"
-        accessibilityValue={{ text: String(shown / 10) }}
+        accessibilityValue={{ text: (shown / perUnit).toFixed(decimals) }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(e) => {
           pos.value = clamp(shown + (e.nativeEvent.actionName === "increment" ? 1 : -1));
@@ -96,8 +103,8 @@ export function WeightDial({ tenths, onChange }: WeightDialProps) {
           {indices.map((i) => {
             const v = shown + i;
             if (v < MIN || v > MAX) return <View key={i} style={styles.slot} />;
-            const whole = v % 10 === 0;
-            const mid = v % 5 === 0;
+            const whole = v % perUnit === 0;
+            const mid = v % (perUnit / 2) === 0;
             return (
               <View key={i} style={styles.slot}>
                 <View
@@ -108,7 +115,7 @@ export function WeightDial({ tenths, onChange }: WeightDialProps) {
                 />
                 {whole ? (
                   <Text variant="caption" tone="ink2" style={styles.tickLabel} numberOfLines={1}>
-                    {v / 10}
+                    {v / perUnit}
                   </Text>
                 ) : null}
               </View>

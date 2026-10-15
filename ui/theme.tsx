@@ -18,6 +18,8 @@ const ThemeContext = createContext<ThemeValue | null>(null);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
   const [preference, setPref] = useState<ThemePreference>("system");
+  // Children wait for the stored preference (a fast read, under the splash) so a dark-mode user never sees a light flash.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
@@ -26,7 +28,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         // storage unavailable: stay on "system"
-      });
+      })
+      .finally(() => setLoaded(true));
   }, []);
 
   const setPreference = useCallback((p: ThemePreference) => {
@@ -41,6 +44,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return { colors: scheme === "dark" ? darkColors : lightColors, scheme, preference, setPreference };
   }, [preference, system, setPreference]);
 
+  if (!loaded) return null;
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

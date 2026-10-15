@@ -14,8 +14,12 @@ export function DangerZone({ pet }: { pet: Pet }) {
           text: "Remove",
           style: "destructive",
           onPress: () => {
-            router.back();
-            deletePet(pet.id).catch(() => undefined); // rolled back + toasted by the data layer
+            // Leave first so the profile never renders as "not found"; delete once the transition is done.
+            if (router.canGoBack()) router.back();
+            else router.replace("/home");
+            setTimeout(() => {
+              deletePet(pet.id).catch(() => undefined); // rolled back + toasted by the data layer
+            }, 350);
           },
         },
       ],

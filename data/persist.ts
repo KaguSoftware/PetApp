@@ -29,8 +29,9 @@ export class MutationError extends Error {
 // so an undo can never overtake the insert it undoes.
 const chains = new Map<string, Promise<unknown>>();
 
-function enqueue(id: string, op: DbOp): Promise<Outcome> {
-  const prev = chains.get(id) ?? Promise.resolve();
+// `after` = parent rows (pet, med) whose own writes must land first (foreign keys).
+function enqueue(id: string, op: DbOp, after: string[] = []): Promise<Outcome> {
+  const prev = Promise.all([chains.get(id), ...after.map(settled)]);
   cache.markPending(id);
   const run = prev.then(() => attempt(op));
   const tail = run.finally(() => {
@@ -46,19 +47,25 @@ export function settled(id: string): Promise<unknown> {
   return chains.get(id) ?? Promise.resolve();
 }
 
-/** Insert the row locally, write it, and on failure remove ONLY that row. Throws after toasting. */
+/**
+ * Insert the row locally (synchronously), write it after any pending write for the
+ * ids in `after`, and on failure remove ONLY that row. Throws after toasting.
+ */
 export async function optimisticInsert<K extends TableName>(
   table: K,
   row: Tables[K],
   op: DbOp,
-  errorText: string
+  errorText: string,
+  after: string[] = []
 ): Promise<Tables[K]> {
   const ep = cache.epoch();
   cache.upsert(table, row);
-  const res = await enqueue(row.id, op);
+  const res = await enqueue(row.id, op, after);
   if (!res.ok) {
-    if (cache.epoch() === ep) cache.remove(table, row.id);
-    showError(errorText);
+    if (cache.epoch() === ep) {
+      cache.remove(table, row.id);
+      showError(errorText);
+    }
     throw new MutationError(errorText);
   }
   return row;
@@ -78,13 +85,13 @@ export async function optimisticUpdate<K extends TableName>(
   cache.upsert(table, { ...before, ...patch });
   const res = await enqueue(id, op);
   if (res.ok) return true;
-  if (cache.epoch() === ep) {
-    const current = cache.get(table, id);
-    if (current) {
-      const restored = { ...current };
-      for (const key of Object.keys(patch) as (keyof Tables[K])[]) restored[key] = before[key];
-      cache.upsert(table, restored);
-    }
+  if (cache.epoch() !== ep) return false;
+  const current = cache.get(table, id);
+  if (current) {
+    // A key someone else changed since is theirs now; only undo what is still ours.
+    const restored = { ...current };
+    for (const key of Object.keys(patch) as (keyof Tables[K])[]) if (current[key] === patch[key]) restored[key] = before[key];
+    cache.upsert(table, restored);
   }
   showError(errorText);
   return false;
@@ -98,9 +105,13 @@ export async function optimisticDelete(table: TableName, id: string, op: DbOp, e
   cache.remove(table, id);
   cache.tombstone(id);
   const res = await enqueue(id, op);
+  if (res.ok) {
+    if (cache.epoch() === ep) cache.releaseTombstone(id);
+    return true;
+  }
   cache.untombstone(id);
-  if (res.ok) return true;
-  if (cache.epoch() === ep) cache.upsert(table, before as never);
+  if (cache.epoch() !== ep) return false;
+  cache.upsert(table, before as never);
   showError(errorText);
   return false;
 }

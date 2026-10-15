@@ -16,6 +16,9 @@ function codeFromUrl(url: string): string | null {
   return typeof value === "string" ? normalizeInviteCode(value) : null;
 }
 
+/** A parked invite is replayed at most once per app session, so backing out of /join never re-prompts. */
+let replayedThisSession = false;
+
 /**
  * Renders nothing. Inbound invite links: signed out -> park the code for after
  * sign-in; signed in -> open /join with it. After sign-in, a parked code opens /join.
@@ -40,21 +43,26 @@ export function InviteLinkHandler() {
   }, [ready, session, url]);
 
   // Replay a parked code once, after the household has loaded so Home's own redirect settles first.
-  const replayed = useRef(false);
   const userId = session?.user.id ?? null;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!userId) {
-      replayed.current = false;
-      return;
-    }
-    if (!household.ready || replayed.current) return;
-    replayed.current = true;
-    setTimeout(() => {
+    if (!userId || !household.ready || replayedThisSession) return;
+    replayedThisSession = true;
+    timer.current = setTimeout(() => {
+      timer.current = null;
       void peekPendingInvite().then((code) => {
-        if (code) router.push("/join");
+        if (code && sessionRef.current) router.push("/join");
       });
     }, 400);
   }, [userId, household.ready]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   return null;
 }

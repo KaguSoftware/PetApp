@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthFrame } from "@/components/auth/AuthFrame";
 import { ErrorText } from "@/components/auth/AuthBits";
 import { CODE_LENGTH, CodeInput } from "@/components/auth/CodeInput";
+import { useSession } from "@/data";
 import { resendCode, verifyEmailOtp, type OtpPurpose } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { PillButton, Text, TextField } from "@/ui";
@@ -36,6 +37,21 @@ export default function VerifyScreen() {
   const [cooldown, setCooldown] = useState(0);
   // Secure email change: the first code landed, the sibling one is still due.
   const [awaitingSecond, setAwaitingSecond] = useState(false);
+  const { session } = useSession();
+  // Signup verified: leave for Home only once the session has reached the root guards.
+  const [verified, setVerified] = useState(false);
+  const [resending, setResending] = useState(false);
+  const resendBusy = useRef(false);
+
+  useEffect(() => {
+    if (verified && session) router.replace("/home");
+  }, [verified, session]);
+
+  // Already signed in and nothing to verify (e.g. an old link or a stale screen): go Home.
+  const hasPurpose = !!(params.purpose ?? "").trim();
+  useEffect(() => {
+    if (session && !hasPurpose && !params.error && !verified && !awaitingSecond) router.replace("/home");
+  }, [session, hasPurpose, params.error, verified, awaitingSecond]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -84,24 +100,31 @@ export default function VerifyScreen() {
       router.back();
       return;
     }
-    // Signup: the session now exists and the root layout has unlocked the app.
+    // Signup: the session now exists; the effect above navigates once the root guards have re-rendered.
     setBusy(false);
-    router.replace("/home");
+    setVerified(true);
   }
 
   async function handleResend() {
-    if (cooldown > 0 || busy) return;
+    if (cooldown > 0 || busy || resendBusy.current) return;
     if (!email) {
       setError("Enter the email address you signed up with.");
       return;
     }
+    resendBusy.current = true;
+    setResending(true);
     setError(null);
-    const { error } = await resendCode(email, purpose);
-    if (error) {
-      setError(error);
-      return;
+    try {
+      const { error } = await resendCode(email, purpose);
+      if (error) {
+        setError(error);
+        return;
+      }
+      setCooldown(RESEND_COOLDOWN_S);
+    } finally {
+      resendBusy.current = false;
+      setResending(false);
     }
-    setCooldown(RESEND_COOLDOWN_S);
   }
 
   const title = purpose === "recovery" ? "Reset your password" : awaitingSecond ? "One more code" : "Enter the code";
@@ -146,6 +169,7 @@ export default function VerifyScreen() {
         variant="secondary"
         onPress={handleResend}
         disabled={cooldown > 0}
+        loading={resending}
       />
       <Text variant="small" tone="ink3" style={{ textAlign: "center" }}>
         No code in the email? Older emails may only carry a link. Resend to get a code.

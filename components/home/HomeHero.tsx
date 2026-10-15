@@ -16,6 +16,7 @@ export function HomeHero({ pet, mood, now }: { pet: Pet; mood: MascotMood; now: 
   const lastKey = useRef(reaction?.key);
   const [spoken, setSpoken] = useState<string | null>(null);
   const [burst, setBurst] = useState(0);
+  const speakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // A fresh reaction (from the log sheet or a tap on the pet) speaks and celebrates.
   useEffect(() => {
@@ -23,9 +24,19 @@ export function HomeHero({ pet, mood, now }: { pet: Pet; mood: MascotMood; now: 
     lastKey.current = reaction.key;
     setSpoken(reactionLine(reaction.source, pet.species, pet.name, reaction.key));
     if (reaction.source !== "tap") setBurst((n) => n + 1);
-    const t = setTimeout(() => setSpoken(null), SPEAK_MS);
-    return () => clearTimeout(t);
+    // Restarted per reaction and cleared on unmount only, so a re-render can never strand the bubble.
+    if (speakTimer.current) clearTimeout(speakTimer.current);
+    speakTimer.current = setTimeout(() => {
+      speakTimer.current = null;
+      setSpoken(null);
+    }, SPEAK_MS);
   }, [reaction, pet.species, pet.name]);
+  useEffect(
+    () => () => {
+      if (speakTimer.current) clearTimeout(speakTimer.current);
+    },
+    [],
+  );
 
   // The idle line is stable for a few hours so it doesn't flicker on every tick.
   const idle = useMemo(

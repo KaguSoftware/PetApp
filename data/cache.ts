@@ -32,7 +32,18 @@ const store = createStore<Maps>(emptyMaps());
 let epoch = 0;
 // Ids with a write in flight: replaceAll keeps them, realtime ignores deleted ones.
 const pending = new Map<string, number>();
-const tombstones = new Set<string>();
+// Deleted ids: null = delete still in flight, number = expiry after the ack. Kept briefly
+// past the ack so a fetch that started before the delete cannot bring the row back.
+const tombstones = new Map<string, number | null>();
+const TOMBSTONE_TTL_MS = 10_000;
+
+function isTombstoned(id: string): boolean {
+  if (!tombstones.has(id)) return false;
+  const until = tombstones.get(id);
+  if (until === null || until === undefined || until > Date.now()) return true;
+  tombstones.delete(id);
+  return false;
+}
 // Per-table sync cursors and other numeric bookkeeping (see data/household.ts).
 let meta: Record<string, number> = {};
 
@@ -62,7 +73,7 @@ export const cache = {
   upsertMany<K extends TableName>(table: K, rows: Tables[K][]): void {
     if (rows.length === 0) return;
     const next = new Map(store.get()[table]);
-    for (const r of rows) next.set(r.id, r);
+    for (const r of rows) if (!isTombstoned(r.id)) next.set(r.id, r);
     write(table, next);
   },
   remove(table: TableName, id: string): void {
@@ -80,17 +91,24 @@ export const cache = {
       if (next.size !== current.size) write(table, next as never);
     }
   },
-  /** Authoritative refetch of a whole table; rows with writes in flight survive. */
-  replaceAll<K extends TableName>(table: K, rows: Tables[K][]): void {
+  /**
+   * Authoritative refetch; rows with writes in flight survive and tombstoned ids stay out.
+   * With `inScope`, only rows it accepts are replaced: the rest of the table is kept
+   * (a windowed reload must not evict older history).
+   */
+  replaceAll<K extends TableName>(table: K, rows: Tables[K][], inScope?: (row: Tables[K]) => boolean): void {
     const next = new Map<string, Tables[K]>();
-    for (const r of rows) next.set(r.id, r);
-    for (const [id, row] of store.get()[table]) if (pending.has(id) && !next.has(id)) next.set(id, row);
+    for (const r of rows) if (!isTombstoned(r.id)) next.set(r.id, r);
+    for (const [id, row] of store.get()[table]) {
+      if (next.has(id) || isTombstoned(id)) continue;
+      if (pending.has(id) || (inScope && !inScope(row))) next.set(id, row);
+    }
     write(table, next);
   },
 
   /** Realtime path: a self-echo is just the same id replacing itself. */
   mergeRemote<K extends TableName>(table: K, row: Tables[K]): void {
-    if (tombstones.has(row.id)) return;
+    if (isTombstoned(row.id)) return;
     cache.upsert(table, row);
   },
 
@@ -103,11 +121,17 @@ export const cache = {
     else pending.set(id, n);
   },
   tombstone(id: string): void {
-    tombstones.add(id);
+    tombstones.set(id, null);
   },
+  /** The delete was acked: keep the tombstone a little longer, then let it expire. */
+  releaseTombstone(id: string): void {
+    tombstones.set(id, Date.now() + TOMBSTONE_TTL_MS);
+  },
+  /** The delete failed and the row is coming back. */
   untombstone(id: string): void {
     tombstones.delete(id);
   },
+  isTombstoned,
 
   getMeta: (key: string): number | undefined => meta[key],
   setMeta(key: string, value: number): void {

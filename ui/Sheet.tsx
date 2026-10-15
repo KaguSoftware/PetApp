@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Easing,
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -46,7 +47,19 @@ export function SheetPanel({ open, onClose, onClosed, children }: SheetPanelProp
   // Both pans can fire onEnd for one drag that starts on the grabber; close once.
   const closeFired = useRef(false);
 
-  const fireClosed = useCallback(() => closedRef.current?.(), []);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancelAnimation(progress);
+      cancelAnimation(dragY);
+    };
+  }, [progress, dragY]);
+
+  const fireClosed = useCallback(() => {
+    if (mounted.current) closedRef.current?.();
+  }, []);
   const requestClose = useCallback(() => {
     if (closeFired.current) return;
     closeFired.current = true;
@@ -96,7 +109,7 @@ export function SheetPanel({ open, onClose, onClosed, children }: SheetPanelProp
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
       </Animated.View>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior="padding"
         pointerEvents="box-none"
         style={styles.kav}
       >

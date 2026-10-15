@@ -7,8 +7,6 @@ import { toWeight } from "./mappers";
 import { optimisticDelete, optimisticInsert, optimisticUpdate } from "./persist";
 import type { WeightEntry } from "./types";
 
-const CURSOR = "weights";
-
 const query = (petIds: string[]) => supabase.from("weights").select("*").in("pet_id", petIds);
 
 export async function loadWeights(petIds: string[]): Promise<void> {
@@ -17,18 +15,10 @@ export async function loadWeights(petIds: string[]): Promise<void> {
   const rows = await allPages((from, to) => query(petIds).order("ts", { ascending: false }).order("id").range(from, to));
   if (cache.epoch() !== ep) return;
   cache.replaceAll("weights", rows.map(toWeight));
-  cache.setMeta(CURSOR, Math.max(0, ...rows.map((r) => Number(r.ts))));
 }
 
-export async function resyncWeights(petIds: string[]): Promise<void> {
-  if (petIds.length === 0) return;
-  const ep = cache.epoch();
-  const cursor = cache.getMeta(CURSOR) ?? 0;
-  const rows = await allPages((from, to) => query(petIds).gt("ts", cursor).order("ts", { ascending: false }).order("id").range(from, to));
-  if (cache.epoch() !== ep) return;
-  cache.upsertMany("weights", rows.map(toWeight));
-  for (const r of rows) cache.bumpMeta(CURSOR, Number(r.ts));
-}
+// weights has no server-set created_at to cursor on, and the table is small: refetch it whole.
+export const resyncWeights = loadWeights;
 
 /** Oldest first, ready for a chart. */
 export function useWeights(petId: string): WeightEntry[] {
@@ -59,7 +49,8 @@ export async function addWeight(petId: string, kg: number, ts: number = Date.now
     "weights",
     entry,
     () => supabase.from("weights").insert({ id: entry.id, pet_id: petId, ts, kg }),
-    "Couldn't save that weight"
+    "Couldn't save that weight",
+    [petId]
   );
   await syncPetWeight(petId);
   return entry;

@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, Text, useTheme, spacing, type IconName, type Tone } from "@/ui";
 
@@ -17,7 +17,7 @@ export function AuthFrame({ title, subtitle, badge, children, footer }: AuthFram
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: colors.bg }]} behavior="padding">
       <ScrollView
         alwaysBounceVertical={false}
         keyboardShouldPersistTaps="handled"

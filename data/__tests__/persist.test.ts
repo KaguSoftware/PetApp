@@ -90,7 +90,7 @@ describe("optimisticDelete", () => {
       "err"
     );
     expect(cache.get("activities", "a")).toBeUndefined();
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
     expect(order).toEqual(["insert"]);
     insert.resolve({ error: null });
     await del;
@@ -129,5 +129,53 @@ describe("cache lifecycle", () => {
     void optimisticInsert("activities", log("local"), () => d.promise, "err");
     cache.replaceAll("activities", [log("server")]);
     expect(cache.all("activities").map((l) => l.id).sort()).toEqual(["local", "server"]);
+  });
+});
+
+describe("tombstones", () => {
+  it("replaceAll and upsertMany skip a tombstoned id, also for a while after the ack", async () => {
+    cache.upsert("activities", log("a"));
+    await optimisticDelete("activities", "a", ok, "err");
+    cache.replaceAll("activities", [log("a"), log("b")]);
+    expect(cache.all("activities").map((l) => l.id)).toEqual(["b"]);
+    cache.upsertMany("activities", [log("a")]);
+    expect(cache.get("activities", "a")).toBeUndefined();
+  });
+
+  it("expires ~10s after the ack", async () => {
+    const now = jest.spyOn(Date, "now");
+    now.mockReturnValue(1_000);
+    cache.upsert("activities", log("a"));
+    await optimisticDelete("activities", "a", ok, "err");
+    now.mockReturnValue(1_000 + 9_000);
+    expect(cache.isTombstoned("a")).toBe(true);
+    now.mockReturnValue(1_000 + 11_000);
+    cache.replaceAll("activities", [log("a")]);
+    expect(cache.get("activities", "a")).toBeDefined();
+  });
+
+  it("a failed delete lifts the tombstone", async () => {
+    cache.upsert("activities", log("a"));
+    await optimisticDelete("activities", "a", fail, "err");
+    expect(cache.isTombstoned("a")).toBe(false);
+  });
+});
+
+describe("replaceAll with a scope", () => {
+  it("keeps rows outside the reloaded window", () => {
+    cache.upsert("activities", log("old", { ts: 1 }));
+    cache.upsert("activities", log("gone", { ts: 100 }));
+    cache.replaceAll("activities", [log("new", { ts: 200 })], (l) => l.ts >= 50);
+    expect(cache.all("activities").map((l) => l.id).sort()).toEqual(["new", "old"]);
+  });
+});
+
+describe("rollback only if unchanged", () => {
+  it("does not clobber a field that was edited again after this patch", async () => {
+    cache.upsert("activities", log("a", { note: "old" }));
+    const update = optimisticUpdate("activities", "a", { note: "mine" }, fail, "err");
+    cache.upsert("activities", { ...cache.get("activities", "a")!, note: "theirs" });
+    await update;
+    expect(cache.get("activities", "a")!.note).toBe("theirs");
   });
 });

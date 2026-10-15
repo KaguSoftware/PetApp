@@ -98,10 +98,10 @@ const MOOD_LINES: Record<MascotMood, Bank> = {
 };
 
 const LETTERS: Bank = [
-  "Dear human, I miss our routine… — {name} 💌",
-  "Dear human, no pressure, I just like when you drop by. — {name} 💌",
+  "Dear human, whenever you're ready, I'd love a snack and a cuddle. — {name} 💌",
+  "Dear human, no rush at all. I just like when you drop by. — {name} 💌",
   "Dear human, I saved your spot on the couch. — {name} 💌",
-  "Dear human, whenever you're ready, I'll be here. — {name} 💌",
+  "Dear human, I'm cozy and content. Say hi when you can! — {name} 💌",
 ];
 
 function pick(bank: Bank, seed: number): string {

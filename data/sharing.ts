@@ -3,6 +3,7 @@ import { Share } from "react-native";
 import { normalizeInviteCode } from "@/lib/pendingInvite";
 import { cache } from "./cache";
 import { supabase } from "./client";
+import { parseTimestamptz } from "./mappers";
 import { optimisticDelete } from "./persist";
 import { switchHousehold } from "./household";
 import { requireHouseholdId, sessionStore } from "./state";
@@ -20,7 +21,7 @@ export async function createInvite(): Promise<{ code: string; expiresAt: number 
     });
     if (error || !data) throw error ?? new Error("create_invite returned nothing");
     const invite = data as { code: string; expires_at: string };
-    return { code: invite.code, expiresAt: Date.parse(invite.expires_at) };
+    return { code: invite.code, expiresAt: parseTimestamptz(invite.expires_at) };
   } catch (e) {
     if (__DEV__) console.warn("[data] create_invite failed:", e);
     showError("Couldn't create the invite. Please try again.");
@@ -67,6 +68,9 @@ export async function redeemInvite(code: string): Promise<RedeemResult> {
 
   const joined = outcome.ok || (outcome.reason === "already_member" && !!res.household_id);
   if (joined && res.household_id && res.status !== "pending") {
+    // The server-side join already happened, so this stays ok:true even if the reload
+    // below fails; loadHousehold then leaves loadError set (householdId null) and the UI
+    // offers retryHouseholdLoad instead of looking like "no household".
     await activateHousehold(res.household_id);
   }
   return outcome;

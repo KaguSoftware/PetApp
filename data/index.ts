@@ -1,7 +1,7 @@
 // The only public entry of the data layer. UI imports from "@/data", never from data/*.
 export { DataProvider } from "./provider";
 export { signOut, useSession } from "./session";
-export { createHousehold, reloadHousehold, setTimezone, setUnits, useHousehold } from "./household";
+export { createHousehold, liveStreak, reloadHousehold, retryHouseholdLoad, setTimezone, setUnits, useHousehold } from "./household";
 export { addPet, deletePet, editPet, usePet, usePets } from "./pets";
 export { deleteLog, editLog, logCare, useLogs } from "./logs";
 export { addWeight, deleteWeight, useWeights } from "./weights";
@@ -18,6 +18,7 @@ export {
   useVetVisits,
 } from "./health";
 export { addNote, deleteNote, useNotes } from "./notes";
+export { parseTimestamptz } from "./mappers";
 export { useMembers } from "./members";
 export { copyInviteCode, createInvite, inviteLink, leaveHousehold, redeemInvite, removeMember, shareInvite } from "./sharing";
 export { dismissToast, showToast, useToasts } from "./toasts";

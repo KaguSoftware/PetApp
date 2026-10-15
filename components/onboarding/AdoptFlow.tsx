@@ -1,10 +1,10 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelectedPet } from "@/components/home/selectedPet";
-import { addPet, createHousehold, useHousehold, useMembers, useSession, type Species } from "@/data";
+import { addPet, createHousehold, reloadHousehold, showToast, useHousehold, useMembers, useSession, type Species } from "@/data";
 import { useReduceMotion } from "@/lib/a11y";
 import { Icon, PillButton, PressableScale, Text, borderWidth, spacing, useTheme } from "@/ui";
 import { firstNameOf } from "./firstName";
@@ -27,7 +27,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
-  const { householdId } = useHousehold();
+  const { householdId, loadError } = useHousehold();
   const { session } = useSession();
   const members = useMembers();
   const { select } = useSelectedPet();
@@ -43,7 +43,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
     firstNameOf(meta?.full_name) ?? firstNameOf(meta?.name) ?? firstNameOf(members.find((m) => m.isMe)?.name) ?? "friend";
   const trimmed = name.trim();
 
-  const canGoBack = step > 0 || router.canGoBack();
+  const canGoBack = step > 0 || (router.canGoBack() && !(mode === "first" && !householdId));
   const nextDisabled = step === 0 ? species === null : step === 1 ? trimmed.length === 0 : birthDateError(details.birthDate) !== null;
 
   function back() {
@@ -53,6 +53,15 @@ export function AdoptFlow({ mode, onFinished }: Props) {
 
   async function finish() {
     if (!species || busy) return;
+    if (!householdId && loadError) {
+      showToast({
+        kind: "error",
+        text: "We couldn’t reach your family’s data. Check your connection and retry.",
+        actionLabel: "Retry",
+        onAction: () => void reloadHousehold(),
+      });
+      return;
+    }
     setBusy(true);
     try {
       if (!householdId) await createHousehold();
@@ -84,7 +93,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
       style={[styles.root, { backgroundColor: colors.bg }]}
     >
       <View style={[styles.top, { paddingTop: insets.top + spacing.md }]}>

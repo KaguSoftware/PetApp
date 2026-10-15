@@ -5,20 +5,30 @@ import { TopicCard } from "@/components/guide/TopicCard";
 import { FEATURED_TOPIC_ID, filterCategories, topicById, type SpeciesFilter } from "@/content/guide";
 import { Chip, Screen, Text, TextField, spacing } from "@/ui";
 
-const FILTERS: { id: SpeciesFilter; label: string }[] = [
+/** "other" = species-agnostic topics, for rabbits, birds, fish and the rest. */
+type GuideFilter = SpeciesFilter | "other";
+
+const FILTERS: { id: GuideFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "dog", label: "Dog" },
   { id: "cat", label: "Cat" },
+  { id: "other", label: "Other pets" },
 ];
 
 export default function GuideScreen() {
   const [query, setQuery] = useState("");
-  const [species, setSpecies] = useState<SpeciesFilter>("all");
+  const [species, setSpecies] = useState<GuideFilter>("all");
 
   const featured = topicById(FEATURED_TOPIC_ID);
-  const showFeatured = !!featured && query.trim() === "";
+  const showFeatured =
+    !!featured && query.trim() === "" && (species !== "other" || !featured.species || featured.species.includes("all"));
   const categories = useMemo(() => {
-    const cats = filterCategories(query, species);
+    let cats = filterCategories(query, species === "other" ? "all" : species);
+    if (species === "other") {
+      cats = cats
+        .map((c) => ({ ...c, topics: c.topics.filter((t) => !t.species || t.species.includes("all")) }))
+        .filter((c) => c.topics.length > 0);
+    }
     if (!showFeatured) return cats;
     return cats
       .map((c) => ({ ...c, topics: c.topics.filter((t) => t.id !== FEATURED_TOPIC_ID) }))

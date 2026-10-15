@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { isValidDateString } from "@/lib/format";
+import { isValidDateString, toDateString } from "@/lib/format";
 import { Chip, TextField, Text, spacing } from "@/ui";
 
 export interface PetDetails {
@@ -16,7 +16,7 @@ export function birthDateError(value: string): string | null {
   const v = value.trim();
   if (!v) return null;
   if (!isValidDateString(v)) return "Use the format YYYY-MM-DD, like 2021-04-18.";
-  if (new Date(v).getTime() > Date.now()) return "That date is in the future.";
+  if (v > toDateString(Date.now())) return "That date is in the future.";
   return null;
 }
 

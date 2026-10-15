@@ -1,8 +1,9 @@
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, StyleSheet, TextInput, View } from "react-native";
+import { LoadErrorState } from "@/components/home/LoadErrorState";
 import { Mascot } from "@/components/mascot";
-import { redeemInvite } from "@/data";
+import { redeemInvite, useHousehold, useSession } from "@/data";
 import { consumePendingInvite, normalizeInviteCode, peekPendingInvite } from "@/lib/pendingInvite";
 import { Confetti, PillButton, Screen, SpeechBubble, Text, borderWidth, fonts, haptic, radius, spacing, useTheme } from "@/ui";
 
@@ -31,6 +32,23 @@ export default function JoinScreen() {
   const [burst, setBurst] = useState(0);
   const [love, setLove] = useState(0);
   const touched = useRef(false);
+  const household = useHousehold();
+  const { session } = useSession();
+  const navigation = useNavigation();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const homeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set once we are on our way out (joined, or already a member); the timer starts when the household is usable.
+  const [leaveAfter, setLeaveAfter] = useState<number | null>(null);
+
+  // Backing out of the screen (header, swipe, hardware back) drops a parked invite so it never re-prompts.
+  useEffect(
+    () =>
+      navigation.addListener("beforeRemove", () => {
+        void consumePendingInvite();
+      }),
+    [navigation],
+  );
 
   // A link opened while this screen is already up updates the code.
   useEffect(() => {
@@ -58,9 +76,18 @@ export default function JoinScreen() {
 
   const normalized = normalizeInviteCode(code);
 
-  function goHome(delay: number) {
-    setTimeout(() => router.replace("/home"), delay);
-  }
+  const householdOk = household.ready && !household.loadError && !!household.householdId;
+  useEffect(() => {
+    if (leaveAfter === null || !householdOk) return;
+    homeTimer.current = setTimeout(() => {
+      homeTimer.current = null;
+      if (sessionRef.current) router.replace("/home");
+    }, leaveAfter);
+    return () => {
+      if (homeTimer.current) clearTimeout(homeTimer.current);
+      homeTimer.current = null;
+    };
+  }, [leaveAfter, householdOk]);
 
   async function join() {
     if (!normalized || busy) return;
@@ -73,11 +100,11 @@ export default function JoinScreen() {
         haptic("success");
         setJoined(true);
         setBurst(1);
-        goHome(1800);
+        setLeaveAfter(1800);
       } else if (res.reason === "already_member") {
         await consumePendingInvite();
         setFailure("already_member");
-        goHome(1500);
+        setLeaveAfter(1500);
       } else {
         setFailure(res.reason);
       }
@@ -86,6 +113,14 @@ export default function JoinScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (joined && household.ready && household.loadError && !household.householdId) {
+    return (
+      <Screen scroll={false} contentStyle={styles.success}>
+        <LoadErrorState title="You joined, but we couldn't load your family" />
+      </Screen>
+    );
   }
 
   if (joined) {
@@ -107,7 +142,7 @@ export default function JoinScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+    <KeyboardAvoidingView behavior="padding" style={styles.flex}>
       <Screen title="Join a family" back>
         <Text tone="ink2">Got an invite code from someone? Pop it in below.</Text>
         <TextInput

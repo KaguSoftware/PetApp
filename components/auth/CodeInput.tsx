@@ -33,6 +33,8 @@ export function CodeInput({
       <Pressable
         style={styles.row}
         onPress={() => inputRef.current?.focus()}
+        accessibilityRole="button"
+        accessibilityHint="Opens the keyboard to type the code"
         accessibilityLabel={`Code entry, ${value.length} of ${CODE_LENGTH} digits entered`}
       >
         {Array.from({ length: CODE_LENGTH }, (_, i) => (
@@ -56,6 +58,7 @@ export function CodeInput({
         textContentType="oneTimeCode"
         autoComplete="one-time-code"
         autoFocus={autoFocus}
+        accessibilityLabel="Verification code"
         caretHidden
         maxLength={CODE_LENGTH}
       />

@@ -29,6 +29,32 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Parse a Postgres timestamptz string. Postgres emits microseconds and "+00:00";
+ * Hermes' Date.parse is only reliable with <=3 fractional digits and "Z"/"+hh:mm".
+ */
+export function parseTimestamptz(s: unknown): number {
+  if (typeof s !== "string") return NaN;
+  const iso = s
+    .trim()
+    .replace(" ", "T")
+    .replace(/\.(\d+)/, (_m, d: string) => `.${(d + "000").slice(0, 3)}`)
+    .replace(/([+-]\d{2})(\d{2})$/, "$1:$2")
+    .replace(/([+-]\d{2})$/, "$1:00")
+    .replace(/[+-]00:00$/, "Z");
+  return Date.parse(iso);
+}
+
+/** Largest finite value, or `floor`. A loop: Math.max(...spread) overflows the stack on big arrays. */
+export function maxFinite(values: Iterable<number>, floor: number): number {
+  let max = floor;
+  for (const v of values) if (Number.isFinite(v) && v > max) max = v;
+  return max;
+}
+
+/** activities.created_at (server-set, migration 0056) as epoch ms; only ever a resync cursor. */
+export const createdAtMs = (r: Row): number => parseTimestamptz(r.created_at);
+
 export function msToDate(ms: number): string {
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, "0");

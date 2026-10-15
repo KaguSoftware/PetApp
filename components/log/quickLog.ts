@@ -1,7 +1,13 @@
 import { randomUUID } from "expo-crypto";
 import { deleteLog, logCare, showToast, type CareType, type Pet } from "@/data";
 import { emitReaction } from "@/lib/reactions";
-import { CARE } from "./careMeta";
+import { CARE, supportsCare } from "./careMeta";
+
+function joinNames(names: string[]): string {
+  if (names.length > 3) return `${names.length} pets`;
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+}
 
 export interface LogExtra {
   grams?: number;
@@ -15,7 +21,9 @@ export interface LogExtra {
  * reacts and the Undo toast shows instantly; deleteLog waits for each insert to
  * settle, so an early Undo can't race it. Failures are toasted by the data layer.
  */
-export function quickLog(pets: Pet[], type: CareType, extra?: LogExtra): void {
+export function quickLog(allPets: Pet[], type: CareType, extra?: LogExtra): void {
+  // "All pets" only logs for the pets this care type applies to (no walks for the cat).
+  const pets = allPets.filter((p) => supportsCare(p.species, type));
   if (pets.length === 0) return;
   const meta = CARE[type];
   const ids = pets.map((p) => {
@@ -24,7 +32,7 @@ export function quickLog(pets: Pet[], type: CareType, extra?: LogExtra): void {
     emitReaction({ petId: p.id, type });
     return id;
   });
-  const text = pets.length > 1 ? `${meta.label} logged for all pets ✓` : `${pets[0].name} ${meta.done} ✓`;
+  const text = `${joinNames(pets.map((p) => p.name))} ${meta.done} ✓`;
   showToast({
     kind: "undo",
     text,

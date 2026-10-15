@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { editPet, type Pet } from "@/data";
-import { formatDate, isValidDateString } from "@/lib/format";
+import { formatDate, isValidDateString, toDateString } from "@/lib/format";
 import { Card, Chip, Icon, PillButton, Sheet, spacing, Text, TextField, useTheme } from "@/ui";
 
 type Gender = Pet["gender"];
@@ -25,7 +25,10 @@ function EditSheet({ pet, open, onClose }: { pet: Pet; open: boolean; onClose: (
   const [birth, setBirth] = useState(pet.birthDate ?? "");
   const [gender, setGender] = useState<Gender>(pet.gender);
   const [notes, setNotes] = useState(pet.notes ?? "");
-  const birthOk = birth.trim() === "" || isValidDateString(birth);
+  const birthTrim = birth.trim();
+  const birthFormatOk = birthTrim === "" || isValidDateString(birthTrim);
+  const birthFuture = birthFormatOk && birthTrim > toDateString(Date.now());
+  const birthOk = birthFormatOk && !birthFuture;
   const canSave = name.trim().length > 0 && birthOk;
 
   const save = () => {
@@ -57,7 +60,7 @@ function EditSheet({ pet, open, onClose }: { pet: Pet; open: boolean; onClose: (
         />
         {!birthOk ? (
           <Text variant="small" tone="danger">
-            Use the format 2021-04-18.
+            {birthFuture ? "That date is in the future." : "Use the format 2021-04-18."}
           </Text>
         ) : null}
         <View style={styles.chips}>

@@ -3,9 +3,10 @@ import { useMemo } from "react";
 import { cache, useTable } from "./cache";
 import { supabase } from "./client";
 import { allPages, FetchError } from "./fetch";
-import { toNote } from "./mappers";
-import { optimisticDelete, optimisticInsert } from "./persist";
+import { maxFinite, parseTimestamptz, toNote } from "./mappers";
+import { MutationError, optimisticDelete, optimisticInsert } from "./persist";
 import { getMyLink, requireHouseholdId } from "./state";
+import { showError } from "./toasts";
 import type { PetNote } from "./types";
 
 const CURSOR = "notes";
@@ -33,7 +34,7 @@ async function fetchNotes(householdId: string, afterCreatedAt?: string) {
 }
 
 function noteCursor(rows: { created_at?: unknown }[], fallback: number): number {
-  return Math.max(fallback, ...rows.map((r) => Date.parse(String(r.created_at))).filter(Number.isFinite));
+  return maxFinite(rows.map((r) => parseTimestamptz(r.created_at)), fallback);
 }
 
 export async function loadNotes(householdId: string): Promise<void> {
@@ -62,8 +63,17 @@ export function useNotes(petId?: string): PetNote[] {
   );
 }
 
-export async function addNote(petId: string, kind: PetNote["kind"], body: string, ts: number = Date.now()): Promise<PetNote> {
+export const MAX_NOTE_LENGTH = 4000;
+
+export async function addNote(petId: string, kind: PetNote["kind"], rawBody: string, ts: number = Date.now()): Promise<PetNote> {
   const householdId = requireHouseholdId();
+  const body = rawBody.trim();
+  if (body.length === 0 || body.length > MAX_NOTE_LENGTH) {
+    // Never truncate silently: the user would lose text they believe was saved.
+    const text = body.length === 0 ? "Write something first." : `Notes can be up to ${MAX_NOTE_LENGTH} characters.`;
+    showError(text);
+    throw new MutationError(text);
+  }
   const note: PetNote = { id: randomUUID(), petId, memberId: getMyLink()?.memberId ?? null, kind, body, ts };
   // user_id is set by the server.
   return optimisticInsert(
@@ -71,7 +81,8 @@ export async function addNote(petId: string, kind: PetNote["kind"], body: string
     note,
     () =>
       supabase.from("pet_notes").insert({ id: note.id, household_id: householdId, pet_id: petId, member_id: note.memberId, ts, kind, body }),
-    "Couldn't save that note"
+    "Couldn't save that note",
+    [petId]
   );
 }
 
