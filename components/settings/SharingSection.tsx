@@ -1,0 +1,147 @@
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
+import { Alert, StyleSheet, View } from "react-native";
+import { copyInviteCode, createInvite, leaveHousehold, removeMember, shareInvite, useHousehold, useMembers, type Member } from "@/data";
+import { Chip, PillButton, Text, radius, spacing, useTheme } from "@/ui";
+import { Row, Section } from "./parts";
+
+type Invite = { code: string; expiresAt: number };
+
+const ROLE_LABEL = { owner: "Owner", admin: "Admin", member: "Member" } as const;
+
+function expiryText(expiresAt: number): string {
+  const days = Math.round((expiresAt - Date.now()) / 86_400_000);
+  return days > 1 ? `Works for about ${days} days.` : "Works for the next 24 hours.";
+}
+
+function InviteCard({ invite }: { invite: Invite }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.invite, { backgroundColor: colors.surface }]}>
+      <Text variant="caption" tone="ink2">
+        Your invite code
+      </Text>
+      <Text
+        variant="display"
+        selectable
+        accessibilityLabel={`Invite code ${invite.code.split("").join(" ")}`}
+        style={styles.code}
+      >
+        {invite.code}
+      </Text>
+      <Text variant="small" tone="ink2">
+        {expiryText(invite.expiresAt)}
+      </Text>
+      <View style={styles.inviteButtons}>
+        <PillButton label="Share" icon="share" size="sm" fullWidth={false} onPress={() => void shareInvite(invite)} />
+        <PillButton
+          label="Copy"
+          variant="secondary"
+          size="sm"
+          fullWidth={false}
+          onPress={() => void copyInviteCode(invite.code)}
+        />
+      </View>
+    </View>
+  );
+}
+
+function MemberRow({ member, canRemove }: { member: Member; canRemove: boolean }) {
+  function confirmRemove() {
+    Alert.alert(`Remove ${member.name}?`, "They'll lose access to your pets until you invite them again.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => void removeMember(member.id) },
+    ]);
+  }
+  return (
+    <Row
+      label={member.isMe ? `${member.name} (You)` : member.name}
+      left={<Text style={styles.emoji}>{member.emoji ?? "🐾"}</Text>}
+      right={
+        <View style={styles.rowRight}>
+          {member.role ? <Chip label={ROLE_LABEL[member.role]} tone={member.role === "owner" ? "butter" : "grey"} /> : null}
+          {canRemove ? (
+            <Chip label="Remove" icon="trash" onPress={confirmRemove} />
+          ) : null}
+        </View>
+      }
+    />
+  );
+}
+
+export function SharingSection() {
+  const { householdId, myRole } = useHousehold();
+  const members = useMembers();
+  const [invite, setInvite] = useState<Invite | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [leftFrom, setLeftFrom] = useState<string | null>(null);
+
+  const canManage = myRole === "owner" || myRole === "admin";
+  const canLeave = myRole === "member" || myRole === "admin";
+
+  // After leaving, the household reloads: no household left means onboarding, another one means home.
+  useEffect(() => {
+    if (!leftFrom || householdId === leftFrom) return;
+    router.replace(householdId ? "/home" : "/(onboarding)/adopt");
+  }, [leftFrom, householdId]);
+
+  async function invitePerson() {
+    setBusy(true);
+    try {
+      setInvite(await createInvite());
+    } catch {
+      // createInvite already showed a toast.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function confirmLeave() {
+    Alert.alert("Leave this family?", "You'll stop seeing their pets and logs.", [
+      { text: "Stay", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: async () => {
+          const from = householdId;
+          await leaveHousehold();
+          if (from) setLeftFrom(from);
+        },
+      },
+    ]);
+  }
+
+  return (
+    <Section title="Family & friends" tone="ice">
+      {members.map((m) => (
+        <MemberRow
+          key={m.id}
+          member={m}
+          canRemove={canManage && !m.isMe && m.userId !== null && m.role !== "owner"}
+        />
+      ))}
+      {canManage ? (
+        <>
+          {invite ? <InviteCard invite={invite} /> : null}
+          <PillButton
+            label={invite ? "Make a new code" : "Invite someone"}
+            icon="plus"
+            variant={invite ? "secondary" : "primary"}
+            size="sm"
+            loading={busy}
+            onPress={() => void invitePerson()}
+          />
+        </>
+      ) : null}
+      {canLeave ? <PillButton label="Leave this family" variant="secondary" size="sm" onPress={confirmLeave} /> : null}
+    </Section>
+  );
+}
+
+const styles = StyleSheet.create({
+  emoji: { fontSize: 26, width: 44, textAlign: "center" },
+  rowRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  invite: { borderRadius: radius.md, padding: spacing.xl, alignItems: "center", gap: spacing.xs },
+  code: { letterSpacing: 3, textAlign: "center" },
+  inviteButtons: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
+});

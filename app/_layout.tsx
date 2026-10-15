@@ -13,6 +13,7 @@ import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
+import { InviteLinkHandler } from "@/components/onboarding/InviteLinkHandler";
 import { DataProvider, dismissToast, useSession, useToasts } from "@/data";
 import { ThemeProvider, ToastHost, fonts, useTheme } from "@/ui";
 
@@ -95,6 +96,7 @@ function Shell() {
     <NavThemeProvider value={navTheme}>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <RootStack />
+        <InviteLinkHandler />
         <ToastHost toasts={toasts} onDismiss={dismissToast} bottomOffset={80} />
         <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       </View>
