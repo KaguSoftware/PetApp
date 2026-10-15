@@ -1,48 +1,56 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
- * An invite deep link (peting://join?code=…) tapped while signed OUT can't
- * open /join — the route is session-guarded. The code parks here across the
+ * An invite deep link (peting://join?code=...) tapped while signed OUT can't
+ * open /join - the route is session-guarded. The code parks here across the
  * sign-in/sign-up round trip and the root layout consumes it right after
  * hydration, so the invitee lands on the join screen they were promised.
  */
 const KEY = "petpal.pendingInviteCode";
+/** A parked code older than this is dropped rather than replayed. */
+const MAX_AGE_MS = 24 * 3_600_000;
 
-/** Which link shape was tapped. `code` = a 0027 invite code (XXXX-XXXX);
- *  `f` = a legacy web-demo household UUID. They redeem through completely
- *  different paths, so the kind has to survive the round trip — replaying a
- *  UUID as a code turns it into a garbage 8-char string that can never match. */
-export type PendingInvite = { kind: "code" | "f"; value: string };
+/** XXXX-XXXX from any spelling of an 8-char A-Z0-9 code, or null if it isn't one. */
+export function normalizeInviteCode(input: string): string | null {
+  const compact = input.toUpperCase().replace(/[\s-]/g, "");
+  return /^[A-Z0-9]{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4)}` : null;
+}
 
-export async function setPendingInvite(invite: PendingInvite): Promise<void> {
+export async function setPendingInvite(code: string): Promise<void> {
+  const normalized = normalizeInviteCode(code);
+  if (!normalized) return;
   try {
-    await AsyncStorage.setItem(KEY, `${invite.kind}:${invite.value}`);
+    await AsyncStorage.setItem(KEY, JSON.stringify({ code: normalized, at: Date.now() }));
   } catch (e) {
     console.error("[peting] pending invite stash failed:", e);
   }
 }
 
-function parse(stored: string | null): PendingInvite | null {
+function parse(stored: string | null): string | null {
   if (!stored) return null;
-  const sep = stored.indexOf(":");
-  // Un-prefixed values are from a build before the kind was recorded — those
-  // could only ever have been codes.
-  if (sep < 0) return { kind: "code", value: stored };
-  const kind = stored.slice(0, sep);
-  return { kind: kind === "f" ? "f" : "code", value: stored.slice(sep + 1) };
+  try {
+    const { code, at } = JSON.parse(stored) as { code?: unknown; at?: unknown };
+    if (typeof code !== "string" || typeof at !== "number" || Date.now() - at > MAX_AGE_MS) return null;
+    return normalizeInviteCode(code);
+  } catch {
+    return null;
+  }
 }
 
-/** Read without clearing — for showing "you have a pending invite" affordances. */
-export async function peekPendingInvite(): Promise<PendingInvite | null> {
+/** Read without clearing - for showing "you have a pending invite" affordances. */
+export async function peekPendingInvite(): Promise<string | null> {
   try {
-    return parse(await AsyncStorage.getItem(KEY));
+    const stored = await AsyncStorage.getItem(KEY);
+    const code = parse(stored);
+    if (stored && !code) await AsyncStorage.removeItem(KEY);
+    return code;
   } catch {
     return null;
   }
 }
 
 /** Read-and-clear: the caller is committing to routing the user to /join. */
-export async function consumePendingInvite(): Promise<PendingInvite | null> {
+export async function consumePendingInvite(): Promise<string | null> {
   try {
     const stored = await AsyncStorage.getItem(KEY);
     if (stored) await AsyncStorage.removeItem(KEY);

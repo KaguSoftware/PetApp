@@ -6,7 +6,9 @@ import { AppState, Platform } from "react-native";
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const hasSupabaseEnv = Boolean(url && anonKey);
+if (!url || !anonKey) {
+  throw new Error("Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Set both in .env and restart Metro.");
+}
 
 // Storage for the persisted auth session. On native this is AsyncStorage. On
 // web the page is server-rendered (web.output: "static"), so AsyncStorage —
@@ -17,10 +19,9 @@ export const hasSupabaseEnv = Boolean(url && anonKey);
 const isServer = typeof window === "undefined";
 const authStorage = Platform.OS === "web" && isServer ? undefined : AsyncStorage;
 
-// Shared backend with the PetPal web demo — same project, same schema, same
-// RLS. Sessions persist in AsyncStorage; there is no URL-based session
-// detection on native (email links land on the web demo during development).
-export const supabase = createClient(url ?? "https://missing.supabase.co", anonKey ?? "missing", {
+// Sessions persist in AsyncStorage; there is no URL-based session detection
+// on native.
+export const supabase = createClient(url, anonKey, {
   auth: {
     storage: authStorage,
     autoRefreshToken: true,
@@ -32,7 +33,7 @@ export const supabase = createClient(url ?? "https://missing.supabase.co", anonK
     // signInWithIdToken (Apple) and OTP verification are unaffected.
     flowType: "pkce",
   },
-  // Realtime (lib/store.tsx subscribes per household). The 10/s ceiling is the
+  // Realtime (data/realtime.ts subscribes per household). The 10/s ceiling is the
   // client default, stated explicitly so it's tunable in one place.
   //
   // NOTE: supabase-js pushes each refreshed JWT to every joined channel itself
