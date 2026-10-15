@@ -76,13 +76,22 @@ begin
   if inv.id is null then
     insert into private.auth_attempts (kind, user_id, scope, succeeded)
     values ('invite_redeem', uid, 'global', false);
+    delete from private.auth_attempts
+      where user_id = uid and attempted_at < now() - interval '1 day';
     return jsonb_build_object('ok', false, 'reason', 'not_found');
   end if;
 
   -- A real but dead code is not a guess: no failure recorded, bucket kept.
+  -- An invite also dies with its creator's authority: one minted by an admin
+  -- who has since been demoted or removed must not keep granting access.
   if inv.revoked_at is not null
      or inv.expires_at <= now()
-     or (inv.max_uses is not null and inv.use_count >= inv.max_uses) then
+     or (inv.max_uses is not null and inv.use_count >= inv.max_uses)
+     or not exists (
+       select 1 from household_members
+       where household_id = inv.household_id and user_id = inv.created_by
+         and (role = 'owner' or (role = 'admin' and inv.role = 'member'))
+     ) then
     return jsonb_build_object('ok', false, 'reason', 'expired');
   end if;
 
@@ -145,7 +154,9 @@ create index if not exists auth_attempts_user_idx
 -- 3. household_members: no direct DELETE / UPDATE ------------------------------
 
 drop policy if exists "leave household" on public.household_members;
-revoke delete, update on public.household_members from authenticated, anon;
+-- INSERT was only blocked by the absence of a policy; make it a privilege too.
+revoke insert, update, delete, truncate, references, trigger
+  on public.household_members from authenticated, anon;
 
 do $$
 begin
@@ -234,6 +245,75 @@ $$;
 create unique index if not exists household_members_one_owner
   on public.household_members (household_id) where role = 'owner';
 
+-- prepare_account_deletion (0044) promoted the successor while the departing
+-- owner still held 'owner' — with the index above that raises 23505 and, via
+-- the BEFORE DELETE trigger on auth.users, makes the account undeletable.
+-- Same body, with the departing owner demoted first.
+create or replace function public.prepare_account_deletion(target_user uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  m record;
+  successor uuid;
+  households_deleted integer := 0;
+  ownerships_moved integer := 0;
+  memberships_removed integer := 0;
+begin
+  for m in
+    select hm.household_id, hm.role from household_members hm
+    where hm.user_id = target_user
+  loop
+    if (select count(*) from household_members
+        where household_id = m.household_id) = 1 then
+      perform public.write_audit_log(
+        'household.deleted', m.household_id, null, null,
+        jsonb_build_object('member_count', 1, 'reason', 'last_member_account_deleted'),
+        target_user
+      );
+      delete from households where id = m.household_id;
+      households_deleted := households_deleted + 1;
+      continue;
+    end if;
+
+    if m.role = 'owner' then
+      select user_id into successor from household_members
+        where household_id = m.household_id and user_id <> target_user
+        order by (role <> 'admin'), joined_at asc
+        limit 1;
+      update household_members set role = 'member'
+        where household_id = m.household_id and user_id = target_user;
+      update household_members set role = 'owner'
+        where household_id = m.household_id and user_id = successor;
+      update households set owner_id = successor where id = m.household_id;
+
+      perform public.write_audit_log(
+        'household.ownership_transferred', m.household_id, successor, null,
+        jsonb_build_object('voluntary', false, 'reason', 'owner_account_deleted'),
+        target_user
+      );
+      ownerships_moved := ownerships_moved + 1;
+    end if;
+
+    delete from household_members
+      where household_id = m.household_id and user_id = target_user;
+    memberships_removed := memberships_removed + 1;
+  end loop;
+
+  perform public.write_audit_log(
+    'account.deletion_prepared', null, target_user, null,
+    jsonb_build_object('households_deleted', households_deleted,
+                       'ownerships_transferred', ownerships_moved,
+                       'memberships_removed', memberships_removed),
+    target_user
+  );
+end;
+$$;
+revoke all on function public.prepare_account_deletion(uuid) from public, authenticated, anon;
+grant execute on function public.prepare_account_deletion(uuid) to service_role;
+
 create or replace function public.transfer_ownership(hid uuid, new_owner uuid)
 returns void
 language plpgsql
@@ -309,7 +389,11 @@ begin
 end;
 $$;
 
-alter default privileges in schema public revoke execute on functions from public, anon;
+-- An IN SCHEMA revoke cannot remove the built-in global EXECUTE-to-PUBLIC
+-- default; it has to be revoked for the creating role. From here on every new
+-- RPC needs an explicit `grant execute ... to authenticated`.
+alter default privileges for role postgres revoke execute on functions from public;
+alter default privileges for role postgres in schema public revoke execute on functions from anon;
 
 -- VERIFY:
 --   wrong code ×11 within an hour as one user → the 11th returns reason 'rate_limited'
