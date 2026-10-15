@@ -32,7 +32,10 @@ beforeEach(() => {
   sessionStore.set({ ready: true, session: null, userId: "u1" });
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  clearToasts();
+  jest.restoreAllMocks();
+});
 
 describe("createHousehold", () => {
   it("refuses while the load failed or is unfinished, without calling the server", async () => {

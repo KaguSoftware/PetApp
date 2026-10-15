@@ -1,5 +1,22 @@
-module.exports = {
+const base = {
   preset: "jest-expo",
   moduleNameMapper: { "^@/(.*)$": "<rootDir>/$1" },
-  testPathIgnorePatterns: ["/node_modules/", "/supabase/"],
+};
+
+// Two projects: the screens project mocks @/data, expo-router and the native modules (jest.setup.js);
+// the unit project keeps the real data layer.
+module.exports = {
+  projects: [
+    {
+      ...base,
+      displayName: "unit",
+      testPathIgnorePatterns: ["/node_modules/", "/supabase/", "/__tests__/screens/"],
+    },
+    {
+      ...base,
+      displayName: "screens",
+      testMatch: ["<rootDir>/__tests__/screens/**/*.test.[jt]s?(x)"],
+      setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+    },
+  ],
 };

@@ -29,7 +29,10 @@ beforeEach(() => {
   clearToasts();
   jest.spyOn(console, "warn").mockImplementation(() => undefined);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  clearToasts();
+  jest.restoreAllMocks();
+});
 
 describe("optimisticInsert", () => {
   it("shows the row immediately and keeps it on success", async () => {
