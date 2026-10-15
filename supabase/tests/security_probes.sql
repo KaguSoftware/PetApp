@@ -117,6 +117,17 @@ do $$ declare inv household_invites; begin
   insert into probe(name,outcome) values ('owner creates invite (should work)', case when inv.code ~ '^[A-Z0-9]{4}-[A-Z0-9]{4}$' then 'ok' else 'BAD CODE!!' end);
 exception when others then insert into probe(name,outcome) values ('owner creates invite (should work)', 'FAILED!! '||sqlstate||' '||sqlerrm); end $$;
 
+do $$ declare h uuid; begin
+  h := public.create_household('Probe household');
+  insert into probe(name,outcome) values ('create_household + owner membership (should work)',
+    (select case when count(*) = 1 and bool_and(role = 'owner' and member_id is not null) then 'ok' else 'NO OWNER ROW!!' end
+     from household_members where household_id = h));
+exception when others then insert into probe(name,outcome) values ('create_household (should work)', 'FAILED!! '||sqlstate||' '||sqlerrm); end $$;
+
+do $$ begin perform public.add_owner_membership();
+  insert into probe(name,outcome) values ('call trigger fn via rpc', 'ALLOWED!!');
+exception when others then insert into probe(name,outcome) values ('call trigger fn via rpc', 'blocked '||sqlstate); end $$;
+
 reset role;
 select set_config('request.jwt.claims', '', true);
 
