@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import Svg, { Circle, G, Line, Path } from "react-native-svg";
 
-/** Rounded-stroke 24x24 glyphs. Stroke-only so one `color` prop recolours everything. */
+/** Thin rounded-stroke 24x24 line glyphs. Stroke-only so one `color` prop recolours everything. */
 const GLYPHS = {
-  fed: (
+  food: (
     <>
       <Path d="M3.5 11.5h17c0 4.8-3.5 8-8.5 8s-8.5-3.2-8.5-8Z" />
-      <Circle cx={8.8} cy={7.6} r={1.1} />
-      <Circle cx={12.2} cy={5.6} r={1.1} />
-      <Circle cx={15.4} cy={7.8} r={1.1} />
+      <Path d="M8 8.5c0-1.2 1-1.6 1-2.8M12 8.5c0-1.2 1-1.6 1-2.8M16 8.5c0-1.2 1-1.6 1-2.8" />
     </>
   ),
   water: <Path d="M12 3.5c3.6 4.2 6 7.2 6 10.2a6 6 0 0 1-12 0c0-3 2.4-6 6-10.2Z" />,
@@ -35,7 +33,7 @@ const GLYPHS = {
       <Path d="M7.5 15.5l1 1M10 13l1 1" />
     </>
   ),
-  pill: (
+  meds: (
     <>
       <Path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l10-10a4.95 4.95 0 0 1 7 7Z" />
       <Path d="M8.5 8.5l7 7" />
@@ -55,7 +53,7 @@ const GLYPHS = {
       <Path d="M12 11l1.8-2.2" />
     </>
   ),
-  health: (
+  vaccine: (
     <>
       <Path d="M17 3l4 4" />
       <Path d="M18.5 8.5l-9 9-4.5.8.8-4.5 9-9" />
@@ -70,6 +68,13 @@ const GLYPHS = {
       <Path d="M8.5 12.5h7M8.5 16.5h4.5" />
     </>
   ),
+  more: (
+    <>
+      <Circle cx={5.5} cy={12} r={1.1} />
+      <Circle cx={12} cy={12} r={1.1} />
+      <Circle cx={18.5} cy={12} r={1.1} />
+    </>
+  ),
   home: (
     <>
       <Path d="M4 11 12 4l8 7v8.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
@@ -82,7 +87,7 @@ const GLYPHS = {
       <Path d="M12 7v5l3 2" />
     </>
   ),
-  book: (
+  guide: (
     <>
       <Path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5Z" />
       <Path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5Z" />
@@ -101,13 +106,33 @@ const GLYPHS = {
   ),
   plus: <Path d="M12 5v14M5 12h14" />,
   close: <Path d="M6 6l12 12M18 6 6 18" />,
-  chevron: <Path d="M9 5l7 7-7 7" />,
+  "chevron-right": <Path d="M9 5l7 7-7 7" />,
+  "chevron-left": <Path d="M15 5l-7 7 7 7" />,
+  "chevron-down": <Path d="M5 9l7 7 7-7" />,
   check: <Path d="M5 12.5l4.5 4.5L19 7.5" />,
   heart: <Path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20Z" />,
   share: (
     <>
       <Path d="M12 15V4M8 7.5 12 3.5l4 4" />
       <Path d="M5 12v7a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-7" />
+    </>
+  ),
+  copy: (
+    <>
+      <Path d="M9 9h9a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 18 21H9a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 9 9Z" />
+      <Path d="M5.5 15H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 3h9a1.5 1.5 0 0 1 1.5 1.5V5" />
+    </>
+  ),
+  search: (
+    <>
+      <Circle cx={11} cy={11} r={6.5} />
+      <Path d="M16 16l4.5 4.5" />
+    </>
+  ),
+  user: (
+    <>
+      <Circle cx={12} cy={8} r={4} />
+      <Path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
     </>
   ),
   trash: (
@@ -125,13 +150,26 @@ const GLYPHS = {
   ),
 } satisfies Record<string, ReactNode>;
 
-export type IconName = keyof typeof GLYPHS;
+/** Older names still used by screens; Phase 2 migrates callers and drops these. */
+const ALIASES = {
+  fed: "food",
+  pill: "meds",
+  health: "vaccine",
+  book: "guide",
+  chevron: "chevron-right",
+} as const;
+
+export type IconName = keyof typeof GLYPHS | keyof typeof ALIASES;
+
+function glyph(name: IconName): ReactNode {
+  return name in ALIASES ? GLYPHS[ALIASES[name as keyof typeof ALIASES]] : GLYPHS[name as keyof typeof GLYPHS];
+}
 
 export function Icon({
   name,
   size = 24,
-  color = "#262626",
-  strokeWidth = 2.2,
+  color = "#000000",
+  strokeWidth = 1.75,
 }: {
   name: IconName;
   size?: number;
@@ -141,7 +179,7 @@ export function Icon({
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <G stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-        {GLYPHS[name]}
+        {glyph(name)}
       </G>
     </Svg>
   );

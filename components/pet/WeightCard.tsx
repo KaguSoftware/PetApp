@@ -26,20 +26,20 @@ export function WeightCard({ pet }: { pet: Pet }) {
     : "";
 
   return (
-    <Card tone="mint" style={styles.card}>
-      <Text variant="heading" accessibilityRole="header">
+    <Card style={styles.card}>
+      <Text variant="title" accessibilityRole="header">
         Weight
       </Text>
       {latest ? (
         <>
           <View style={styles.big}>
-            <Text variant="display">{kgToDisplay(latest.kg, units)}</Text>
+            <Text variant="largeTitle">{kgToDisplay(latest.kg, units)}</Text>
             {prev ? (
-              <Text tone="ink2" variant="small">
+              <Text tone="ink2" variant="callout">
                 {kgDeltaDisplay(latest.kg - prev.kg, units)} since {shortDate(prev.ts)}
               </Text>
             ) : (
-              <Text tone="ink2" variant="small">
+              <Text tone="ink2" variant="callout">
                 First weigh-in, nice start
               </Text>
             )}

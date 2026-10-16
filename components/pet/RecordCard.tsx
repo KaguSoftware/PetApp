@@ -1,5 +1,5 @@
 import { Alert, StyleSheet, View } from "react-native";
-import { HIT, Icon, PillButton, PressableScale, spacing, Text, useTheme, Card, type IconName, type Tone } from "@/ui";
+import { HIT, Icon, PillButton, PressableScale, spacing, Text, useTheme, Card, type IconName } from "@/ui";
 
 export interface RecordRowData {
   id: string;
@@ -17,7 +17,7 @@ export interface RecordRowData {
 export interface RecordCardProps {
   title: string;
   icon: IconName;
-  tone: Tone;
+  tone?: string;
   rows: RecordRowData[];
   emptyText: string;
   addLabel: string;
@@ -50,11 +50,11 @@ function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => 
       style={[styles.row, row.highlight && { backgroundColor: colors.surface }]}
     >
       <View style={styles.rowText}>
-        <Text variant="bodyStrong" numberOfLines={2}>
+        <Text variant="headline" numberOfLines={2}>
           {row.title}
         </Text>
         {row.subtitle ? (
-          <Text variant="small" tone="ink2" numberOfLines={2}>
+          <Text variant="callout" tone="ink2" numberOfLines={2}>
             {row.subtitle}
           </Text>
         ) : null}
@@ -71,10 +71,10 @@ function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => 
 export function RecordCard({ title, icon, tone, rows, emptyText, addLabel, onAdd, onRemove }: RecordCardProps) {
   const { colors } = useTheme();
   return (
-    <Card tone={tone} style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.head}>
-        <Icon name={icon} size={22} color={colors.tones[tone].fg} />
-        <Text variant="heading" accessibilityRole="header">
+        <Icon name={icon} size={22} color={colors.ink} />
+        <Text variant="title" accessibilityRole="header">
           {title}
         </Text>
       </View>

@@ -22,14 +22,14 @@ function InviteCard({ invite }: { invite: Invite }) {
         Your invite code
       </Text>
       <Text
-        variant="display"
+        variant="largeTitle"
         selectable
         accessibilityLabel={`Invite code ${invite.code.split("").join(" ")}`}
         style={styles.code}
       >
         {invite.code}
       </Text>
-      <Text variant="small" tone="ink2">
+      <Text variant="callout" tone="ink2">
         {expiryText(invite.expiresAt)}
       </Text>
       <View style={styles.inviteButtons}>
@@ -59,7 +59,7 @@ function MemberRow({ member, canRemove }: { member: Member; canRemove: boolean }
       left={<Text style={styles.emoji}>{member.emoji ?? "🐾"}</Text>}
       right={
         <View style={styles.rowRight}>
-          {member.role ? <Chip label={ROLE_LABEL[member.role]} tone={member.role === "owner" ? "butter" : "grey"} /> : null}
+          {member.role ? <Chip label={ROLE_LABEL[member.role]} /> : null}
           {canRemove ? (
             <Chip label="Remove" icon="trash" onPress={confirmRemove} />
           ) : null}
@@ -112,7 +112,7 @@ export function SharingSection() {
   }
 
   return (
-    <Section title="Family & friends" tone="ice">
+    <Section title="Family & friends">
       {members.map((m) => (
         <MemberRow
           key={m.id}

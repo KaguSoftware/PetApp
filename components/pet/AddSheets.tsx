@@ -14,7 +14,7 @@ function Form({ title, open, onClose, children }: { title: string; open: boolean
   return (
     <Sheet open={open} onClose={onClose}>
       <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.form}>
-        <Text variant="heading" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           {title}
         </Text>
         {children}
@@ -35,7 +35,7 @@ function DateInput({ label, value, onChange, optional = false }: { label: string
         autoCapitalize="none"
       />
       {value.trim() !== "" && !isValidDateString(value) ? (
-        <Text variant="small" tone="danger">
+        <Text variant="callout" tone="danger">
           Use the format 2026-10-15.
         </Text>
       ) : null}

@@ -12,7 +12,7 @@ function Step({ label, delta, onStep }: { label: string; delta: number; onStep: 
       haptic="select"
       accessibilityRole="button"
       accessibilityLabel={`Move time ${label}`}
-      style={[styles.step, { backgroundColor: colors.sunken }]}
+      style={[styles.step, { backgroundColor: colors.surface }]}
     >
       <Text variant="caption">{label}</Text>
     </PressableScale>
@@ -48,7 +48,7 @@ export function EditCareFields({ value, onChange, showGrams, showDuration, now }
     <View style={styles.wrap}>
       <View style={styles.timeRow}>
         <Icon name="history" size={20} color={colors.ink2} />
-        <Text variant="bodyStrong" style={styles.time}>
+        <Text variant="headline" style={styles.time}>
           {dayLabel(value.ts, now)}, {clockTime(value.ts)}
         </Text>
       </View>

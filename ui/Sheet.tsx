@@ -121,7 +121,7 @@ export function SheetPanel({ open, onClose, onClosed, children }: SheetPanelProp
             style={[
               styles.panel,
               {
-                backgroundColor: colors.bg,
+                backgroundColor: colors.surface,
                 maxHeight: screenH - insets.top - spacing["2xl"],
                 paddingBottom: insets.bottom + spacing.xl,
               },

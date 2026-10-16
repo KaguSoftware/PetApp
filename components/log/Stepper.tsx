@@ -35,7 +35,7 @@ export function Stepper({ label, value, onMinus, onPlus, minusLabel, plusLabel }
       </Text>
       <View style={styles.row}>
         {btn(onMinus, minusLabel, true)}
-        <Text variant="bodyStrong" style={styles.value} accessibilityLiveRegion="polite">
+        <Text variant="headline" style={styles.value} accessibilityLiveRegion="polite">
           {value}
         </Text>
         {btn(onPlus, plusLabel, false)}

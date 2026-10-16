@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, View } from "react-native";
 import { addNote, showToast, type Pet, type PetNote } from "@/data";
-import { emitReaction } from "@/lib/reactions";
 import { Chip, PillButton, TextField, haptic, spacing } from "@/ui";
 import { StepHeader } from "./StepHeader";
 
@@ -13,8 +12,7 @@ export function NoteStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => void
   const save = () => {
     if (empty) return;
     Keyboard.dismiss();
-    haptic("success");
-    emitReaction({ petId: pet.id, type: "note" });
+    haptic("success");
     addNote(pet.id, kind, body.trim())
       .then(() => showToast({ kind: "info", text: kind === "symptom" ? "Symptom saved ✓" : "Note saved ✓" }))
       .catch(() => undefined);

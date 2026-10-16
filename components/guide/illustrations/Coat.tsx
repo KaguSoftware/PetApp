@@ -49,9 +49,9 @@ export function Coat() {
   const inactive = colors.ink3;
   return (
     <View style={styles.row}>
-      <CoatCell label="Short" tool="Curry or bristle" tint={colors.green} inactive={inactive} top={9} under={0} />
-      <CoatCell label="Double" tool="Rake, then slicker" tint={colors.amber} inactive={inactive} top={18} under={9} />
-      <CoatCell label="Long" tool="Slicker and comb" tint={colors.pink} inactive={inactive} top={28} under={0} />
+      <CoatCell label="Short" tool="Curry or bristle" tint={colors.ink} inactive={inactive} top={9} under={0} />
+      <CoatCell label="Double" tool="Rake, then slicker" tint={colors.ink2} inactive={inactive} top={18} under={9} />
+      <CoatCell label="Long" tool="Slicker and comb" tint={colors.ink3} inactive={inactive} top={28} under={0} />
     </View>
   );
 }

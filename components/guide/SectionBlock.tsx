@@ -16,11 +16,11 @@ function StepRow({ n, text }: { n: number; text: string }) {
   );
 }
 
-function Callout({ tone, label, text }: { tone: "butter" | "peach"; label: string; text: string }) {
+function Callout({ label, text }: { label: string; text: string }) {
   return (
-    <Card tone={tone} style={styles.callout} accessible accessibilityLabel={`${label}. ${text}`}>
-      <Text variant="label">{label}</Text>
-      <Text variant="small">{text}</Text>
+    <Card style={styles.callout} accessible accessibilityLabel={`${label}. ${text}`}>
+      <Text variant="headline">{label}</Text>
+      <Text variant="callout">{text}</Text>
     </Card>
   );
 }
@@ -28,7 +28,7 @@ function Callout({ tone, label, text }: { tone: "butter" | "peach"; label: strin
 export function SectionBlock({ section }: { section: GuideSection }) {
   return (
     <View style={styles.section}>
-      <Text variant="heading" accessibilityRole="header">
+      <Text variant="title" accessibilityRole="header">
         {section.heading}
       </Text>
       {section.body ? <Text tone="ink2">{section.body}</Text> : null}
@@ -39,8 +39,8 @@ export function SectionBlock({ section }: { section: GuideSection }) {
           ))}
         </View>
       ) : null}
-      {section.tip ? <Callout tone="butter" label="Tip" text={section.tip} /> : null}
-      {section.warn ? <Callout tone="peach" label="Good to know" text={section.warn} /> : null}
+      {section.tip ? <Callout label="Tip" text={section.tip} /> : null}
+      {section.warn ? <Callout label="Good to know" text={section.warn} /> : null}
     </View>
   );
 }

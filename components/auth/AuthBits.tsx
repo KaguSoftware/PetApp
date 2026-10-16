@@ -17,7 +17,7 @@ export function OrDivider() {
 export function ErrorText({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <Text variant="small" tone="danger" accessibilityRole="alert" style={styles.error}>
+    <Text variant="callout" tone="danger" accessibilityRole="alert" style={styles.error}>
       {message}
     </Text>
   );
@@ -29,7 +29,7 @@ export function AuthLink({ label, onPress, prefix }: { label: string; onPress: (
     <View style={styles.linkRow}>
       {prefix ? <Text tone="ink2">{prefix} </Text> : null}
       <PressableScale onPress={onPress} haptic="select" accessibilityRole="link" accessibilityLabel={label} style={styles.link}>
-        <Text variant="bodyStrong">{label}</Text>
+        <Text variant="headline">{label}</Text>
       </PressableScale>
     </View>
   );

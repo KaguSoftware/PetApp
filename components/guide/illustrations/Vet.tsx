@@ -35,8 +35,8 @@ export function Vet() {
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
-        <Year label="Most adults: yearly" tint={colors.blue} line={colors.ink3} ring={colors.surface} visits={[12]} />
-        <Year label="Seniors: often twice a year" tint={colors.pink} line={colors.ink3} ring={colors.surface} visits={[6, 12]} />
+        <Year label="Most adults: yearly" tint={colors.ink2} line={colors.ink3} ring={colors.surface} visits={[12]} />
+        <Year label="Seniors: often twice a year" tint={colors.ink3} line={colors.ink3} ring={colors.surface} visits={[6, 12]} />
       </View>
       <Text variant="caption" tone="ink2" style={styles.caption}>
         Ticks are 3 months. Dots are wellness exams. Your vet knows best.

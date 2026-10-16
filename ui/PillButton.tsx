@@ -2,7 +2,7 @@ import { ActivityIndicator, StyleSheet, View, type StyleProp, type ViewStyle } f
 import { Icon, type IconName } from "./icons";
 import { PressableScale } from "./PressableScale";
 import { Text } from "./Text";
-import { borderWidth, radius, spacing } from "./tokens";
+import { radius, spacing } from "./tokens";
 import { useTheme } from "./theme";
 
 export interface PillButtonProps {
@@ -18,7 +18,7 @@ export interface PillButtonProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const HEIGHT = { sm: 44, md: 52, lg: 60 } as const;
+const HEIGHT = { sm: 44, md: 52, lg: 58 } as const;
 
 export function PillButton({
   label,
@@ -34,23 +34,21 @@ export function PillButton({
 }: PillButtonProps) {
   const { colors } = useTheme();
   const primary = variant === "primary";
-  const fg = primary ? colors.onInk : colors.ink;
+  const fg = primary ? colors.bg : colors.ink;
   const off = disabled || loading;
 
   return (
     <PressableScale
       onPress={onPress}
       disabled={off}
+      scaleTo={0.97}
       haptic="tap"
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: off, busy: loading }}
       style={[
         styles.pill,
-        { height: HEIGHT[size], opacity: disabled ? 0.45 : 1 },
-        primary
-          ? { backgroundColor: colors.ink }
-          : { backgroundColor: colors.surface, borderWidth, borderColor: colors.border },
+        { height: HEIGHT[size], opacity: disabled ? 0.4 : 1, backgroundColor: primary ? colors.ink : colors.surface },
         fullWidth ? styles.full : styles.hug,
         style,
       ]}
@@ -60,7 +58,7 @@ export function PillButton({
       ) : (
         <View style={styles.row}>
           {icon ? <Icon name={icon} size={20} color={fg} /> : null}
-          <Text variant="label" style={{ color: fg, fontSize: size === "sm" ? 15 : 17 }}>
+          <Text variant="headline" style={{ color: fg, fontSize: size === "sm" ? 15 : 17 }}>
             {label}
           </Text>
         </View>

@@ -122,7 +122,7 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
             );
           })}
         </Animated.View>
-        <View pointerEvents="none" style={[styles.needle, { backgroundColor: colors.green }]} />
+        <View pointerEvents="none" style={[styles.needle, { backgroundColor: colors.ink }]} />
       </View>
     </GestureDetector>
   );

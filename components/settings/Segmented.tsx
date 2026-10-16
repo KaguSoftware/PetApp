@@ -15,7 +15,7 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
-      style={[styles.track, { backgroundColor: colors.sunken, borderRadius: radius.pill }]}
+      style={[styles.track, { backgroundColor: colors.surface, borderRadius: radius.pill }]}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -29,7 +29,7 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
             accessibilityState={{ selected }}
             style={[styles.segment, selected && { backgroundColor: colors.ink }]}
           >
-            <Text variant="label" style={{ color: selected ? colors.onInk : colors.ink }}>
+            <Text variant="headline" style={{ color: selected ? colors.onInk : colors.ink }}>
               {o.label}
             </Text>
           </PressableScale>

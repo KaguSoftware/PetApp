@@ -9,10 +9,10 @@ type Gender = Pet["gender"];
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
     <View style={styles.row}>
-      <Text tone="ink2" variant="small" style={styles.label}>
+      <Text tone="ink2" variant="callout" style={styles.label}>
         {label}
       </Text>
-      <Text variant="bodyStrong" style={styles.value}>
+      <Text variant="headline" style={styles.value}>
         {value ?? "Not set"}
       </Text>
     </View>
@@ -45,7 +45,7 @@ function EditSheet({ pet, open, onClose }: { pet: Pet; open: boolean; onClose: (
   return (
     <Sheet open={open} onClose={onClose}>
       <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.form}>
-        <Text variant="heading" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           About {pet.name}
         </Text>
         <TextField label="Name" value={name} onChangeText={setName} />
@@ -59,7 +59,7 @@ function EditSheet({ pet, open, onClose }: { pet: Pet; open: boolean; onClose: (
           autoCapitalize="none"
         />
         {!birthOk ? (
-          <Text variant="small" tone="danger">
+          <Text variant="callout" tone="danger">
             {birthFuture ? "That date is in the future." : "Use the format 2021-04-18."}
           </Text>
         ) : null}
@@ -81,15 +81,15 @@ export function AboutCard({ pet }: { pet: Pet }) {
   const gender = pet.gender === "female" ? "Girl" : pet.gender === "male" ? "Boy" : null;
   return (
     <>
-      <Card tone="ice" onPress={() => {
+      <Card onPress={() => {
           setRev((r) => r + 1);
           setOpen(true);
         }} accessibilityLabel={`About ${pet.name}. Tap to edit`} style={styles.card}>
         <View style={styles.head}>
-          <Text variant="heading" style={styles.value}>
+          <Text variant="title" style={styles.value}>
             About
           </Text>
-          <Icon name="edit" size={20} color={colors.tones.ice.fg} />
+          <Icon name="edit" size={20} color={colors.ink} />
         </View>
         <Row label="Breed" value={pet.breed} />
         <Row label="Birthday" value={pet.birthDate ? formatDate(pet.birthDate) : null} />

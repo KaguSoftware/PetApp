@@ -56,7 +56,7 @@ export default function GuideScreen() {
 
       {categories.map((c) => (
         <View key={c.id} style={styles.section}>
-          <Text variant="heading" accessibilityRole="header">
+          <Text variant="title" accessibilityRole="header">
             {c.title}
           </Text>
           {c.topics.map((t) => (

@@ -1,19 +1,15 @@
-import { forwardRef, useState } from "react";
+import { forwardRef } from "react";
 import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { borderWidth, fonts, radius, spacing } from "./tokens";
+import { radius, spacing } from "./tokens";
 
 export interface TextFieldProps extends TextInputProps {
   label?: string;
 }
 
-export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
-  { label, style, onFocus, onBlur, ...rest },
-  ref,
-) {
+export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField({ label, style, ...rest }, ref) {
   const { colors } = useTheme();
-  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.wrap}>
       {label ? (
@@ -25,22 +21,9 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         ref={ref}
         accessibilityLabel={label ?? rest.placeholder}
         placeholderTextColor={colors.ink3}
-        selectionColor={colors.green}
+        selectionColor={colors.ink}
         {...rest}
-        onFocus={(e) => {
-          setFocused(true);
-          onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          setFocused(false);
-          onBlur?.(e);
-        }}
-        style={[
-          styles.input,
-          { backgroundColor: colors.surface, color: colors.ink, borderColor: focused ? colors.ink : colors.border },
-          rest.multiline && styles.multiline,
-          style,
-        ]}
+        style={[styles.input, { backgroundColor: colors.surface, color: colors.ink }, rest.multiline && styles.multiline, style]}
       />
     </View>
   );
@@ -50,12 +33,10 @@ const styles = StyleSheet.create({
   wrap: { gap: spacing.xs + 2 },
   label: { paddingHorizontal: spacing.sm },
   input: {
-    minHeight: 56,
+    minHeight: 52,
     borderRadius: radius.md,
-    borderWidth,
     paddingHorizontal: spacing.lg + 2,
-    fontFamily: fonts.medium,
-    fontSize: 16,
+    fontSize: 17,
   },
   multiline: { minHeight: 112, paddingTop: spacing.lg, textAlignVertical: "top" },
 });

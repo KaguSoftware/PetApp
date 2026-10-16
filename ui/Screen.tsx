@@ -5,7 +5,7 @@ import { Icon } from "./icons";
 import { PressableScale } from "./PressableScale";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { borderWidth, spacing } from "./tokens";
+import { spacing } from "./tokens";
 
 export interface ScreenProps {
   /** Large display title at the top. */
@@ -21,7 +21,7 @@ export interface ScreenProps {
   children?: React.ReactNode;
 }
 
-/** Height reserved for the floating tab bar plus the raised Log button. */
+/** Height reserved for the native tab bar plus the floating + button. */
 export const TAB_BAR_CLEARANCE = 110;
 
 export function Screen({
@@ -48,15 +48,15 @@ export function Screen({
             haptic="select"
             accessibilityRole="button"
             accessibilityLabel="Back"
-            style={[styles.back, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[styles.back, { backgroundColor: colors.surface }]}
           >
-            <View style={styles.flip}>
-              <Icon name="chevron" size={22} color={colors.ink} />
+            <View>
+              <Icon name="chevron-left" size={22} color={colors.ink} />
             </View>
           </PressableScale>
         ) : null}
         {title ? (
-          <Text variant={back ? "title" : "display"} accessibilityRole="header" style={styles.title}>
+          <Text variant={back ? "title" : "largeTitle"} accessibilityRole="header" style={styles.title}>
             {title}
           </Text>
         ) : (
@@ -92,6 +92,5 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   title: { flex: 1 },
-  back: { width: 44, height: 44, borderRadius: 22, borderWidth, alignItems: "center", justifyContent: "center" },
-  flip: { transform: [{ scaleX: -1 }] },
+  back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });

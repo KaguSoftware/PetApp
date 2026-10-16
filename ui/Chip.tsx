@@ -2,25 +2,23 @@ import { StyleSheet, View } from "react-native";
 import { Icon, type IconName } from "./icons";
 import { PressableScale } from "./PressableScale";
 import { Text } from "./Text";
-import { borderWidth, radius, spacing, type Tone } from "./tokens";
+import { radius, spacing } from "./tokens";
 import { useTheme } from "./theme";
 
 export interface ChipProps {
   label: string;
   icon?: IconName;
-  tone?: Tone;
   selected?: boolean;
   onPress?: () => void;
 }
 
-export function Chip({ label, icon, tone, selected = false, onPress }: ChipProps) {
+export function Chip({ label, icon, selected = false, onPress }: ChipProps) {
   const { colors } = useTheme();
-  const bg = selected ? colors.ink : tone ? colors.tones[tone].bg : colors.surface;
-  const fg = selected ? colors.onInk : colors.ink;
+  const fg = selected ? colors.bg : colors.ink;
   const body = (
-    <View style={[styles.chip, { backgroundColor: bg }, !tone && !selected && { borderWidth, borderColor: colors.border }]}>
-      {icon ? <Icon name={icon} size={16} color={tone && !selected ? colors.tones[tone].fg : fg} /> : null}
-      <Text variant="caption" style={{ color: fg, fontSize: 14, lineHeight: 18 }}>
+    <View style={[styles.chip, { backgroundColor: selected ? colors.ink : colors.surface }]}>
+      {icon ? <Icon name={icon} size={16} color={fg} /> : null}
+      <Text variant="callout" style={{ color: fg, fontWeight: "500" }}>
         {label}
       </Text>
     </View>
@@ -47,7 +45,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.xs + 2,
     height: 36,
-    paddingHorizontal: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
   },
 });

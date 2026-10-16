@@ -26,7 +26,7 @@ export function DangerZone({ pet }: { pet: Pet }) {
     );
   return (
     <View style={styles.wrap}>
-      <Text variant="small" tone="ink3" style={styles.note}>
+      <Text variant="callout" tone="ink3" style={styles.note}>
         Danger zone
       </Text>
       <PillButton label={`Remove ${pet.name}`} icon="trash" variant="secondary" onPress={confirm} />

@@ -1,15 +1,14 @@
 import { useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, View } from "react-native";
 import { addMed, addVaccination, addVetVisit, showToast, type Pet } from "@/data";
-import { emitReaction } from "@/lib/reactions";
-import { Chip, Icon, PillButton, PressableScale, Text, TextField, haptic, radius, spacing, useTheme, type IconName, type Tone } from "@/ui";
+import { Chip, Icon, PillButton, PressableScale, Text, TextField, haptic, radius, spacing, useTheme, type IconName } from "@/ui";
 import { addMonths, dayLabel, isoDay } from "./dates";
 import { StepHeader } from "./StepHeader";
 import { Stepper } from "./Stepper";
 
 type Kind = "vaccination" | "vet" | "med";
 
-const CHOICES: { kind: Kind; label: string; hint: string; icon: IconName; tone: Tone }[] = [
+const CHOICES: { kind: Kind; label: string; hint: string; icon: IconName; tone: string }[] = [
   { kind: "vaccination", label: "Vaccination", hint: "Shots and boosters", icon: "health", tone: "mint" },
   { kind: "vet", label: "Vet visit", hint: "Check-ups and treatments", icon: "vet", tone: "ice" },
   { kind: "med", label: "Medication", hint: "Name and dose", icon: "pill", tone: "peach" },
@@ -47,7 +46,6 @@ export function HealthStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
         : kind === "vet"
           ? addVetVisit({ ...base, date, reason: text.trim(), notes: extra.trim() || null })
           : addMed({ ...base, name: text.trim(), dose: extra.trim() || null, schedule: null, active: true });
-    emitReaction({ petId: pet.id, type: "health" });
     run.then(() => showToast({ kind: "info", text: `${TITLES[kind]} saved ✓` })).catch(() => undefined);
     onDone();
   };
@@ -64,14 +62,14 @@ export function HealthStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
             accessibilityRole="button"
             accessibilityLabel={c.label}
             accessibilityHint={c.hint}
-            style={[styles.choice, { backgroundColor: colors.tones[c.tone].bg }]}
+            style={[styles.choice, { backgroundColor: colors.surface }]}
           >
             <View style={[styles.disc, { backgroundColor: colors.surface }]}>
-              <Icon name={c.icon} size={26} color={colors.tones[c.tone].fg} strokeWidth={2.4} />
+              <Icon name={c.icon} size={26} color={colors.ink} strokeWidth={2.4} />
             </View>
             <View style={styles.choiceText}>
-              <Text variant="heading">{c.label}</Text>
-              <Text variant="small" tone="ink2">
+              <Text variant="title">{c.label}</Text>
+              <Text variant="callout" tone="ink2">
                 {c.hint}
               </Text>
             </View>

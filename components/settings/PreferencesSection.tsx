@@ -14,7 +14,7 @@ const THEMES: { value: ThemePreference; label: string }[] = [
 export function UnitsSection() {
   const { units } = useHousehold();
   return (
-    <Section title="Units" tone="mint">
+    <Section title="Units">
       <Segmented
         label="Units"
         value={units}
@@ -32,10 +32,10 @@ export function AppearanceSection() {
   const { preference, setPreference, colors } = useTheme();
   const a11y = useA11yPrefs();
   return (
-    <Section title="Appearance" tone="butter">
+    <Section title="Appearance">
       <Segmented label="Theme" value={preference} onChange={setPreference} options={THEMES} />
       <View style={styles.gap}>
-        <Text variant="bodyStrong" accessibilityRole="header">
+        <Text variant="headline" accessibilityRole="header">
           Accessibility
         </Text>
         <Row
@@ -45,7 +45,7 @@ export function AppearanceSection() {
             <Switch
               value={a11y.reduceMotion}
               onValueChange={a11y.setReduceMotion}
-              trackColor={{ true: colors.green, false: colors.border }}
+              trackColor={{ true: colors.ink, false: colors.border }}
               accessibilityLabel="Reduce motion"
             />
           }
@@ -57,7 +57,7 @@ export function AppearanceSection() {
             <Switch
               value={a11y.haptics}
               onValueChange={a11y.setHaptics}
-              trackColor={{ true: colors.green, false: colors.border }}
+              trackColor={{ true: colors.ink, false: colors.border }}
               accessibilityLabel="Haptics"
             />
           }

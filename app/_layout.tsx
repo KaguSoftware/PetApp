@@ -1,9 +1,3 @@
-import {
-  BricolageGrotesque_600SemiBold,
-  BricolageGrotesque_700Bold,
-  BricolageGrotesque_800ExtraBold,
-} from "@expo-google-fonts/bricolage-grotesque";
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, useFonts } from "@expo-google-fonts/inter";
 import { DefaultTheme, DarkTheme, ThemeProvider as NavThemeProvider, type Theme } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -12,15 +6,16 @@ import * as SystemUI from "expo-system-ui";
 import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { InviteLinkHandler } from "@/components/onboarding/InviteLinkHandler";
 import { DataProvider, dismissToast, useSession, useToasts } from "@/data";
-import { ThemeProvider, ToastHost, fonts, useTheme } from "@/ui";
+import { ThemeProvider, ToastHost, useTheme } from "@/ui";
 
 SplashScreen.preventAutoHideAsync();
 
-/** Floating tab bar (68) + raised Log button (26) + a small gap, measured from the bar's own bottom padding. */
-const BAR_STACK = 68 + 26 + 8;
+/** Lift toasts above the native tab bar (ToastHost already adds the bottom inset). */
+const TOAST_OFFSET = 56;
+
 
 function useNavTheme(): Theme {
   const { colors, scheme } = useTheme();
@@ -72,18 +67,6 @@ function Shell() {
   const { colors, scheme } = useTheme();
   const navTheme = useNavTheme();
   const toasts = useToasts();
-  const insets = useSafeAreaInsets();
-  // ToastHost already pads by insets.bottom + 16; the bar sits on max(insets.bottom, 12) and is BAR_STACK tall.
-  const toastOffset = Math.max(insets.bottom, 12) + BAR_STACK - (insets.bottom + 16);
-  const [fontsLoaded, fontError] = useFonts({
-    [fonts.regular]: Inter_400Regular,
-    [fonts.medium]: Inter_500Medium,
-    [fonts.semibold]: Inter_600SemiBold,
-    [fonts.bold]: Inter_700Bold,
-    [fonts.displaySemi]: BricolageGrotesque_600SemiBold,
-    [fonts.displayBold]: BricolageGrotesque_700Bold,
-    [fonts.displayXBold]: BricolageGrotesque_800ExtraBold,
-  });
 
   // Native root view colour: shows between screens during transitions.
   useEffect(() => {
@@ -92,8 +75,8 @@ function Shell() {
     });
   }, [colors.bg]);
 
-  // A font error must not hold the splash forever: fall back to system fonts.
-  const appReady = ready && (fontsLoaded || !!fontError);
+  
+  const appReady = ready;
   useEffect(() => {
     if (appReady) SplashScreen.hideAsync();
   }, [appReady]);
@@ -104,7 +87,7 @@ function Shell() {
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <RootStack />
         <InviteLinkHandler />
-        <ToastHost toasts={toasts} onDismiss={dismissToast} bottomOffset={toastOffset} />
+        <ToastHost toasts={toasts} onDismiss={dismissToast} bottomOffset={TOAST_OFFSET} />
         <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       </View>
     </NavThemeProvider>

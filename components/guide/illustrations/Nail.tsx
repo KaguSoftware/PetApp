@@ -18,16 +18,16 @@ export function Nail() {
         />
         <Path
           d="M23 35 Q23 25 44 25 L70 31 Q74 35 70 39 L44 45 Q23 45 23 35 Z"
-          fill={colors.tones.peach.bg}
-          stroke={colors.tones.peach.fg}
+          fill={colors.surface}
+          stroke={colors.ink}
           strokeWidth={2.5}
           strokeLinejoin="round"
         />
-        <Line x1={96} y1={14} x2={96} y2={56} stroke={colors.green} strokeWidth={3} strokeDasharray="4 5" strokeLinecap="round" />
+        <Line x1={96} y1={14} x2={96} y2={56} stroke={colors.ink} strokeWidth={3} strokeDasharray="4 5" strokeLinecap="round" />
       </Svg>
       <View style={styles.keys}>
-        <Key color={colors.tones.peach.fg} label="the quick: never cut here" />
-        <Key color={colors.green} label="safe cut line" />
+        <Key color={colors.ink} label="the quick: never cut here" />
+        <Key color={colors.ink} label="safe cut line" />
       </View>
       <Text variant="caption" tone="ink2" style={styles.caption}>
         Always cut well clear of the quick.

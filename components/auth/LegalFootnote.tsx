@@ -5,10 +5,10 @@ import { Text } from "@/ui";
 /** "By continuing, you agree to…" with tappable Terms / Privacy; legal/[doc] is reachable signed out. */
 export function LegalFootnote() {
   return (
-    <Text variant="small" tone="ink3" style={styles.footnote}>
+    <Text variant="callout" tone="ink3" style={styles.footnote}>
       By continuing, you agree to our{" "}
       <Text
-        variant="small"
+        variant="callout"
         tone="ink2"
         style={styles.link}
         accessibilityRole="link"
@@ -18,7 +18,7 @@ export function LegalFootnote() {
       </Text>{" "}
       and{" "}
       <Text
-        variant="small"
+        variant="callout"
         tone="ink2"
         style={styles.link}
         accessibilityRole="link"

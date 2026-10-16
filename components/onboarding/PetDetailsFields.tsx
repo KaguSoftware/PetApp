@@ -57,7 +57,7 @@ export function PetDetailsFields({ petName, value, onChange }: Props) {
         maxLength={10}
       />
       {error ? (
-        <Text variant="small" tone="danger" accessibilityLiveRegion="polite">
+        <Text variant="callout" tone="danger" accessibilityLiveRegion="polite">
           {error}
         </Text>
       ) : null}

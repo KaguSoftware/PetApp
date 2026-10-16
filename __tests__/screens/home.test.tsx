@@ -19,11 +19,10 @@ describe("Home", () => {
     expect(screen.getByText(/retry|try again/i)).toBeTruthy();
   });
 
-  it("(d) full household shows the pet and a Log for button", async () => {
+  it("(d) full household shows the pet", async () => {
     prepare("full");
     await renderScreen(<HomeScreen />);
     expect(screen.getAllByText(/Rex/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Log for/)).toBeTruthy();
     expect(fns.logCare).not.toHaveBeenCalled();
   });
 

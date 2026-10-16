@@ -69,7 +69,6 @@ export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
   }, [item]);
 
   const log = current?.source.kind === "care" ? current.source.log : null;
-  const tone = current ? colors.tones[current.tone] : null;
 
   const confirmDelete = () => {
     if (!current) return;
@@ -100,17 +99,17 @@ export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
 
   return (
     <Sheet open={item !== null} onClose={onClose}>
-      {current && tone ? (
+      {current ? (
         <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
           <View style={styles.head}>
-            <View style={[styles.disc, { backgroundColor: tone.bg }]}>
-              <Icon name={current.icon} size={26} color={tone.fg} />
+            <View style={[styles.disc, { backgroundColor: colors.bg }]}>
+              <Icon name={current.icon} size={26} color={colors.ink} />
             </View>
             <View style={styles.headText}>
-              <Text variant="heading" accessibilityRole="header">
+              <Text variant="title" accessibilityRole="header">
                 {current.title}
               </Text>
-              <Text tone="ink2" variant="small">
+              <Text tone="ink2" variant="callout">
                 {[pet?.name, `${dayLabel(current.ts)}, ${clockTime(current.ts)}`, who].filter(Boolean).join(" · ")}
               </Text>
             </View>

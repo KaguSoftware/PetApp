@@ -1,12 +1,12 @@
 import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon, Text, useTheme, spacing, type IconName, type Tone } from "@/ui";
+import { Icon, Text, useTheme, spacing, type IconName } from "@/ui";
 
 export interface AuthFrameProps {
   title: string;
   subtitle?: string;
   /** Round pastel badge above the title. */
-  badge?: { icon: IconName; tone: Tone };
+  badge?: { icon: IconName; tone: string };
   children: React.ReactNode;
   /** Pinned under the form (switch-screen links, legal footnote). */
   footer?: React.ReactNode;
@@ -25,11 +25,11 @@ export function AuthFrame({ title, subtitle, badge, children, footer }: AuthFram
       >
         <View style={styles.head}>
           {badge ? (
-            <View style={[styles.badge, { backgroundColor: colors.tones[badge.tone].bg }]}>
-              <Icon name={badge.icon} size={36} color={colors.tones[badge.tone].fg} />
+            <View style={[styles.badge, { backgroundColor: colors.surface }]}>
+              <Icon name={badge.icon} size={36} color={colors.ink} />
             </View>
           ) : null}
-          <Text variant="display" accessibilityRole="header" style={styles.center}>
+          <Text variant="largeTitle" accessibilityRole="header" style={styles.center}>
             {title}
           </Text>
           {subtitle ? (

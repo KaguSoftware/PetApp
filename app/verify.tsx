@@ -171,7 +171,7 @@ export default function VerifyScreen() {
         disabled={cooldown > 0}
         loading={resending}
       />
-      <Text variant="small" tone="ink3" style={{ textAlign: "center" }}>
+      <Text variant="callout" tone="ink3" style={{ textAlign: "center" }}>
         No code in the email? Older emails may only carry a link. Resend to get a code.
       </Text>
     </AuthFrame>

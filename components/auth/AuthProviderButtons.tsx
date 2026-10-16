@@ -68,7 +68,7 @@ export function AuthProviderButtons({ onError, disabled }: { onError: (message: 
         ) : (
           <>
             <GoogleLogo />
-            <Text variant="label" style={styles.googleLabel}>
+            <Text variant="headline" style={styles.googleLabel}>
               Continue with Google
             </Text>
           </>

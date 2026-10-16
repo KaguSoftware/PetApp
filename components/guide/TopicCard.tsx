@@ -24,15 +24,14 @@ export function EmojiDisc({ emoji, size = 52 }: { emoji: string; size?: number }
 export function TopicCard({ topic }: { topic: GuideTopic }) {
   return (
     <Card
-      tone={topic.tone}
       onPress={() => openTopic(topic.id)}
       accessibilityLabel={`${topic.title}. ${topic.summary} ${topic.readMinutes} minute read.`}
       style={styles.card}
     >
       <EmojiDisc emoji={topic.emoji} />
       <View style={styles.text}>
-        <Text variant="label">{topic.title}</Text>
-        <Text variant="small" tone="ink2">
+        <Text variant="headline">{topic.title}</Text>
+        <Text variant="callout" tone="ink2">
           {topic.summary}
         </Text>
         <Text variant="caption" tone="ink2">

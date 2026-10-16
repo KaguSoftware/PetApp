@@ -15,7 +15,7 @@ export default function GuideArticleScreen() {
       <Screen back tabBarPadding>
         <EmptyState
           icon="book"
-          tone="butter"
+         
           title="We couldn't find that guide"
           message="It may have moved. Head back to see everything we have."
           actionLabel="Back to the guide"
@@ -33,12 +33,12 @@ export default function GuideArticleScreen() {
         <SectionBlock key={s.heading} section={s} />
       ))}
       {topic.disclaimer ? (
-        <Text variant="small" tone="ink3" style={styles.disclaimer}>
+        <Text variant="callout" tone="ink3" style={styles.disclaimer}>
           {DISCLAIMER}
         </Text>
       ) : null}
       <View style={styles.related}>
-        <Text variant="heading" accessibilityRole="header">
+        <Text variant="title" accessibilityRole="header">
           Keep reading
         </Text>
         {related.map((t) => (

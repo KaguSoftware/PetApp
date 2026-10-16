@@ -1,6 +1,5 @@
 import { randomUUID } from "expo-crypto";
 import { deleteLog, logCare, showToast, type CareType, type Pet } from "@/data";
-import { emitReaction } from "@/lib/reactions";
 import { CARE, supportsCare } from "./careMeta";
 
 function joinNames(names: string[]): string {
@@ -28,8 +27,7 @@ export function quickLog(allPets: Pet[], type: CareType, extra?: LogExtra): void
   const meta = CARE[type];
   const ids = pets.map((p) => {
     const id = randomUUID();
-    logCare(p.id, type, { ...extra, id }).catch(() => undefined);
-    emitReaction({ petId: p.id, type });
+    logCare(p.id, type, { ...extra, id }).catch(() => undefined);
     return id;
   });
   const text = `${joinNames(pets.map((p) => p.name))} ${meta.done} ✓`;

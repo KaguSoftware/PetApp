@@ -1,11 +1,11 @@
 import { StyleSheet, View } from "react-native";
-import { Card, Icon, PressableScale, Text, spacing, useTheme, type Tone } from "@/ui";
+import { Card, Icon, PressableScale, Text, spacing, useTheme } from "@/ui";
 
 /** A soft grouped card with a heading. */
-export function Section({ title, tone, children }: { title: string; tone?: Tone; children: React.ReactNode }) {
+export function Section({ title, tone, children }: { title: string; tone?: string; children: React.ReactNode }) {
   return (
-    <Card tone={tone} style={styles.section}>
-      <Text variant="heading" accessibilityRole="header">
+    <Card style={styles.section}>
+      <Text variant="title" accessibilityRole="header">
         {title}
       </Text>
       {children}
@@ -30,11 +30,11 @@ export function Row({ label, hint, left, right, onPress, tone = "ink", chevron =
     <>
       {left}
       <View style={styles.rowText}>
-        <Text variant="bodyStrong" tone={tone} numberOfLines={1}>
+        <Text variant="headline" tone={tone} numberOfLines={1}>
           {label}
         </Text>
         {hint ? (
-          <Text variant="small" tone="ink2">
+          <Text variant="callout" tone="ink2">
             {hint}
           </Text>
         ) : null}

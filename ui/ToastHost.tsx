@@ -1,13 +1,11 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
-import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useReduceMotion } from "@/lib/a11y";
 import { Icon } from "./icons";
 import { PressableScale } from "./PressableScale";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { radius, shadow, spacing } from "./tokens";
+import { radius, spacing } from "./tokens";
 
 /** Structurally identical to `Toast` from @/data, so the host stays decoupled from it. */
 export interface ToastItem {
@@ -21,15 +19,15 @@ export interface ToastItem {
 export interface ToastHostProps {
   toasts: ToastItem[];
   onDismiss: (id: string) => void;
-  /** Lift above the floating tab bar. */
+  /** Lift above the tab bar. */
   bottomOffset?: number;
 }
 
 const LIFETIME_MS = { info: 3500, error: 5000, undo: 6500 } as const;
 
+/** A small "Saved · Undo" bar in the inverse colours. No animation. */
 function ToastRow({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
   const { colors } = useTheme();
-  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     const timer = setTimeout(() => onDismiss(toast.id), LIFETIME_MS[toast.kind]);
@@ -37,14 +35,12 @@ function ToastRow({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: stri
   }, [toast.id, toast.kind, onDismiss]);
 
   return (
-    <Animated.View
-      entering={reduceMotion ? undefined : FadeInDown.springify().damping(14)}
-      exiting={reduceMotion ? undefined : FadeOutDown.duration(160)}
+    <View
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      style={[styles.toast, shadow.float, { backgroundColor: colors.ink }]}
+      style={[styles.toast, { backgroundColor: colors.inverse }]}
     >
-      <Text variant="bodyStrong" tone="onInk" style={styles.text}>
+      <Text variant="callout" tone="inverse" style={styles.text}>
         {toast.text}
       </Text>
       {toast.actionLabel ? (
@@ -58,7 +54,7 @@ function ToastRow({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: stri
           accessibilityLabel={toast.actionLabel}
           style={styles.action}
         >
-          <Text variant="label" style={{ color: colors.amber }}>
+          <Text variant="headline" tone="inverse">
             {toast.actionLabel}
           </Text>
         </PressableScale>
@@ -69,9 +65,9 @@ function ToastRow({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: stri
         accessibilityLabel="Dismiss"
         style={styles.close}
       >
-        <Icon name="close" size={18} color={colors.onInk} />
+        <Icon name="close" size={16} color={colors.inverseInk2} />
       </PressableScale>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -89,17 +85,18 @@ export function ToastHost({ toasts, onDismiss, bottomOffset = 0 }: ToastHostProp
 }
 
 const styles = StyleSheet.create({
-  host: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", paddingHorizontal: spacing.lg, gap: spacing.sm },
+  host: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", alignItems: "center", paddingHorizontal: spacing.lg, gap: spacing.sm },
   toast: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 56,
+    minHeight: 48,
+    maxWidth: "100%",
     borderRadius: radius.pill,
     paddingLeft: spacing.xl,
     paddingRight: spacing.xs,
     gap: spacing.xs,
   },
-  text: { flex: 1, paddingVertical: spacing.md },
+  text: { flexShrink: 1, paddingVertical: spacing.md },
   action: { minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.sm },
-  close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  close: { width: 40, height: 44, alignItems: "center", justifyContent: "center" },
 });

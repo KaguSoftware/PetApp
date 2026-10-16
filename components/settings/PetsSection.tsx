@@ -1,15 +1,14 @@
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
-import { Mascot } from "@/components/mascot";
 import { usePets } from "@/data";
-import { PillButton, useTheme } from "@/ui";
+import { Icon, PillButton, useTheme } from "@/ui";
 import { Row, Section } from "./parts";
 
 export function PetsSection() {
   const { colors } = useTheme();
   const pets = usePets();
   return (
-    <Section title="Your pets" tone="peach">
+    <Section title="Your pets">
       {pets.map((p) => (
         <Row
           key={p.id}
@@ -19,7 +18,7 @@ export function PetsSection() {
           onPress={() => router.push(`/pet/${p.id}`)}
           left={
             <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
-              <Mascot species={p.species} size={40} animated={false} />
+              <Icon name="walk" size={22} color={colors.ink} />
             </View>
           }
         />

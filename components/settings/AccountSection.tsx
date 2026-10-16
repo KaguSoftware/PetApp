@@ -59,7 +59,7 @@ export function AccountSection() {
 
   return (
     <>
-      <Section title="Account" tone="grey">
+      <Section title="Account">
         <Row label="Signed in as" hint={session?.user.email ?? "your account"} />
         <PillButton label="Sign out" variant="secondary" size="sm" onPress={confirmSignOut} />
         <PillButton label="Delete account" variant="secondary" size="sm" loading={deleting} onPress={confirmDelete} />

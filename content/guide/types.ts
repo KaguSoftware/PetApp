@@ -1,4 +1,5 @@
-import type { Tone } from "@/ui";
+/** Legacy per-topic accent; the monochrome design ignores it. */
+type Tone = string;
 
 export type GuideSpecies = "dog" | "cat" | "all";
 

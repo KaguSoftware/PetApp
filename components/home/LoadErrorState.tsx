@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Mascot } from "@/components/mascot";
 import { reloadHousehold } from "@/data";
 import { PillButton, Text, spacing } from "@/ui";
 
@@ -20,8 +19,7 @@ export function LoadErrorState({ title = "We couldn't reach your family's data" 
 
   return (
     <View style={styles.wrap}>
-      <Mascot species="dog" size={170} mood="sleepy" />
-      <Text variant="heading" style={styles.center} accessibilityRole="header">
+      <Text variant="title" style={styles.center} accessibilityRole="header">
         {title}
       </Text>
       <Text tone="ink2" style={styles.center}>

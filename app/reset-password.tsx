@@ -53,11 +53,11 @@ export default function ResetPasswordScreen() {
         onSubmitEditing={handleSubmit}
       />
       {password.length > 0 && password.length < 6 ? (
-        <Text variant="small" tone="ink3">
+        <Text variant="callout" tone="ink3">
           Passwords need at least 6 characters.
         </Text>
       ) : confirm.length > 0 && password !== confirm ? (
-        <Text variant="small" tone="ink3">
+        <Text variant="callout" tone="ink3">
           Those don{"'"}t match yet.
         </Text>
       ) : null}

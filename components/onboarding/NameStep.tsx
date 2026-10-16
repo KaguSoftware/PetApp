@@ -1,7 +1,6 @@
 import { StyleSheet, TextInput, View } from "react-native";
 import type { Species } from "@/data";
-import { Mascot } from "@/components/mascot";
-import { SpeechBubble, Text, borderWidth, fonts, spacing, useTheme } from "@/ui";
+import { Text, borderWidth, spacing, useTheme } from "@/ui";
 
 interface Props {
   species: Species;
@@ -10,26 +9,22 @@ interface Props {
   onSubmit: () => void;
 }
 
-/** Step 2: big display-font name field, the mascot under a live "Hi, I'm {name}!" bubble. */
-export function NameStep({ species, name, onChange, onSubmit }: Props) {
+/** Step 2: a big name field. */
+export function NameStep({ name, onChange, onSubmit }: Props) {
   const { colors } = useTheme();
   const trimmed = name.trim();
   return (
     <View style={styles.wrap}>
-      <Text variant="display" style={styles.center} accessibilityRole="header">
+      <Text variant="largeTitle" style={styles.center} accessibilityRole="header">
         What&apos;s their name?
       </Text>
-      <View style={styles.stage}>
-        <SpeechBubble text={trimmed ? `Hi, I'm ${trimmed}!` : "Hi, I'm …"} />
-        <Mascot species={species} size={190} mood="happy" />
-      </View>
       <TextInput
         value={name}
         onChangeText={onChange}
         onSubmitEditing={onSubmit}
         placeholder="Name"
         placeholderTextColor={colors.ink3}
-        selectionColor={colors.green}
+        selectionColor={colors.ink}
         accessibilityLabel="Pet name"
         autoFocus
         autoCapitalize="words"
@@ -43,16 +38,15 @@ export function NameStep({ species, name, onChange, onSubmit }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.xl },
+  wrap: { gap: spacing["3xl"] },
   center: { textAlign: "center" },
-  stage: { alignItems: "center", gap: spacing.lg },
   input: {
-    fontFamily: fonts.displayXBold,
+    fontWeight: "700",
     fontSize: 38,
     lineHeight: 48,
     textAlign: "center",
     minHeight: 64,
-    borderBottomWidth: borderWidth * 2,
+    borderBottomWidth: borderWidth,
     paddingVertical: spacing.xs,
   },
 });

@@ -6,16 +6,16 @@ import { EmojiDisc, openTopic } from "./TopicCard";
 /** The "Start here" hero at the top of the guide. */
 export function FeaturedCard({ topic }: { topic: GuideTopic }) {
   return (
-    <Card tone={topic.tone} style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.top}>
         <View style={styles.text}>
           <Text variant="caption" tone="ink2">
             START HERE
           </Text>
-          <Text variant="heading" accessibilityRole="header">
+          <Text variant="title" accessibilityRole="header">
             {topic.title}
           </Text>
-          <Text variant="small" tone="ink2">
+          <Text variant="callout" tone="ink2">
             {topic.summary}
           </Text>
         </View>

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { addWeight, showToast, useHousehold, useWeights, type Pet, type Species } from "@/data";
-import { emitReaction } from "@/lib/reactions";
-import { PillButton, PressableScale, Text, fonts, haptic, spacing, useTheme } from "@/ui";
+import { PillButton, PressableScale, Text, haptic, spacing, useTheme } from "@/ui";
 import { StepHeader } from "./StepHeader";
 import { WEIGHT_MIN_STEPS, WeightDial } from "./WeightDial";
 
@@ -57,7 +56,6 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
     const display = current.steps / current.perUnit;
     const kg = Math.round((imperial ? display / LB_PER_KG : display) * 1000) / 1000;
     haptic("success");
-    emitReaction({ petId: pet.id, type: "weight" });
     addWeight(pet.id, kg)
       .then(() => showToast({ kind: "info", text: `${pet.name} weighs ${display.toFixed(current.perUnit === 100 ? 2 : 1)} ${unit} ✓` }))
       .catch(() => undefined);
@@ -77,7 +75,7 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
             accessibilityHint="Tap to type a weight"
             style={styles.number}
           >
-            <Text variant="display" style={styles.big}>
+            <Text variant="largeTitle" style={styles.big}>
               {(tenths / perUnit).toFixed(decimals)}
             </Text>
           </PressableScale>
@@ -95,7 +93,7 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
             style={[styles.big, styles.input, { color: colors.ink, borderColor: colors.ink }]}
           />
         )}
-        <Text variant="heading" tone="ink2">
+        <Text variant="title" tone="ink2">
           {unit}
         </Text>
       </View>
@@ -109,6 +107,6 @@ const styles = StyleSheet.create({
   body: { gap: spacing.lg, paddingBottom: spacing.sm },
   readout: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: spacing.sm },
   number: { minHeight: 64, minWidth: 44, justifyContent: "center" },
-  big: { fontFamily: fonts.displayXBold, fontSize: 56, lineHeight: 64, letterSpacing: -1 },
+  big: { fontWeight: "700", fontSize: 56, lineHeight: 64, letterSpacing: -1 },
   input: { minWidth: 120, textAlign: "center", borderBottomWidth: 3, padding: 0 },
 });

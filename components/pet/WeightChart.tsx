@@ -37,7 +37,7 @@ export function smoothPath(pts: Pt[]): string {
 export function WeightChart({ values, label }: { values: number[]; label: string }) {
   const { colors } = useTheme();
   const [width, setWidth] = useState(0);
-  const line = colors.tones.mint.fg;
+  const line = colors.ink;
 
   let body: React.ReactNode = null;
   if (width > 0 && values.length > 0) {

@@ -42,7 +42,7 @@ export function VaccinationsCard({ petId, onAdd }: { petId: string; onAdd: (k: A
     <RecordCard
       title="Vaccinations"
       icon="health"
-      tone="pink"
+     
       rows={rows}
       emptyText="No vaccinations recorded yet."
       addLabel="Add vaccination"
@@ -65,7 +65,7 @@ export function VetVisitsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddK
     <RecordCard
       title="Vet visits"
       icon="vet"
-      tone="butter"
+     
       rows={rows}
       emptyText="No vet visits yet."
       addLabel="Add vet visit"
@@ -93,7 +93,7 @@ export function MedsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) 
     <RecordCard
       title="Medications"
       icon="pill"
-      tone="peach"
+     
       rows={rows}
       emptyText="No medications. Add one to pick it when logging meds."
       addLabel="Add medication"

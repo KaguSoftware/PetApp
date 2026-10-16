@@ -6,9 +6,9 @@ import { Text, useTheme } from "@/ui";
 export function Body() {
   const { colors } = useTheme();
   const items = [
-    { rx: 13, label: "Too thin", tint: colors.amber },
-    { rx: 18, label: "Ideal", tint: colors.green },
-    { rx: 25, label: "Overweight", tint: colors.pink },
+    { rx: 13, label: "Too thin", tint: colors.ink2 },
+    { rx: 18, label: "Ideal", tint: colors.ink },
+    { rx: 25, label: "Overweight", tint: colors.ink3 },
   ];
   return (
     <View style={styles.row}>

@@ -57,11 +57,11 @@ export default function HistoryScreen() {
   const filtered = petId !== null || category !== "all";
 
   const empty = filtered ? (
-    <EmptyState icon="history" tone="ice" title="Nothing here" message="No entries match these filters yet. Try another pet or type." />
+    <EmptyState icon="history" title="Nothing here" message="No entries match these filters yet. Try another pet or type." />
   ) : (
     <EmptyState
       icon="history"
-      tone="ice"
+     
       title="Nothing logged yet"
       message="Everything you log for your pet shows up here, day by day."
       actionLabel="Log something"
@@ -88,7 +88,7 @@ export default function HistoryScreen() {
         SectionSeparatorComponent={() => <View style={styles.gap} />}
         renderSectionHeader={({ section }) => (
           <View style={[styles.dayHeader, { backgroundColor: colors.bg }]}>
-            <Text variant="label" tone="ink2" accessibilityRole="header">
+            <Text variant="headline" tone="ink2" accessibilityRole="header">
               {section.title}
             </Text>
           </View>

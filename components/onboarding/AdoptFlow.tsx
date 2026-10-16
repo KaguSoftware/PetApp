@@ -144,7 +144,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
             accessibilityLabel="I was invited, enter a code"
             style={styles.link}
           >
-            <Text variant="bodyStrong" tone="ink2">
+            <Text variant="headline" tone="ink2">
               I was invited — enter a code
             </Text>
           </PressableScale>

@@ -7,9 +7,9 @@ import { EmojiDisc } from "./TopicCard";
 export function ArticleHero({ topic }: { topic: GuideTopic }) {
   const { colors } = useTheme();
   return (
-    <Card tone={topic.tone} style={styles.card}>
+    <Card style={styles.card}>
       {topic.illustration ? (
-        <View style={[styles.art, { backgroundColor: colors.tones[topic.tone].bg }]}>
+        <View style={[styles.art, { backgroundColor: colors.surface }]}>
           <GuideIllustration id={topic.illustration} />
         </View>
       ) : (

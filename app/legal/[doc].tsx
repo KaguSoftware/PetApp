@@ -31,7 +31,7 @@ export default function LegalDocScreen() {
       ))}
       {doc.sections.map((section) => (
         <View key={section.heading} style={styles.section}>
-          <Text variant="heading">{section.heading}</Text>
+          <Text variant="title">{section.heading}</Text>
           {section.body.map((p, i) =>
             p.startsWith("• ") ? (
               <View key={i} style={styles.bullet}>

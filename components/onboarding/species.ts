@@ -1,17 +1,15 @@
 import type { Species } from "@/data";
-import type { Tone } from "@/ui";
 
 export interface MainSpecies {
   /** Stored directly for dog/cat; "other" opens the extra list instead. */
   value: "dog" | "cat" | "other";
   label: string;
-  tone: Tone;
 }
 
 export const MAIN_SPECIES: MainSpecies[] = [
-  { value: "dog", label: "Dog", tone: "butter" },
-  { value: "cat", label: "Cat", tone: "ice" },
-  { value: "other", label: "Other", tone: "pink" },
+  { value: "dog", label: "Dog" },
+  { value: "cat", label: "Cat" },
+  { value: "other", label: "Other" },
 ];
 
 export const OTHER_SPECIES: { value: Species; label: string }[] = [

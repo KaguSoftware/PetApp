@@ -16,33 +16,32 @@ export function TodayList({ logs, members, now, petName }: { logs: CareLog[]; me
 
   return (
     <View style={styles.wrap}>
-      <Text variant="heading" accessibilityRole="header">
+      <Text variant="title" accessibilityRole="header">
         Today
       </Text>
       {logs.length === 0 ? (
-        <Card tone="grey">
-          <Text variant="bodyStrong">Nothing yet today</Text>
-          <Text tone="ink2">Tap the big button when {petName} has been looked after. It takes two taps.</Text>
+        <Card>
+          <Text variant="headline">Nothing yet today</Text>
+          <Text tone="ink2">Tap + when {petName} has been looked after.</Text>
         </Card>
       ) : (
         <Card style={styles.list}>
           {logs.map((l) => {
             const meta = CARE[l.type];
-            const t = colors.tones[meta.tone];
             const who = showWho ? members.find((m) => m.id === l.memberId)?.name : undefined;
             const extra = detail(l);
             const when = relativeTime(l.ts, now);
             return (
               <View key={l.id} style={styles.row} accessible accessibilityLabel={`${meta.label}, ${when}${who ? `, by ${who}` : ""}`}>
-                <View style={[styles.disc, { backgroundColor: t.bg }]}>
-                  <Icon name={meta.icon} size={22} color={t.fg} strokeWidth={2.4} />
+                <View style={[styles.disc, { backgroundColor: colors.bg }]}>
+                  <Icon name={meta.icon} size={22} color={colors.ink} />
                 </View>
                 <View style={styles.body}>
-                  <Text variant="bodyStrong" numberOfLines={1}>
+                  <Text variant="headline" numberOfLines={1}>
                     {meta.label}
                     {extra ? <Text tone="ink2">{`  ${extra}`}</Text> : null}
                   </Text>
-                  <Text variant="small" tone="ink2">
+                  <Text variant="callout" tone="ink2">
                     {when}
                     {who ? ` · ${who}` : ""}
                   </Text>

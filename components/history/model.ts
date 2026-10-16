@@ -1,6 +1,6 @@
 import type { CareLog, CareType, Med, PetNote, Vaccination, VetVisit, WeightEntry } from "@/data";
 import { dayLabel, kgToDisplay, type Units } from "@/lib/format";
-import type { IconName, Tone } from "@/ui";
+import type { IconName } from "@/ui";
 
 export type Category = "care" | "weight" | "health" | "notes";
 export type CategoryFilter = "all" | Category;
@@ -19,7 +19,7 @@ export interface HistoryItem {
   memberId: string | null;
   category: Category;
   icon: IconName;
-  tone: Tone;
+  tone: string;
   title: string;
   /** Extra line (note text, reason...) shown under the title. */
   detail: string | null;
@@ -47,7 +47,7 @@ export interface HistorySection {
   data: HistoryItem[];
 }
 
-const CARE: Record<CareType, { icon: IconName; tone: Tone; verb: (pet: string) => string }> = {
+const CARE: Record<CareType, { icon: IconName; tone: string; verb: (pet: string) => string }> = {
   fed: { icon: "fed", tone: "butter", verb: (p) => `Fed ${p}` },
   water: { icon: "water", tone: "ice", verb: (p) => `Water for ${p}` },
   walk: { icon: "walk", tone: "mint", verb: (p) => `Walked ${p}` },

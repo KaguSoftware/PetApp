@@ -13,8 +13,8 @@ export interface PressableScaleProps extends Omit<PressableProps, "style"> {
   haptic?: HapticKind;
 }
 
-/** The app's only press feedback: a springy squish. Bare opacity presses are banned. */
-export function PressableScale({ style, scaleTo = 0.96, haptic: hapticKind, onPress, children, ...rest }: PressableScaleProps) {
+/** The app's only press feedback: a subtle scale. Bare opacity presses are banned. */
+export function PressableScale({ style, scaleTo = 0.97, haptic: hapticKind, onPress, children, ...rest }: PressableScaleProps) {
   const reduceMotion = useReduceMotion();
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));

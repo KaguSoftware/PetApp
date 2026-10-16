@@ -1,11 +1,11 @@
 import type { CareType, Species } from "@/data";
-import type { IconName, Tone } from "@/ui";
+import type { IconName } from "@/ui";
 
 export interface CareMeta {
   type: CareType;
   label: string;
   icon: IconName;
-  tone: Tone;
+  tone: string;
   /** Completes "{Name} …" in the undo toast. */
   done: string;
 }
