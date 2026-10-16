@@ -1,8 +1,8 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { copyInviteCode, createInvite, leaveHousehold, removeMember, shareInvite, useHousehold, useMembers, type Member } from "@/data";
-import { Chip, PillButton, Text, radius, spacing, useTheme } from "@/ui";
+import { PillButton, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
 import { Row, Section } from "./parts";
 
 type Invite = { code: string; expiresAt: number };
@@ -17,7 +17,7 @@ function expiryText(expiresAt: number): string {
 function InviteCard({ invite }: { invite: Invite }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.invite, { backgroundColor: colors.surface }]}>
+    <View style={[styles.invite, { backgroundColor: colors.bg }]}>
       <Text variant="caption" tone="ink2">
         Your invite code
       </Text>
@@ -56,12 +56,18 @@ function MemberRow({ member, canRemove }: { member: Member; canRemove: boolean }
   return (
     <Row
       label={member.isMe ? `${member.name} (You)` : member.name}
-      left={<Text style={styles.emoji}>{member.emoji ?? "🐾"}</Text>}
+      icon="user"
       right={
         <View style={styles.rowRight}>
-          {member.role ? <Chip label={ROLE_LABEL[member.role]} /> : null}
+          {member.role ? (
+            <Text variant="callout" tone="ink2">
+              {ROLE_LABEL[member.role]}
+            </Text>
+          ) : null}
           {canRemove ? (
-            <Chip label="Remove" icon="trash" onPress={confirmRemove} />
+            <PressableScale onPress={confirmRemove} haptic="tap" accessibilityRole="button" accessibilityLabel={`Remove ${member.name}`} hitSlop={8}>
+              <Text variant="callout">Remove</Text>
+            </PressableScale>
           ) : null}
         </View>
       }
@@ -75,6 +81,7 @@ export function SharingSection() {
   const [invite, setInvite] = useState<Invite | null>(null);
   const [busy, setBusy] = useState(false);
   const [leftFrom, setLeftFrom] = useState<string | null>(null);
+  const { colors } = useTheme();
 
   const canManage = myRole === "owner" || myRole === "admin";
   const canLeave = myRole === "member" || myRole === "admin";
@@ -123,25 +130,22 @@ export function SharingSection() {
       {canManage ? (
         <>
           {invite ? <InviteCard invite={invite} /> : null}
-          <PillButton
+          <Row
             label={invite ? "Make a new code" : "Invite someone"}
             icon="plus"
-            variant={invite ? "secondary" : "primary"}
-            size="sm"
-            loading={busy}
-            onPress={() => void invitePerson()}
+            right={busy ? <ActivityIndicator color={colors.ink} /> : undefined}
+            onPress={busy ? undefined : () => void invitePerson()}
           />
         </>
       ) : null}
-      {canLeave ? <PillButton label="Leave this family" variant="secondary" size="sm" onPress={confirmLeave} /> : null}
+      {canLeave ? <Row label="Leave this family" onPress={confirmLeave} /> : null}
     </Section>
   );
 }
 
 const styles = StyleSheet.create({
-  emoji: { fontSize: 26, width: 44, textAlign: "center" },
   rowRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  invite: { borderRadius: radius.md, padding: spacing.xl, alignItems: "center", gap: spacing.xs },
+  invite: { borderRadius: radius.md, padding: spacing.xl, alignItems: "center", gap: spacing.xs, marginVertical: spacing.md },
   code: { letterSpacing: 3, textAlign: "center" },
   inviteButtons: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
 });

@@ -22,10 +22,10 @@ export default function WelcomeScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
     >
       <View style={styles.hero}>
-        <Text variant="largeTitle" style={styles.center}>
+        <Text variant="largeTitle" accessibilityRole="header">
           {BRAND_MARK}
         </Text>
-        <Text tone="ink2" style={styles.center}>
+        <Text tone="ink2">
           Little moments of care for your pet, all in one place.
         </Text>
       </View>
@@ -33,7 +33,7 @@ export default function WelcomeScreen() {
       <View style={styles.form}>
         <AuthProviderButtons onError={setError} />
         <OrDivider />
-        <PillButton label="Continue with email" variant="secondary" icon="note" onPress={() => router.push("/(auth)/login")} />
+        <PillButton label="Continue with email" variant="secondary" onPress={() => router.push("/(auth)/login")} />
         <ErrorText message={error} />
       </View>
 
@@ -47,7 +47,6 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: "space-between", paddingHorizontal: spacing["2xl"], gap: spacing["2xl"] },
-  hero: { alignItems: "center", gap: spacing.md, paddingTop: spacing["2xl"] },
-  center: { textAlign: "center" },
+  hero: { gap: spacing.sm, paddingTop: spacing["4xl"] },
   form: { gap: spacing.md },
 });

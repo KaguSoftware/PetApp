@@ -4,7 +4,7 @@ import { ArticleHero } from "@/components/guide/ArticleHero";
 import { SectionBlock } from "@/components/guide/SectionBlock";
 import { TopicCard } from "@/components/guide/TopicCard";
 import { DISCLAIMER, relatedTopics, topicById } from "@/content/guide";
-import { EmptyState, Screen, Text } from "@/ui";
+import { EmptyState, Screen, spacing, Text } from "@/ui";
 
 export default function GuideArticleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,8 +14,7 @@ export default function GuideArticleScreen() {
     return (
       <Screen back tabBarPadding>
         <EmptyState
-          icon="book"
-         
+          icon="guide"
           title="We couldn't find that guide"
           message="It may have moved. Head back to see everything we have."
           actionLabel="Back to the guide"
@@ -50,7 +49,7 @@ export default function GuideArticleScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 24 },
+  content: { gap: spacing["2xl"] },
   disclaimer: { textAlign: "center" },
-  related: { gap: 12 },
+  related: { gap: spacing.sm },
 });

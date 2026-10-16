@@ -1,14 +1,15 @@
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { ActivityIndicator, Alert } from "react-native";
 import { showToast, signOut, useSession } from "@/data";
 import { supabase } from "@/lib/supabase";
-import { PillButton, Text } from "@/ui";
+import { Text, useTheme } from "@/ui";
 import { Row, Section } from "./parts";
 
 export function AccountSection() {
   const { session } = useSession();
+  const { colors } = useTheme();
   const [deleting, setDeleting] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -61,15 +62,17 @@ export function AccountSection() {
     <>
       <Section title="Account">
         <Row label="Signed in as" hint={session?.user.email ?? "your account"} />
-        <PillButton label="Sign out" variant="secondary" size="sm" onPress={confirmSignOut} />
-        <PillButton label="Delete account" variant="secondary" size="sm" loading={deleting} onPress={confirmDelete} />
+        <Row label="Sign out" onPress={confirmSignOut} />
+        <Row
+          label="Delete account"
+          onPress={deleting ? undefined : confirmDelete}
+          right={deleting ? <ActivityIndicator color={colors.ink} /> : undefined}
+        />
       </Section>
       <Section title="About">
         <Row label="Terms of Service" chevron onPress={() => router.push("/legal/terms")} />
         <Row label="Privacy Policy" chevron onPress={() => router.push("/legal/privacy")} />
-        <Text variant="caption" tone="ink3">
-          Version {Constants.expoConfig?.version ?? "1.0.0"}
-        </Text>
+        <Row label="Version" right={<Text tone="ink2">{Constants.expoConfig?.version ?? "1.0.0"}</Text>} />
       </Section>
     </>
   );

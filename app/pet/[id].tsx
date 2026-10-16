@@ -28,7 +28,6 @@ export default function PetProfileScreen() {
         {ready ? (
           <EmptyState
             icon="heart"
-           
             title="We can't find this pet"
             message="They may have been removed from your household."
             actionLabel="Go back"

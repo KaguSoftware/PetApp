@@ -11,6 +11,24 @@ describe("Adopt", () => {
     expect(screen.getByText("Continue")).toBeTruthy();
   });
 
+  it("shows a step indicator and no art", async () => {
+    prepare("noHousehold");
+    await renderScreen(<AdoptScreen />);
+    expect(screen.getByLabelText("Step 1 of 3")).toBeTruthy();
+  });
+
+  it("name then reveal is plain text and ends with a confirm button", async () => {
+    prepare("noHousehold");
+    await renderScreen(<AdoptScreen />);
+    fireEvent.press(screen.getByLabelText("Dog"));
+    fireEvent.press(screen.getByText("Continue"));
+    fireEvent.changeText(screen.getByLabelText("Pet name"), "Biscuit");
+    fireEvent.press(screen.getByText("Meet them"));
+    expect(screen.getByText("Biscuit is here")).toBeTruthy();
+    expect(screen.getByText("Welcome home, Biscuit!")).toBeTruthy();
+    expect(screen.getByLabelText("Step 3 of 3")).toBeTruthy();
+  });
+
   it("choosing Other reveals the extra species", async () => {
     prepare("noHousehold");
     await renderScreen(<AdoptScreen />);

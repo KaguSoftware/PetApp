@@ -1,20 +1,23 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { LogSheet } from "@/components/log/LogSheet";
-import { SheetPanel } from "@/ui";
+import { useCallback, useState } from "react";
+import { useSelectedPet } from "@/components/home/selectedPet";
+import { formFromStep } from "@/components/plus/careMeta";
+import { PlusPanel } from "@/components/plus/PlusPanel";
+import { usePets } from "@/data";
 
 /**
- * The log sheet, hosted as a transparent-modal route so the tab bar's Log button
- * and Home's big button are both just `router.push("/log")`.
+ * The + panel, hosted as a transparent-modal route so the floating + button and the
+ * pet profile are both just `router.push("/log")`. Logs for the pet selected on Home,
+ * or the `petId` param; `step` opens straight at one form.
  */
 export default function LogScreen() {
   const { petId, step } = useLocalSearchParams<{ petId?: string; step?: string }>();
+  const { pet: selected } = useSelectedPet();
+  const pets = usePets();
   const [open, setOpen] = useState(true);
-  const close = () => setOpen(false);
+  const close = useCallback(() => setOpen(false), []);
+  const closed = useCallback(() => (router.canGoBack() ? router.back() : router.replace("/home")), []);
 
-  return (
-    <SheetPanel open={open} onClose={close} onClosed={() => (router.canGoBack() ? router.back() : router.replace("/home"))}>
-      <LogSheet petId={petId} initialStep={step === "weight" || step === "health" || step === "note" ? step : undefined} close={close} />
-    </SheetPanel>
-  );
+  const pet = (petId ? pets.find((p) => p.id === petId) : undefined) ?? selected;
+  return <PlusPanel pet={pet} initialForm={formFromStep(step)} open={open} onClose={close} onClosed={closed} />;
 }

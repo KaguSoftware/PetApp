@@ -41,9 +41,7 @@ export function VaccinationsCard({ petId, onAdd }: { petId: string; onAdd: (k: A
   return (
     <RecordCard
       title="Vaccinations"
-      icon="health"
-     
-      rows={rows}
+rows={rows}
       emptyText="No vaccinations recorded yet."
       addLabel="Add vaccination"
       onAdd={() => onAdd("vaccination")}
@@ -64,9 +62,7 @@ export function VetVisitsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddK
   return (
     <RecordCard
       title="Vet visits"
-      icon="vet"
-     
-      rows={rows}
+rows={rows}
       emptyText="No vet visits yet."
       addLabel="Add vet visit"
       onAdd={() => onAdd("vet")}
@@ -92,9 +88,7 @@ export function MedsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) 
   return (
     <RecordCard
       title="Medications"
-      icon="pill"
-     
-      rows={rows}
+rows={rows}
       emptyText="No medications. Add one to pick it when logging meds."
       addLabel="Add medication"
       onAdd={() => onAdd("med")}

@@ -2,65 +2,118 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import LogScreen from "@/app/log";
 import { CAT, DOG, fns, onlyPets } from "./_support/fakeData";
 import { prepare, renderScreen } from "./_support/render";
+import { router } from "./_support/routerMock";
 
-describe("Log sheet", () => {
-  it("dog selection offers Fed, Water and Walk", async () => {
+// Noon today, so the "1h ago" fixtures never cross midnight.
+const NOON = new Date().setHours(12, 0, 0, 0);
+
+describe("+ panel", () => {
+  let nowSpy: jest.SpyInstance;
+  beforeEach(() => {
+    nowSpy = jest.spyOn(Date, "now").mockReturnValue(NOON);
+  });
+  afterEach(() => nowSpy.mockRestore());
+
+  it("a dog gets Food, Water, Walk, Weight, Meds, Note and More, with last-time lines", async () => {
     prepare("full", { petId: DOG.id });
     await renderScreen(<LogScreen />);
-    expect(screen.getByText("What did Rex do?")).toBeTruthy();
-    for (const t of ["Fed", "Water", "Walk", "Weight"]) expect(screen.getByText(t)).toBeTruthy();
+    for (const t of ["Food", "Water", "Walk", "Weight", "Meds", "Note", "More"]) expect(screen.getByText(t)).toBeTruthy();
+    expect(screen.queryByText("Litter")).toBeNull();
+    expect(screen.getByText("1h ago")).toBeTruthy(); // food
+    expect(screen.getByText("12 kg")).toBeTruthy();
+    expect(screen.getByText("Not yet")).toBeTruthy(); // meds: Apoquel is defined but never given
   });
 
-  it("cat-only selection has Litter and no Walk", async () => {
+  it("a cat gets Litter instead of Walk", async () => {
     prepare("full", { petId: CAT.id });
     onlyPets(CAT);
     await renderScreen(<LogScreen />);
     expect(screen.getByText("Litter")).toBeTruthy();
-    expect(screen.getByText("Fed")).toBeTruthy();
-    expect(screen.getByText("Water")).toBeTruthy();
+    expect(screen.getByText("Food")).toBeTruthy();
     expect(screen.queryByText("Walk")).toBeNull();
   });
 
-  it("pressing Fed logs the selected pet and shows an undo toast", async () => {
-    prepare("full", { petId: DOG.id });
+  it("without a petId param it logs for the pet selected on Home", async () => {
+    prepare("full");
     await renderScreen(<LogScreen />);
-    fireEvent.press(screen.getByText("Fed"));
-    expect(fns.logCare).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByText("Food"));
+    fireEvent.press(screen.getByText("Save"));
     expect(fns.logCare.mock.calls[0][0]).toBe(DOG.id);
-    expect(fns.logCare.mock.calls[0][1]).toBe("fed");
-    expect(fns.showToast).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "undo", actionLabel: "Undo", text: expect.stringContaining("Rex") }),
-    );
   });
 
-  it("with All pets on, Walk logs only the dog", async () => {
+  it("Food then Save logs with a client id, toasts an Undo and closes", async () => {
     prepare("full", { petId: DOG.id });
     await renderScreen(<LogScreen />);
-    fireEvent.press(screen.getByText("All pets"));
-    expect(screen.getByText("What did everyone do?")).toBeTruthy();
-    fireEvent.press(screen.getByText("Walk"));
-    expect(fns.logCare).toHaveBeenCalledTimes(1);
-    expect(fns.logCare.mock.calls[0][0]).toBe(DOG.id);
-    expect(fns.logCare.mock.calls[0][1]).toBe("walk");
+    fireEvent.press(screen.getByText("Food"));
+    fireEvent.press(screen.getByText("Save"));
+    expect(fns.logCare).toHaveBeenCalledWith(DOG.id, "fed", expect.objectContaining({ id: expect.any(String) }));
+    expect(fns.showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "undo", actionLabel: "Undo", text: "Fed · Rex" }));
+    expect(router.back).toHaveBeenCalled();
   });
 
-  it("with All pets on, Fed logs both pets", async () => {
+  it("Undo deletes the log that was just created", async () => {
     prepare("full", { petId: DOG.id });
     await renderScreen(<LogScreen />);
-    fireEvent.press(screen.getByText("All pets"));
-    fireEvent.press(screen.getByText("Fed"));
-    expect(fns.logCare.mock.calls.map((c) => c[0]).sort()).toEqual([CAT.id, DOG.id].sort());
+    fireEvent.press(screen.getByText("Food"));
+    fireEvent.press(screen.getByText("Save"));
+    const id = (fns.logCare.mock.calls[0][2] as { id: string }).id;
+    (fns.showToast.mock.calls[0][0] as { onAction: () => void }).onAction();
+    expect(fns.deleteLog).toHaveBeenCalledWith(id);
   });
 
-  it("weight step: typing 12.5 and saving calls addWeight(petId, 12.5)", async () => {
+  it("the time stepper back-dates the log and grams are optional", async () => {
     prepare("full", { petId: DOG.id });
     await renderScreen(<LogScreen />);
-    fireEvent.press(screen.getByText("Weight"));
-    expect(screen.getByText("Rex's weight")).toBeTruthy();
+    fireEvent.press(screen.getByText("Food"));
+    fireEvent.press(screen.getByLabelText("15 minutes earlier"));
+    fireEvent.changeText(screen.getByLabelText("Grams"), "60");
+    fireEvent.press(screen.getByText("Save"));
+    expect(fns.logCare).toHaveBeenCalledWith(DOG.id, "fed", expect.objectContaining({ grams: 60, ts: NOON - 15 * 60_000 }));
+  });
+
+  it("More opens vet visit, vaccination and grooming; Back returns to the first level", async () => {
+    prepare("full", { petId: DOG.id });
+    await renderScreen(<LogScreen />);
+    fireEvent.press(screen.getByText("More"));
+    for (const t of ["Vet visit", "Vaccination", "Grooming"]) expect(screen.getByText(t)).toBeTruthy();
+    fireEvent.press(screen.getByText("Grooming"));
+    fireEvent.press(screen.getByLabelText("Back"));
+    expect(screen.getByText("Grooming")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Back"));
+    expect(screen.getByText("Food")).toBeTruthy();
+  });
+
+  it("step=weight opens the weight form; typing 12.5 and saving calls addWeight", async () => {
+    prepare("full", { petId: DOG.id, step: "weight" });
+    await renderScreen(<LogScreen />);
+    expect(screen.queryByText("Food")).toBeNull();
     fireEvent.press(screen.getByLabelText("12.0 kg"));
     fireEvent.changeText(screen.getByLabelText("Weight in kg"), "12.5");
-    fireEvent.press(screen.getByText("Save weight"));
+    fireEvent.press(screen.getByText("Save"));
     expect(fns.addWeight).toHaveBeenCalledWith(DOG.id, 12.5);
+    expect(fns.showToast).toHaveBeenCalledWith(expect.objectContaining({ kind: "undo", text: "Weight 12.5 kg · Rex" }));
+  });
+
+  it("step=note saves a note", async () => {
+    prepare("full", { petId: DOG.id, step: "note" });
+    await renderScreen(<LogScreen />);
+    fireEvent.changeText(screen.getByLabelText("Note text"), "  limping a little ");
+    fireEvent.press(screen.getByText("Save"));
+    expect(fns.addNote).toHaveBeenCalledWith(DOG.id, "note", "limping a little");
+  });
+
+  it("step=meds logs the picked medication", async () => {
+    prepare("full", { petId: DOG.id, step: "meds" });
+    await renderScreen(<LogScreen />);
+    fireEvent.press(screen.getByText("Save"));
+    expect(fns.logCare).toHaveBeenCalledWith(DOG.id, "meds", expect.objectContaining({ medId: "med1", id: expect.any(String) }));
+  });
+
+  it("a step the species does not have falls back to the first level", async () => {
+    prepare("full", { petId: CAT.id, step: "walk" });
+    onlyPets(CAT);
+    await renderScreen(<LogScreen />);
+    expect(screen.getByText("Litter")).toBeTruthy();
   });
 
   it("with no pets shows the add-a-pet hint", async () => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Species } from "@/data";
-import { Chip, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
+import { Chip, Icon, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
 import { isMainSpecies, MAIN_SPECIES, OTHER_SPECIES } from "./species";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onChange: (s: Species) => void;
 }
 
-/** Step 1: three big text choices (Dog, Cat, Other). Phase 2 may add line icons. */
+/** Step 1: three big rounded choices (Dog, Cat, Other), each with a thin line icon. */
 export function SpeciesStep({ species, onChange }: Props) {
   const { colors } = useTheme();
   const [otherOpen, setOtherOpen] = useState(species !== null && !isMainSpecies(species));
@@ -45,7 +45,8 @@ export function SpeciesStep({ species, onChange }: Props) {
               accessibilityState={{ selected }}
               style={[styles.choice, { backgroundColor: selected ? colors.ink : colors.surface }]}
             >
-              <Text variant="headline" style={{ color: selected ? colors.bg : colors.ink }}>
+              <Icon name={s.icon} size={28} color={selected ? colors.bg : colors.ink} />
+              <Text variant="title" style={{ color: selected ? colors.bg : colors.ink }}>
                 {s.label}
               </Text>
             </PressableScale>
@@ -67,6 +68,13 @@ const styles = StyleSheet.create({
   wrap: { gap: spacing["2xl"] },
   center: { textAlign: "center" },
   col: { gap: spacing.md },
-  choice: { minHeight: 64, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
+  choice: {
+    minHeight: 72,
+    borderRadius: radius.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+    paddingHorizontal: spacing["2xl"],
+  },
   chips: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.sm },
 });

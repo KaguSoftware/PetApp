@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
 import { deletePet, type Pet } from "@/data";
-import { PillButton, spacing, Text } from "@/ui";
+import { HIT, PressableScale, spacing, Text } from "@/ui";
 
 export function DangerZone({ pet }: { pet: Pet }) {
   const confirm = () =>
@@ -26,15 +26,16 @@ export function DangerZone({ pet }: { pet: Pet }) {
     );
   return (
     <View style={styles.wrap}>
-      <Text variant="callout" tone="ink3" style={styles.note}>
-        Danger zone
-      </Text>
-      <PillButton label={`Remove ${pet.name}`} icon="trash" variant="secondary" onPress={confirm} />
+      <PressableScale onPress={confirm} haptic="tap" accessibilityRole="button" accessibilityLabel={`Remove ${pet.name}`} style={styles.btn}>
+        <Text tone="ink2" variant="headline">
+          {`Remove ${pet.name}`}
+        </Text>
+      </PressableScale>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm, marginTop: spacing.xl },
-  note: { textAlign: "center" },
+  wrap: { alignItems: "center", marginTop: spacing.lg },
+  btn: { minHeight: HIT, justifyContent: "center", paddingHorizontal: spacing.xl },
 });

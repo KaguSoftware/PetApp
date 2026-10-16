@@ -16,6 +16,13 @@ describe("Auth screens (signed out)", () => {
     expect(screen.getByText("Create an account")).toBeTruthy();
   });
 
+  it("welcome shows the app name and one line, no illustration", async () => {
+    await renderScreen(<WelcomeScreen />);
+    expect(screen.getByText("PETING.")).toBeTruthy();
+    expect(screen.getByText(/Little moments of care/)).toBeTruthy();
+    expect(screen.getByLabelText("Continue with Google")).toBeTruthy();
+  });
+
   it("login", async () => {
     await renderScreen(<LoginScreen />);
     expect(screen.getByText("Welcome back")).toBeTruthy();

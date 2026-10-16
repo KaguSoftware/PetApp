@@ -13,7 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "@/lib/a11y";
 import { useTheme } from "./theme";
-import { radius, spacing } from "./tokens";
+import { borderWidth, radius, spacing } from "./tokens";
 
 export interface SheetPanelProps {
   open: boolean;
@@ -121,7 +121,9 @@ export function SheetPanel({ open, onClose, onClosed, children }: SheetPanelProp
             style={[
               styles.panel,
               {
-                backgroundColor: colors.surface,
+                // bg (not surface) so inputs and chips, which are surface-filled, stay visible on the sheet.
+                backgroundColor: colors.bg,
+                borderColor: colors.border,
                 maxHeight: screenH - insets.top - spacing["2xl"],
                 paddingBottom: insets.bottom + spacing.xl,
               },
@@ -176,6 +178,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.xl,
     flexShrink: 1,
+    borderWidth: borderWidth,
+    borderBottomWidth: 0,
   },
   handleZone: { alignSelf: "center", paddingTop: spacing.md, paddingBottom: spacing.lg, paddingHorizontal: spacing["3xl"] },
   handle: { width: 44, height: 5, borderRadius: radius.pill },

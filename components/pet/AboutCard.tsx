@@ -12,7 +12,7 @@ function Row({ label, value }: { label: string; value: string | null }) {
       <Text tone="ink2" variant="callout" style={styles.label}>
         {label}
       </Text>
-      <Text variant="headline" style={styles.value}>
+      <Text variant="callout" tone={value ? "ink" : "ink3"} style={styles.value}>
         {value ?? "Not set"}
       </Text>
     </View>
@@ -27,7 +27,8 @@ function EditSheet({ pet, open, onClose }: { pet: Pet; open: boolean; onClose: (
   const [notes, setNotes] = useState(pet.notes ?? "");
   const birthTrim = birth.trim();
   const birthFormatOk = birthTrim === "" || isValidDateString(birthTrim);
-  const birthFuture = birthFormatOk && birthTrim > toDateString(Date.now());
+  const [today] = useState(() => toDateString(Date.now()));
+  const birthFuture = birthFormatOk && birthTrim > today;
   const birthOk = birthFormatOk && !birthFuture;
   const canSave = name.trim().length > 0 && birthOk;
 
@@ -86,7 +87,7 @@ export function AboutCard({ pet }: { pet: Pet }) {
           setOpen(true);
         }} accessibilityLabel={`About ${pet.name}. Tap to edit`} style={styles.card}>
         <View style={styles.head}>
-          <Text variant="title" style={styles.value}>
+          <Text variant="headline" style={styles.value}>
             About
           </Text>
           <Icon name="edit" size={20} color={colors.ink} />

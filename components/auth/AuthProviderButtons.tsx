@@ -10,7 +10,7 @@ import { PressableScale, Text, borderWidth, radius, spacing, useTheme } from "@/
 WebBrowser.maybeCompleteAuthSession();
 
 /**
- * Native Apple button (iOS, HIG-compliant) over a Google pill. Both resolve
+ * Native Apple button (iOS, HIG-compliant) over a Google pill (the "G" keeps its official colors, a brand requirement). Both resolve
  * through lib/auth.ts; on success the session listener navigates, so this only
  * surfaces errors upward.
  */
@@ -61,7 +61,7 @@ export function AuthProviderButtons({ onError, disabled }: { onError: (message: 
         accessibilityRole="button"
         accessibilityLabel="Continue with Google"
         accessibilityState={{ disabled: disabled || busy !== null, busy: busy === "google" }}
-        style={[styles.google, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.google, { backgroundColor: colors.bg, borderColor: colors.ink3 }]}
       >
         {busy === "google" ? (
           <ActivityIndicator color={colors.ink} />

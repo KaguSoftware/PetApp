@@ -1,15 +1,25 @@
+import { Children, Fragment } from "react";
 import { StyleSheet, View } from "react-native";
-import { Card, Icon, PressableScale, Text, spacing, useTheme } from "@/ui";
+import { borderWidth, Card, Icon, PressableScale, Text, spacing, useTheme, type IconName } from "@/ui";
 
-/** A soft grouped card with a heading. */
-export function Section({ title, tone, children }: { title: string; tone?: string; children: React.ReactNode }) {
+/** A small grey heading above a surface card; rows inside are split by hairlines. */
+export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const items = Children.toArray(children);
   return (
-    <Card style={styles.section}>
-      <Text variant="title" accessibilityRole="header">
+    <View style={styles.section}>
+      <Text variant="footnote" tone="ink2" style={styles.title} accessibilityRole="header">
         {title}
       </Text>
-      {children}
-    </Card>
+      <Card style={styles.card}>
+        {items.map((child, i) => (
+          <Fragment key={i}>
+            {i > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
+            {child}
+          </Fragment>
+        ))}
+      </Card>
+    </View>
   );
 }
 
@@ -17,20 +27,22 @@ interface RowProps {
   label: string;
   hint?: string;
   left?: React.ReactNode;
+  /** Convenience for a leading line icon. */
+  icon?: IconName;
   right?: React.ReactNode;
   onPress?: () => void;
-  tone?: "ink" | "danger";
   chevron?: boolean;
 }
 
-/** One 44pt+ row inside a section; pressable when `onPress` is given. */
-export function Row({ label, hint, left, right, onPress, tone = "ink", chevron = false }: RowProps) {
+/** One 52pt row inside a section; pressable when `onPress` is given. */
+export function Row({ label, hint, left, icon, right, onPress, chevron = false }: RowProps) {
   const { colors } = useTheme();
   const body = (
     <>
+      {icon ? <Icon name={icon} size={22} color={colors.ink} /> : null}
       {left}
       <View style={styles.rowText}>
-        <Text variant="headline" tone={tone} numberOfLines={1}>
+        <Text variant="body" numberOfLines={1}>
           {label}
         </Text>
         {hint ? (
@@ -40,7 +52,7 @@ export function Row({ label, hint, left, right, onPress, tone = "ink", chevron =
         ) : null}
       </View>
       {right}
-      {chevron ? <Icon name="chevron" size={18} color={colors.ink3} /> : null}
+      {chevron ? <Icon name="chevron-right" size={18} color={colors.ink3} /> : null}
     </>
   );
   if (!onPress) return <View style={styles.row}>{body}</View>;
@@ -59,6 +71,9 @@ export function Row({ label, hint, left, right, onPress, tone = "ink", chevron =
 
 const styles = StyleSheet.create({
   section: { gap: spacing.sm },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 52 },
+  title: { fontWeight: "600", paddingHorizontal: spacing.xs },
+  card: { paddingVertical: spacing.xs, paddingHorizontal: spacing.lg },
+  divider: { height: borderWidth },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 52, paddingVertical: spacing.xs },
   rowText: { flex: 1 },
 });

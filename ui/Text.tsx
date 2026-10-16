@@ -4,7 +4,7 @@ import { useTheme } from "./theme";
 
 export interface AppTextProps extends TextProps {
   variant?: keyof typeof typeScale;
-  tone?: "ink" | "ink2" | "ink3" | "onInk" | "danger" | "inverse" | "inverse2";
+  tone?: "ink" | "ink2" | "ink3" | "danger" | "inverse" | "inverse2";
 }
 
 export function Text({ variant = "body", tone = "ink", style, ...rest }: AppTextProps) {
@@ -13,7 +13,6 @@ export function Text({ variant = "body", tone = "ink", style, ...rest }: AppText
     ink: colors.ink,
     ink2: colors.ink2,
     ink3: colors.ink3,
-    onInk: colors.onInk,
     danger: colors.danger,
     inverse: colors.inverseInk,
     inverse2: colors.inverseInk2,

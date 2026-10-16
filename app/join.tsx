@@ -33,7 +33,9 @@ export default function JoinScreen() {
   const { session } = useSession();
   const navigation = useNavigation();
   const sessionRef = useRef(session);
-  sessionRef.current = session;
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
   const homeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set once we are on our way out (joined, or already a member); the timer starts when the household is usable.
   const [leaveAfter, setLeaveAfter] = useState<number | null>(null);
@@ -47,10 +49,12 @@ export default function JoinScreen() {
     [navigation],
   );
 
-  // A link opened while this screen is already up updates the code.
-  useEffect(() => {
+  // A link opened while this screen is already up updates the code (adjusted during render, not in an effect).
+  const [seenParam, setSeenParam] = useState(params.code);
+  if (params.code !== seenParam) {
+    setSeenParam(params.code);
     if (params.code) setCode(formatCode(params.code));
-  }, [params.code]);
+  }
 
   // Otherwise fall back to an invite parked before sign-in.
   useEffect(() => {

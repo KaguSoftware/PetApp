@@ -19,7 +19,6 @@ export interface HistoryItem {
   memberId: string | null;
   category: Category;
   icon: IconName;
-  tone: string;
   title: string;
   /** Extra line (note text, reason...) shown under the title. */
   detail: string | null;
@@ -47,14 +46,14 @@ export interface HistorySection {
   data: HistoryItem[];
 }
 
-const CARE: Record<CareType, { icon: IconName; tone: string; verb: (pet: string) => string }> = {
-  fed: { icon: "fed", tone: "butter", verb: (p) => `Fed ${p}` },
-  water: { icon: "water", tone: "ice", verb: (p) => `Water for ${p}` },
-  walk: { icon: "walk", tone: "mint", verb: (p) => `Walked ${p}` },
-  litter: { icon: "litter", tone: "grey", verb: (p) => `Litter for ${p}` },
-  groomed: { icon: "groom", tone: "pink", verb: (p) => `Groomed ${p}` },
-  meds: { icon: "pill", tone: "peach", verb: (p) => `Meds for ${p}` },
-  vet: { icon: "vet", tone: "ice", verb: (p) => `Vet visit for ${p}` },
+const CARE: Record<CareType, { icon: IconName; verb: (pet: string) => string }> = {
+  fed: { icon: "food", verb: (p) => `Fed ${p}` },
+  water: { icon: "water", verb: (p) => `Water for ${p}` },
+  walk: { icon: "walk", verb: (p) => `Walked ${p}` },
+  litter: { icon: "litter", verb: (p) => `Litter for ${p}` },
+  groomed: { icon: "groom", verb: (p) => `Groomed ${p}` },
+  meds: { icon: "meds", verb: (p) => `Meds for ${p}` },
+  vet: { icon: "vet", verb: (p) => `Vet visit for ${p}` },
 };
 
 /** yyyy-mm-dd to local noon, so a date-only record lands mid-day in its own day group. */
@@ -79,7 +78,6 @@ function careItem(log: CareLog, pet: string, meds: Map<string, Med>): HistoryIte
     memberId: log.memberId,
     category: "care",
     icon: c.icon,
-    tone: c.tone,
     title: c.verb(pet),
     detail: extras.length ? extras.join(" · ") : null,
     source: { kind: "care", log },
@@ -104,8 +102,7 @@ export function buildItems(input: HistoryInput): HistoryItem[] {
       petId: note.petId,
       memberId: note.memberId,
       category: symptom ? "health" : "notes",
-      icon: symptom ? "health" : "note",
-      tone: symptom ? "pink" : "butter",
+      icon: symptom ? "vaccine" : "note",
       title: symptom ? `Symptom: ${note.body}` : `Note for ${nameOf(note.petId)}`,
       detail: symptom ? null : note.body,
       source: { kind: "note", note },
@@ -123,7 +120,6 @@ export function buildItems(input: HistoryInput): HistoryItem[] {
         memberId: null,
         category: "weight",
         icon: "weight",
-        tone: "mint",
         title: `Weight · ${kgToDisplay(w.kg, units)}`,
         detail: null,
         source: { kind: "weight", entry: w },
@@ -138,8 +134,7 @@ export function buildItems(input: HistoryInput): HistoryItem[] {
         petId,
         memberId: null,
         category: "health",
-        icon: "health",
-        tone: "pink",
+        icon: "vaccine",
         title: `Vaccination · ${v.name}`,
         detail: v.notes ?? null,
         source: { kind: "vaccination", record: v },
@@ -155,7 +150,6 @@ export function buildItems(input: HistoryInput): HistoryItem[] {
         memberId: null,
         category: "health",
         icon: "vet",
-        tone: "ice",
         title: `Vet visit · ${v.reason}`,
         detail: v.notes ?? null,
         source: { kind: "vet", record: v },

@@ -52,12 +52,15 @@ export function WeightChart({ values, label }: { values: number[]; label: string
     const last = pts[pts.length - 1];
     body = (
       <Svg width={width} height={HEIGHT}>
-        <Line x1={PAD_X} x2={width - PAD_X} y1={HEIGHT - 4} y2={HEIGHT - 4} stroke={colors.border} strokeWidth={2} strokeLinecap="round" />
-        <Path d={smoothPath(pts)} stroke={line} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {[0, 0.5, 1].map((f) => {
+          const y = PAD_Y + (HEIGHT - PAD_Y * 2) * f;
+          return <Line key={f} x1={PAD_X} x2={width - PAD_X} y1={y} y2={y} stroke={colors.ink3} strokeOpacity={0.45} strokeWidth={StyleSheet.hairlineWidth} />;
+        })}
+        <Path d={smoothPath(pts)} stroke={line} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
         {pts.slice(0, -1).map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={4} fill={colors.surface} stroke={line} strokeWidth={2.5} />
+          <Circle key={i} cx={p.x} cy={p.y} r={3} fill={colors.surface} stroke={line} strokeWidth={1.25} />
         ))}
-        <Circle cx={last.x} cy={last.y} r={7} fill={line} stroke={colors.surface} strokeWidth={3} />
+        <Circle cx={last.x} cy={last.y} r={4} fill={line} />
       </Svg>
     );
   }

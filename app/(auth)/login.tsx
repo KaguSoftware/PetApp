@@ -37,8 +37,7 @@ export default function LoginScreen() {
   return (
     <AuthFrame
       title="Welcome back"
-      subtitle={`Log in to ${BRAND}`}
-      badge={{ icon: "heart", tone: "pink" }}
+      subtitle={`Log in to ${BRAND}`}
       footer={<AuthLink prefix={`New to ${BRAND}?`} label="Create an account" onPress={() => router.replace("/(auth)/signup")} />}
     >
       <TextField

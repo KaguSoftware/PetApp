@@ -1,5 +1,6 @@
 import { Alert, StyleSheet, View } from "react-native";
-import { HIT, Icon, PillButton, PressableScale, spacing, Text, useTheme, Card, type IconName } from "@/ui";
+import { borderWidth, Card, HIT, PressableScale, spacing, Text, useTheme } from "@/ui";
+import { TextButton } from "./TextButton";
 
 export interface RecordRowData {
   id: string;
@@ -16,8 +17,6 @@ export interface RecordRowData {
 
 export interface RecordCardProps {
   title: string;
-  icon: IconName;
-  tone?: string;
   rows: RecordRowData[];
   emptyText: string;
   addLabel: string;
@@ -32,7 +31,7 @@ function confirmRemove(row: RecordRowData, onRemove: (id: string) => void) {
   ]);
 }
 
-function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => void }) {
+function Row({ row, last, onRemove }: { row: RecordRowData; last: boolean; onRemove: (id: string) => void }) {
   const { colors } = useTheme();
   return (
     <PressableScale
@@ -47,10 +46,10 @@ function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => 
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === "delete") confirmRemove(row, onRemove);
       }}
-      style={[styles.row, row.highlight && { backgroundColor: colors.surface }]}
+      style={[styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: borderWidth }]}
     >
       <View style={styles.rowText}>
-        <Text variant="headline" numberOfLines={2}>
+        <Text variant="body" numberOfLines={2} style={row.highlight ? styles.strong : undefined}>
           {row.title}
         </Text>
         {row.subtitle ? (
@@ -60,7 +59,7 @@ function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => 
         ) : null}
       </View>
       {row.badge ? (
-        <Text variant="caption" tone="ink2">
+        <Text variant="footnote" tone={row.highlight ? "ink" : "ink2"}>
           {row.badge}
         </Text>
       ) : null}
@@ -68,45 +67,41 @@ function Row({ row, onRemove }: { row: RecordRowData; onRemove: (id: string) => 
   );
 }
 
-export function RecordCard({ title, icon, tone, rows, emptyText, addLabel, onAdd, onRemove }: RecordCardProps) {
-  const { colors } = useTheme();
+export function RecordCard({ title, rows, emptyText, addLabel, onAdd, onRemove }: RecordCardProps) {
   return (
     <Card style={styles.card}>
-      <View style={styles.head}>
-        <Icon name={icon} size={22} color={colors.ink} />
-        <Text variant="title" accessibilityRole="header">
-          {title}
-        </Text>
-      </View>
+      <Text variant="headline" accessibilityRole="header">
+        {title}
+      </Text>
       {rows.length === 0 ? (
-        <Text tone="ink2">{emptyText}</Text>
+        <Text tone="ink2" variant="callout">
+          {emptyText}
+        </Text>
       ) : (
-        <View style={styles.list}>
-          {rows.map((r) => (
-            <Row key={r.id} row={r} onRemove={onRemove} />
+        <View>
+          {rows.map((r, i) => (
+            <Row key={r.id} row={r} last={i === rows.length - 1} onRemove={onRemove} />
           ))}
-          <Text variant="caption" tone="ink3">
+          <Text variant="caption" tone="ink3" style={styles.hint}>
             Long press an entry to remove it.
           </Text>
         </View>
       )}
-      <PillButton label={addLabel} icon="plus" variant="secondary" onPress={onAdd} />
+      <TextButton label={addLabel} icon="plus" onPress={onAdd} />
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.md },
-  head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  list: { gap: spacing.xs },
+  card: { gap: spacing.sm },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     minHeight: HIT,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
   },
   rowText: { flex: 1, gap: 1 },
+  strong: { fontWeight: "600" },
+  hint: { paddingTop: spacing.xs },
 });

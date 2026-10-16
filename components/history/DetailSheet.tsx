@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import {
   deleteLog,
@@ -10,7 +10,7 @@ import {
   type Pet,
 } from "@/data";
 import { clockTime, dayLabel } from "@/lib/format";
-import { Icon, PillButton, Sheet, spacing, Text, useTheme } from "@/ui";
+import { PillButton, Sheet, spacing, Text } from "@/ui";
 import { EditCareFields, type EditCareFieldsValue } from "./EditCareFields";
 import type { HistoryItem } from "./model";
 
@@ -53,20 +53,17 @@ function positiveInt(text: string): number | null {
 }
 
 export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
-  const { colors } = useTheme();
-  // Keep the last item mounted while the sheet animates out.
-  const shown = useRef<HistoryItem | null>(null);
-  if (item) shown.current = item;
-  const current = item ?? shown.current;
+  // Keep the last item mounted while the sheet animates out; a new item resets the edit state.
+  const [shown, setShown] = useState<HistoryItem | null>(item);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<EditCareFieldsValue | null>(null);
   const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
+  if (item && item !== shown) {
+    setShown(item);
     setEditing(false);
     setValue(null);
-    setNow(Date.now());
-  }, [item]);
+  }
+  const current = item ?? shown;
 
   const log = current?.source.kind === "care" ? current.source.log : null;
 
@@ -102,17 +99,12 @@ export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
       {current ? (
         <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
           <View style={styles.head}>
-            <View style={[styles.disc, { backgroundColor: colors.bg }]}>
-              <Icon name={current.icon} size={26} color={colors.ink} />
-            </View>
-            <View style={styles.headText}>
-              <Text variant="title" accessibilityRole="header">
-                {current.title}
-              </Text>
-              <Text tone="ink2" variant="callout">
-                {[pet?.name, `${dayLabel(current.ts)}, ${clockTime(current.ts)}`, who].filter(Boolean).join(" · ")}
-              </Text>
-            </View>
+            <Text variant="title" accessibilityRole="header">
+              {current.title}
+            </Text>
+            <Text tone="ink2" variant="callout">
+              {[pet?.name, `${dayLabel(current.ts)}, ${clockTime(current.ts)}`, who].filter(Boolean).join(" · ")}
+            </Text>
           </View>
 
           {editing && value && log ? (
@@ -137,6 +129,7 @@ export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
                   variant="secondary"
                   onPress={() => {
                     setValue(toValue(current));
+                    setNow(Date.now());
                     setEditing(true);
                   }}
                 />
@@ -152,7 +145,5 @@ export function DetailSheet({ item, pet, who, onClose }: DetailSheetProps) {
 
 const styles = StyleSheet.create({
   content: { gap: spacing.lg, paddingBottom: spacing.sm },
-  head: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  headText: { flex: 1, gap: 2 },
-  disc: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  head: { gap: 2 },
 });

@@ -1,19 +1,17 @@
 import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon, Text, useTheme, spacing, type IconName } from "@/ui";
+import { Text, useTheme, spacing } from "@/ui";
 
 export interface AuthFrameProps {
   title: string;
   subtitle?: string;
-  /** Round pastel badge above the title. */
-  badge?: { icon: IconName; tone: string };
   children: React.ReactNode;
   /** Pinned under the form (switch-screen links, legal footnote). */
   footer?: React.ReactNode;
 }
 
-/** Shared shell for every signed-out / verification screen: centred, keyboard-safe, pastel badge. */
-export function AuthFrame({ title, subtitle, badge, children, footer }: AuthFrameProps) {
+/** Shared shell for every signed-out / verification screen: keyboard-safe, title top-left, no art. */
+export function AuthFrame({ title, subtitle, children, footer }: AuthFrameProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -24,16 +22,11 @@ export function AuthFrame({ title, subtitle, badge, children, footer }: AuthFram
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
       >
         <View style={styles.head}>
-          {badge ? (
-            <View style={[styles.badge, { backgroundColor: colors.surface }]}>
-              <Icon name={badge.icon} size={36} color={colors.ink} />
-            </View>
-          ) : null}
-          <Text variant="largeTitle" accessibilityRole="header" style={styles.center}>
+          <Text variant="largeTitle" accessibilityRole="header">
             {title}
           </Text>
           {subtitle ? (
-            <Text tone="ink2" style={styles.center}>
+            <Text tone="ink2">
               {subtitle}
             </Text>
           ) : null}
@@ -48,8 +41,6 @@ export function AuthFrame({ title, subtitle, badge, children, footer }: AuthFram
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: spacing["2xl"], gap: spacing["3xl"] },
-  head: { alignItems: "center", gap: spacing.md },
-  badge: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
-  center: { textAlign: "center" },
+  head: { gap: spacing.sm },
   form: { gap: spacing.md },
 });

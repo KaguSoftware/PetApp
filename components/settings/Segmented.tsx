@@ -8,14 +8,14 @@ interface Props<T extends string> {
   label: string;
 }
 
-/** Pill-shaped segmented control; the selected segment is an ink pill. */
+/** Flat segmented control for a surface card: bg track, ink pill for the selection. */
 export function Segmented<T extends string>({ options, value, onChange, label }: Props<T>) {
   const { colors } = useTheme();
   return (
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
-      style={[styles.track, { backgroundColor: colors.surface, borderRadius: radius.pill }]}
+      style={[styles.track, { backgroundColor: colors.bg, borderRadius: radius.pill }]}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -29,7 +29,7 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
             accessibilityState={{ selected }}
             style={[styles.segment, selected && { backgroundColor: colors.ink }]}
           >
-            <Text variant="headline" style={{ color: selected ? colors.onInk : colors.ink }}>
+            <Text variant="callout" style={{ color: selected ? colors.bg : colors.ink, fontWeight: "600" }}>
               {o.label}
             </Text>
           </PressableScale>

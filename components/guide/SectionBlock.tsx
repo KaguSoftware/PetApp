@@ -1,13 +1,13 @@
 import { StyleSheet, View } from "react-native";
 import type { GuideSection } from "@/content/guide";
-import { Card, Text, useTheme } from "@/ui";
+import { Card, Icon, spacing, Text, useTheme, type IconName } from "@/ui";
 
 function StepRow({ n, text }: { n: number; text: string }) {
   const { colors } = useTheme();
   return (
     <View style={styles.step} accessible accessibilityLabel={`Step ${n}. ${text}`}>
       <View style={[styles.bubble, { backgroundColor: colors.ink }]}>
-        <Text variant="caption" tone="onInk" style={styles.num}>
+        <Text variant="caption" style={[styles.num, { color: colors.bg }]}>
           {n}
         </Text>
       </View>
@@ -16,11 +16,15 @@ function StepRow({ n, text }: { n: number; text: string }) {
   );
 }
 
-function Callout({ label, text }: { label: string; text: string }) {
+function Callout({ icon, label, text }: { icon: IconName; label: string; text: string }) {
+  const { colors } = useTheme();
   return (
     <Card style={styles.callout} accessible accessibilityLabel={`${label}. ${text}`}>
-      <Text variant="headline">{label}</Text>
-      <Text variant="callout">{text}</Text>
+      <Icon name={icon} size={22} color={colors.ink} />
+      <View style={styles.calloutText}>
+        <Text variant="headline">{label}</Text>
+        <Text variant="callout">{text}</Text>
+      </View>
     </Card>
   );
 }
@@ -39,18 +43,19 @@ export function SectionBlock({ section }: { section: GuideSection }) {
           ))}
         </View>
       ) : null}
-      {section.tip ? <Callout label="Tip" text={section.tip} /> : null}
-      {section.warn ? <Callout label="Good to know" text={section.warn} /> : null}
+      {section.tip ? <Callout icon="info" label="Tip" text={section.tip} /> : null}
+      {section.warn ? <Callout icon="alert" label="Good to know" text={section.warn} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 12 },
-  steps: { gap: 12 },
-  step: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  bubble: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  section: { gap: spacing.md },
+  steps: { gap: spacing.md },
+  step: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
+  bubble: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", marginTop: 1 },
   num: { fontSize: 13, lineHeight: 16 },
   stepText: { flex: 1 },
-  callout: { gap: 4, padding: 16, borderRadius: 24 },
+  callout: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start", padding: spacing.lg },
+  calloutText: { flex: 1, gap: 2 },
 });

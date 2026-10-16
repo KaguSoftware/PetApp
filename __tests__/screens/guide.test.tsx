@@ -13,6 +13,13 @@ describe("Guide", () => {
     expect(screen.getByText("Other pets")).toBeTruthy();
   });
 
+  it("topics are plain rows with a read time and the featured one is labelled", async () => {
+    prepare("full");
+    await renderScreen(<GuideScreen />);
+    expect(screen.getByText("Start here")).toBeTruthy();
+    expect(screen.getAllByText(/min read/).length).toBeGreaterThan(3);
+  });
+
   it("article renders for a real topic id", async () => {
     const topic = ALL_TOPICS.find((t) => t.id === "feeding-basics")!;
     prepare("full", { id: topic.id });

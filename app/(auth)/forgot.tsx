@@ -27,8 +27,7 @@ export default function ForgotPasswordScreen() {
   return (
     <AuthFrame
       title="Forgot password?"
-      subtitle="Enter your account email and we'll send a 6-digit code to reset it."
-      badge={{ icon: "note", tone: "ice" }}
+      subtitle="Enter your account email and we'll send a 6-digit code to reset it."
     >
       <TextField
         placeholder="Email"

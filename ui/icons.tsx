@@ -104,6 +104,46 @@ const GLYPHS = {
       ))}
     </>
   ),
+  info: (
+    <>
+      <Circle cx={12} cy={12} r={9} />
+      <Path d="M12 11v5.5" />
+      <Circle cx={12} cy={7.7} r={0.6} />
+    </>
+  ),
+  alert: (
+    <>
+      <Path d="M12 4 21 19.5H3Z" />
+      <Path d="M12 10v4.5" />
+      <Circle cx={12} cy={17} r={0.6} />
+    </>
+  ),
+  dog: (
+    <>
+      <Path d="M7.5 7.5C6 7 3.6 8.4 3.8 12c.1 2 1.2 3.4 2.7 3.4M16.5 7.5c1.5-.5 3.9.9 3.7 4.5-.1 2-1.2 3.4-2.7 3.4" />
+      <Path d="M7.5 7.5C8.6 6 10.2 5.5 12 5.5s3.4.5 4.5 2c.8 1.4.8 4 .5 6.2-.3 2.6-2.3 5-5 5s-4.7-2.4-5-5c-.3-2.2-.3-4.8.5-6.2Z" />
+      <Circle cx={9.8} cy={11.2} r={0.6} />
+      <Circle cx={14.2} cy={11.2} r={0.6} />
+      <Path d="M10.5 15.2c.4.5 1 .8 1.5.8s1.1-.3 1.5-.8" />
+    </>
+  ),
+  cat: (
+    <>
+      <Path d="M5.5 4.5 9 7.2c1.9-.5 4.1-.5 6 0L18.5 4.500c.7 1.800.8 3.600.5 5.300.5 1 .7 2 .6 3-.4 3.800-3.700 6.700-7.600 6.700S4.8 16.6 4.400 12.800c-.1-1 .1-2 .6-3-.3-1.700-.2-3.500.5-5.300Z" />
+      <Circle cx={9.5} cy={12} r={0.6} />
+      <Circle cx={14.5} cy={12} r={0.6} />
+      <Path d="M10.8 15c.4.5.8.7 1.200.7s.8-.2 1.200-.7" />
+    </>
+  ),
+  paw: (
+    <>
+      <Path d="M8 16c0-2 1.8-3.6 4-3.6s4 1.6 4 3.6c0 1.8-1.6 2.9-4 2.9S8 17.8 8 16Z" />
+      <Circle cx={5.8} cy={11.2} r={1.5} />
+      <Circle cx={9.6} cy={7.4} r={1.5} />
+      <Circle cx={14.4} cy={7.4} r={1.5} />
+      <Circle cx={18.2} cy={11.2} r={1.5} />
+    </>
+  ),
   plus: <Path d="M12 5v14M5 12h14" />,
   close: <Path d="M6 6l12 12M18 6 6 18" />,
   "chevron-right": <Path d="M9 5l7 7-7 7" />,
@@ -150,20 +190,7 @@ const GLYPHS = {
   ),
 } satisfies Record<string, ReactNode>;
 
-/** Older names still used by screens; Phase 2 migrates callers and drops these. */
-const ALIASES = {
-  fed: "food",
-  pill: "meds",
-  health: "vaccine",
-  book: "guide",
-  chevron: "chevron-right",
-} as const;
-
-export type IconName = keyof typeof GLYPHS | keyof typeof ALIASES;
-
-function glyph(name: IconName): ReactNode {
-  return name in ALIASES ? GLYPHS[ALIASES[name as keyof typeof ALIASES]] : GLYPHS[name as keyof typeof GLYPHS];
-}
+export type IconName = keyof typeof GLYPHS;
 
 export function Icon({
   name,
@@ -179,7 +206,7 @@ export function Icon({
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <G stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
-        {glyph(name)}
+        {GLYPHS[name]}
       </G>
     </Svg>
   );

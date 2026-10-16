@@ -41,7 +41,6 @@ export default function ResetPasswordScreen() {
     <AuthFrame
       title="New password"
       subtitle="At least 6 characters. You'll stay signed in on this device."
-      badge={{ icon: "check", tone: "mint" }}
     >
       <TextField placeholder="New password" value={password} onChangeText={setPassword} secureTextEntry textContentType="newPassword" autoFocus />
       <TextField

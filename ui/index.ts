@@ -6,7 +6,7 @@ export { Icon, type IconName } from "./icons";
 export { PillButton } from "./PillButton";
 export { PressableScale } from "./PressableScale";
 export { RoundButton } from "./RoundButton";
-export { Screen, TAB_BAR_CLEARANCE } from "./Screen";
+export { Screen, ScreenHeader, TAB_BAR_CLEARANCE, useScreenPadding } from "./Screen";
 export { Sheet, SheetPanel } from "./Sheet";
 export { Text } from "./Text";
 export { TextField } from "./TextField";

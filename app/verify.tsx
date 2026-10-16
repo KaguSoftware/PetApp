@@ -137,7 +137,7 @@ export default function VerifyScreen() {
       : `We emailed a ${CODE_LENGTH}-digit code to ${email}.`;
 
   return (
-    <AuthFrame title={title} subtitle={subtitle} badge={{ icon: "note", tone: "mint" }}>
+    <AuthFrame title={title} subtitle={subtitle}>
       {needsEmail ? (
         <TextField
           placeholder="Email"

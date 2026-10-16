@@ -1,49 +1,41 @@
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import type { GuideTopic } from "@/content/guide";
-import { Card, Text, useTheme } from "@/ui";
+import { Card, Icon, spacing, Text, useTheme } from "@/ui";
 
 export function openTopic(id: string) {
   router.push({ pathname: "/guide/[id]", params: { id } });
 }
 
-/** A pastel disc holding the topic emoji. */
-export function EmojiDisc({ emoji, size = 52 }: { emoji: string; size?: number }) {
+/** Surface row: title, one-line summary, read time, chevron. */
+export function TopicCard({ topic, eyebrow }: { topic: GuideTopic; eyebrow?: string }) {
   const { colors } = useTheme();
-  return (
-    <View
-      style={[styles.disc, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.surface }]}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    >
-      <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.62 }}>{emoji}</Text>
-    </View>
-  );
-}
-
-export function TopicCard({ topic }: { topic: GuideTopic }) {
   return (
     <Card
       onPress={() => openTopic(topic.id)}
       accessibilityLabel={`${topic.title}. ${topic.summary} ${topic.readMinutes} minute read.`}
       style={styles.card}
     >
-      <EmojiDisc emoji={topic.emoji} />
       <View style={styles.text}>
+        {eyebrow ? (
+          <Text variant="caption" tone="ink2">
+            {eyebrow}
+          </Text>
+        ) : null}
         <Text variant="headline">{topic.title}</Text>
-        <Text variant="callout" tone="ink2">
+        <Text variant="callout" tone="ink2" numberOfLines={2}>
           {topic.summary}
         </Text>
-        <Text variant="caption" tone="ink2">
+        <Text variant="footnote" tone="ink3">
           {topic.readMinutes} min read
         </Text>
       </View>
+      <Icon name="chevron-right" size={18} color={colors.ink3} />
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, minHeight: 44 },
-  disc: { alignItems: "center", justifyContent: "center" },
+  card: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, minHeight: 44 },
   text: { flex: 1, gap: 2 },
 });

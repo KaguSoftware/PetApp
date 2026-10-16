@@ -49,8 +49,7 @@ export default function SignupScreen() {
   return (
     <AuthFrame
       title="Let's get started"
-      subtitle="Create your account to look after your pet together."
-      badge={{ icon: "walk", tone: "butter" }}
+      subtitle="Create your account to look after your pet together."
       footer={
         <>
           <AuthLink prefix="Already have an account?" label="Log in" onPress={() => router.replace("/(auth)/login")} />

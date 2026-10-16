@@ -1,35 +1,21 @@
 import { StyleSheet, View } from "react-native";
 import type { GuideTopic } from "@/content/guide";
-import { Card, Text, useTheme } from "@/ui";
-import { GuideIllustration } from "./illustrations";
-import { EmojiDisc } from "./TopicCard";
+import { spacing, Text } from "@/ui";
 
 export function ArticleHero({ topic }: { topic: GuideTopic }) {
-  const { colors } = useTheme();
   return (
-    <Card style={styles.card}>
-      {topic.illustration ? (
-        <View style={[styles.art, { backgroundColor: colors.surface }]}>
-          <GuideIllustration id={topic.illustration} />
-        </View>
-      ) : (
-        <EmojiDisc emoji={topic.emoji} size={88} />
-      )}
-      <Text variant="title" accessibilityRole="header" style={styles.center}>
+    <View style={styles.wrap}>
+      <Text variant="largeTitle" accessibilityRole="header">
         {topic.title}
       </Text>
-      <Text tone="ink2" style={styles.center}>
-        {topic.summary}
-      </Text>
-      <Text variant="caption" tone="ink2">
+      <Text tone="ink2">{topic.summary}</Text>
+      <Text variant="footnote" tone="ink3">
         {topic.readMinutes} min read
       </Text>
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { alignItems: "center", gap: 10 },
-  art: { width: "100%", alignItems: "center", paddingVertical: 8 },
-  center: { textAlign: "center" },
+  wrap: { gap: spacing.sm },
 });

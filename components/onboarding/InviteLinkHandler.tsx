@@ -45,7 +45,9 @@ export function InviteLinkHandler() {
   // Replay a parked code once, after the household has loaded so Home's own redirect settles first.
   const userId = session?.user.id ?? null;
   const sessionRef = useRef(session);
-  sessionRef.current = session;
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!userId || !household.ready || replayedThisSession) return;

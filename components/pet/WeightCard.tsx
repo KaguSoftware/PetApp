@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useHousehold, useWeights, type Pet } from "@/data";
 import { kgDeltaDisplay, kgToDisplay, kgValue, shortDate } from "@/lib/format";
-import { Card, PillButton, spacing, Text } from "@/ui";
+import { Card, spacing, Text } from "@/ui";
+import { TextButton } from "./TextButton";
 import { WeightChart } from "./WeightChart";
 
 const MAX_POINTS = 14;
@@ -27,20 +28,20 @@ export function WeightCard({ pet }: { pet: Pet }) {
 
   return (
     <Card style={styles.card}>
-      <Text variant="title" accessibilityRole="header">
+      <Text variant="headline" accessibilityRole="header">
         Weight
       </Text>
       {latest ? (
         <>
           <View style={styles.big}>
-            <Text variant="largeTitle">{kgToDisplay(latest.kg, units)}</Text>
+            <Text variant="title">{kgToDisplay(latest.kg, units)}</Text>
             {prev ? (
               <Text tone="ink2" variant="callout">
                 {kgDeltaDisplay(latest.kg - prev.kg, units)} since {shortDate(prev.ts)}
               </Text>
             ) : (
               <Text tone="ink2" variant="callout">
-                First weigh-in, nice start
+                First weigh-in
               </Text>
             )}
           </View>
@@ -49,12 +50,11 @@ export function WeightCard({ pet }: { pet: Pet }) {
           ) : null}
         </>
       ) : (
-        <Text tone="ink2">No weigh-ins yet. Add one to start a little chart ({unitLabel}).</Text>
+        <Text tone="ink2" variant="callout">No weigh-ins yet ({unitLabel}).</Text>
       )}
-      <PillButton
+      <TextButton
         label="Add weight"
         icon="plus"
-        variant="secondary"
         onPress={() => router.push({ pathname: "/log", params: { petId: pet.id, step: "weight" } })}
       />
     </Card>

@@ -20,8 +20,6 @@ export interface Colors {
   scrim: string;
   /** No red in this design: destructive actions are told apart by their text. */
   danger: string;
-  /** Text and icons drawn on an `ink` fill (primary pill). Same value as `bg`. */
-  onInk: string;
 }
 
 export const lightColors: Colors = {
@@ -38,7 +36,6 @@ export const lightColors: Colors = {
   inverseSurface: "#1F1F1F",
   scrim: "rgba(0, 0, 0, 0.35)",
   danger: "#000000",
-  onInk: "#FFFFFF",
 };
 
 export const darkColors: Colors = {
@@ -55,7 +52,6 @@ export const darkColors: Colors = {
   inverseSurface: "#E8E8E8",
   scrim: "rgba(0, 0, 0, 0.6)",
   danger: "#FFFFFF",
-  onInk: "#000000",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, "2xl": 24, "3xl": 32, "4xl": 40, "5xl": 56 } as const;

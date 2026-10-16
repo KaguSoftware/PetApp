@@ -3,7 +3,7 @@ import { setUnits, useHousehold } from "@/data";
 import { useA11yPrefs } from "@/lib/a11y";
 import { Section, Row } from "./parts";
 import { Segmented } from "./Segmented";
-import { Text, useTheme, type ThemePreference } from "@/ui";
+import { spacing, Text, useTheme, type ThemePreference } from "@/ui";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: "system", label: "Auto" },
@@ -35,7 +35,7 @@ export function AppearanceSection() {
     <Section title="Appearance">
       <Segmented label="Theme" value={preference} onChange={setPreference} options={THEMES} />
       <View style={styles.gap}>
-        <Text variant="headline" accessibilityRole="header">
+        <Text variant="footnote" tone="ink2" style={styles.subhead} accessibilityRole="header">
           Accessibility
         </Text>
         <Row
@@ -68,5 +68,6 @@ export function AppearanceSection() {
 }
 
 const styles = StyleSheet.create({
-  gap: { marginTop: 8 },
+  gap: { marginTop: spacing.sm },
+  subhead: { fontWeight: "600" },
 });

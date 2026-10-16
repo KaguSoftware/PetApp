@@ -33,5 +33,5 @@ export function LegalFootnote() {
 
 const styles = StyleSheet.create({
   footnote: { textAlign: "center", paddingVertical: 8, paddingHorizontal: 12 },
-  link: { fontFamily: "Inter_600SemiBold" },
+  link: { fontWeight: "600" },
 });

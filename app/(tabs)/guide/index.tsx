@@ -56,7 +56,7 @@ export default function GuideScreen() {
 
       {categories.map((c) => (
         <View key={c.id} style={styles.section}>
-          <Text variant="title" accessibilityRole="header">
+          <Text variant="footnote" tone="ink2" style={styles.sectionTitle} accessibilityRole="header">
             {c.title}
           </Text>
           {c.topics.map((t) => (
@@ -76,6 +76,7 @@ export default function GuideScreen() {
 
 const styles = StyleSheet.create({
   chips: { gap: spacing.sm, paddingVertical: 4 },
-  section: { gap: spacing.md, marginTop: spacing.sm },
+  section: { gap: spacing.sm, marginTop: spacing.sm },
+  sectionTitle: { fontWeight: "600", paddingHorizontal: spacing.xs },
   empty: { textAlign: "center", paddingVertical: spacing["3xl"] },
 });

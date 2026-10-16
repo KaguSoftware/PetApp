@@ -48,7 +48,7 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
 
   // The ruler is the source of truth while touched; this reports the rounded value to React.
   useAnimatedReaction(
-    () => Math.round(pos.value),
+    () => Math.round(pos.get()),
     (r, prev) => {
       if (prev !== null && r !== prev) runOnJS(sync)(r);
     },
@@ -59,7 +59,7 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
     if (tenths === last.current) return;
     last.current = tenths;
     setShown(tenths);
-    pos.value = tenths;
+    pos.set(tenths);
   }, [tenths, pos]);
 
   const half = Math.ceil(width / 2 / STEP_PX) + 2;
@@ -71,20 +71,22 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
         .activeOffsetX([-6, 6])
         .failOffsetY([-14, 14])
         .onBegin(() => {
-          startPos.value = pos.value;
+          startPos.set(pos.get());
         })
         .onUpdate((e) => {
-          pos.value = Math.min(MAX, Math.max(MIN, startPos.value - e.translationX / STEP_PX));
+          pos.set(Math.min(MAX, Math.max(MIN, startPos.get() - e.translationX / STEP_PX)));
         })
         .onEnd((e) => {
-          pos.value = withDecay({ velocity: -e.velocityX / STEP_PX, clamp: [MIN, MAX] }, (finished) => {
-            if (finished) pos.value = withSpring(Math.round(pos.value), { damping: 20, stiffness: 260 });
-          });
+          pos.set(
+            withDecay({ velocity: -e.velocityX / STEP_PX, clamp: [MIN, MAX] }, (finished) => {
+              if (finished) pos.set(withSpring(Math.round(pos.get()), { damping: 20, stiffness: 260 }));
+            }),
+          );
         }),
     [pos, startPos],
   );
 
-  const strip = useAnimatedStyle(() => ({ transform: [{ translateX: -(pos.value - Math.round(pos.value)) * STEP_PX }] }));
+  const strip = useAnimatedStyle(() => ({ transform: [{ translateX: -(pos.get() - Math.round(pos.get())) * STEP_PX }] }));
 
   return (
     <GestureDetector gesture={pan}>
@@ -96,7 +98,7 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
         accessibilityValue={{ text: (shown / perUnit).toFixed(decimals) }}
         accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
         onAccessibilityAction={(e) => {
-          pos.value = clamp(shown + (e.nativeEvent.actionName === "increment" ? 1 : -1));
+          pos.set(clamp(shown + (e.nativeEvent.actionName === "increment" ? 1 : -1)));
         }}
       >
         <Animated.View style={[styles.strip, strip]}>
@@ -110,11 +112,11 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
                 <View
                   style={[
                     styles.tick,
-                    { backgroundColor: whole ? colors.ink : colors.ink3, height: whole ? 38 : mid ? 26 : 16, opacity: whole ? 1 : 0.7 },
+                    { backgroundColor: whole ? colors.inverseInk : colors.inverseInk2, height: whole ? 38 : mid ? 26 : 16, opacity: whole ? 1 : 0.7 },
                   ]}
                 />
                 {whole ? (
-                  <Text variant="caption" tone="ink2" style={styles.tickLabel} numberOfLines={1}>
+                  <Text variant="caption" tone="inverse2" style={styles.tickLabel} numberOfLines={1}>
                     {v / perUnit}
                   </Text>
                 ) : null}
@@ -122,7 +124,7 @@ export function WeightDial({ steps: tenths, perUnit, onChange }: WeightDialProps
             );
           })}
         </Animated.View>
-        <View pointerEvents="none" style={[styles.needle, { backgroundColor: colors.ink }]} />
+        <View pointerEvents="none" style={[styles.needle, { backgroundColor: colors.inverseInk }]} />
       </View>
     </GestureDetector>
   );

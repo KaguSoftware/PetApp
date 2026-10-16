@@ -13,7 +13,7 @@ export function ProgressDots({ count, index }: { count: number; index: number })
       {Array.from({ length: count }, (_, i) => (
         <View
           key={i}
-          style={[styles.dot, i === index && styles.active, { backgroundColor: i <= index ? colors.ink : colors.border }]}
+          style={[styles.dot, { backgroundColor: i === index ? colors.ink : colors.border }]}
         />
       ))}
     </View>
@@ -22,6 +22,5 @@ export function ProgressDots({ count, index }: { count: number; index: number })
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  active: { width: 28 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
 });

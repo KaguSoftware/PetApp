@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Keyboard, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import { addWeight, showToast, useHousehold, useWeights, type Pet, type Species } from "@/data";
-import { PillButton, PressableScale, Text, haptic, spacing, useTheme } from "@/ui";
-import { StepHeader } from "./StepHeader";
+import { Keyboard, StyleSheet, TextInput, View } from "react-native";
+import { useHousehold, useWeights, type Pet, type Species } from "@/data";
+import { PressableScale, Text, spacing, useTheme } from "@/ui";
+import { formStyles, SavePill } from "./parts";
+import { saveWeight } from "./save";
 import { WEIGHT_MIN_STEPS, WeightDial } from "./WeightDial";
 
 const LB_PER_KG = 2.2046226;
@@ -15,15 +16,15 @@ function precisionFor(species: Species, display: number, imperial: boolean): 10 
   return TINY_SPECIES.includes(species) || display < (imperial ? 2 : 1) ? 100 : 10;
 }
 
-/** Weight is stored in kg; imperial households see and enter pounds. */
-export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => void; onDone: () => void }) {
+/** Weight is stored in kg; imperial households see and enter pounds. Starts on the last weight. */
+export function WeightForm({ pet, onDone }: { pet: Pet; onDone: () => void }) {
   const { colors } = useTheme();
   const { units } = useHousehold();
   const imperial = units === "imperial";
   const unit = imperial ? "lb" : "kg";
   const weights = useWeights(pet.id);
 
-  const [{ steps: tenths, perUnit }, setValue] = useState(() => {
+  const [{ steps, perUnit }, setValue] = useState(() => {
     const kg = weights.length > 0 ? weights[weights.length - 1].kg : (pet.weightKg ?? DEFAULT_KG);
     const display = imperial ? kg * LB_PER_KG : kg;
     const per = precisionFor(pet.species, display, imperial);
@@ -32,7 +33,7 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
   const decimals = perUnit === 100 ? 2 : 1;
   const [typing, setTyping] = useState<string | null>(null);
 
-  const setTenths = (steps: number) => setValue((v) => ({ ...v, steps }));
+  const setSteps = (next: number) => setValue((v) => ({ ...v, steps: next }));
 
   /** The typed text as a value (never below the dial minimum), or null when it is not a number. */
   const parseTyped = (text: string) => {
@@ -52,31 +53,27 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
   const save = () => {
     Keyboard.dismiss();
     // A value still being typed counts: the Save tap may land before the field blurs.
-    const current = (typing !== null ? parseTyped(typing) : null) ?? { steps: tenths, perUnit };
+    const current = (typing !== null ? parseTyped(typing) : null) ?? { steps, perUnit };
     const display = current.steps / current.perUnit;
     const kg = Math.round((imperial ? display / LB_PER_KG : display) * 1000) / 1000;
-    haptic("success");
-    addWeight(pet.id, kg)
-      .then(() => showToast({ kind: "info", text: `${pet.name} weighs ${display.toFixed(current.perUnit === 100 ? 2 : 1)} ${unit} ✓` }))
-      .catch(() => undefined);
+    saveWeight(pet, kg, `${display.toFixed(current.perUnit === 100 ? 2 : 1)} ${unit}`);
     onDone();
   };
 
   return (
-    <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-      <StepHeader title={`${pet.name}'s weight`} onBack={onBack} />
+    <View style={formStyles.body}>
       <View style={styles.readout}>
         {typing === null ? (
           <PressableScale
-            onPress={() => setTyping((tenths / perUnit).toFixed(decimals))}
+            onPress={() => setTyping((steps / perUnit).toFixed(decimals))}
             haptic="select"
             accessibilityRole="button"
-            accessibilityLabel={`${(tenths / perUnit).toFixed(decimals)} ${unit}`}
+            accessibilityLabel={`${(steps / perUnit).toFixed(decimals)} ${unit}`}
             accessibilityHint="Tap to type a weight"
             style={styles.number}
           >
-            <Text variant="largeTitle" style={styles.big}>
-              {(tenths / perUnit).toFixed(decimals)}
+            <Text variant="largeTitle" tone="inverse" style={styles.big}>
+              {(steps / perUnit).toFixed(decimals)}
             </Text>
           </PressableScale>
         ) : (
@@ -90,21 +87,20 @@ export function WeightStep({ pet, onBack, onDone }: { pet: Pet; onBack: () => vo
             keyboardType="decimal-pad"
             maxLength={6}
             accessibilityLabel={`Weight in ${unit}`}
-            style={[styles.big, styles.input, { color: colors.ink, borderColor: colors.ink }]}
+            style={[styles.big, styles.input, { color: colors.inverseInk, borderColor: colors.inverseInk }]}
           />
         )}
-        <Text variant="title" tone="ink2">
+        <Text variant="title" tone="inverse2">
           {unit}
         </Text>
       </View>
-      <WeightDial key={perUnit} steps={tenths} perUnit={perUnit} onChange={setTenths} />
-      <PillButton label="Save weight" icon="check" size="lg" onPress={save} />
-    </ScrollView>
+      <WeightDial key={perUnit} steps={steps} perUnit={perUnit} onChange={setSteps} />
+      <SavePill onPress={save} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { gap: spacing.lg, paddingBottom: spacing.sm },
   readout: { flexDirection: "row", alignItems: "baseline", justifyContent: "center", gap: spacing.sm },
   number: { minHeight: 64, minWidth: 44, justifyContent: "center" },
   big: { fontWeight: "700", fontSize: 56, lineHeight: 64, letterSpacing: -1 },

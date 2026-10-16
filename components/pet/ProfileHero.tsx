@@ -1,30 +1,26 @@
 import { StyleSheet, View } from "react-native";
 import type { Pet } from "@/data";
 import { ageLabel } from "@/lib/format";
-import { Card, Chip, spacing, Text } from "@/ui";
+import { spacing, Text } from "@/ui";
 
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Just the name and a grey line under it: no card, no art. */
 export function ProfileHero({ pet }: { pet: Pet }) {
   const age = ageLabel(pet.birthDate);
+  const line = [cap(pet.species), pet.breed, age].filter(Boolean).join(" · ");
   return (
-    <Card style={styles.card}>
-      <Text variant="largeTitle" accessibilityRole="header" style={styles.name}>
+    <View style={styles.wrap}>
+      <Text variant="largeTitle" accessibilityRole="header">
         {pet.name}
       </Text>
-      <View style={styles.chips}>
-        <Chip label={cap(pet.species)} />
-        {pet.breed ? <Chip label={pet.breed} /> : null}
-        {age ? <Chip label={age} /> : null}
-      </View>
-    </Card>
+      <Text tone="ink2">{line}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { alignItems: "center", gap: spacing.md },
-  name: { textAlign: "center" },
-  chips: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.sm },
+  wrap: { gap: spacing.xs, paddingVertical: spacing.sm },
 });

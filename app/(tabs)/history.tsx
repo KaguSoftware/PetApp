@@ -1,7 +1,6 @@
 import { router } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { SectionList, StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHousehold, useLogs, useMembers, useMeds, useNotes, usePets } from "@/data";
 import {
   buildItems,
@@ -15,21 +14,21 @@ import {
   type HistoryItem,
   type PetFeed,
 } from "@/components/history";
-import { EmptyState, PillButton, Screen, spacing, TAB_BAR_CLEARANCE, Text, useTheme } from "@/ui";
+import { EmptyState, PillButton, ScreenHeader, spacing, Text, useScreenPadding, useTheme } from "@/ui";
 
 const DAY_MS = 86_400_000;
 const WINDOW_DAYS = 60;
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+  const padding = useScreenPadding(true);
   const { units } = useHousehold();
   const pets = usePets();
   const members = useMembers();
   const meds = useMeds();
   const notes = useNotes();
 
-  const base = useRef(Date.now()).current;
+  const [base] = useState(() => Date.now());
   const [days, setDays] = useState(WINDOW_DAYS);
   const sinceMs = base - days * DAY_MS;
   const logs = useLogs({ sinceMs });
@@ -43,7 +42,6 @@ export default function HistoryScreen() {
 
   const petById = useMemo(() => new Map(pets.map((p) => [p.id, p])), [pets]);
   const memberName = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
-  const now = Date.now();
 
   const all = useMemo(() => {
     const petNames = Object.fromEntries(pets.map((p) => [p.id, p.name]));
@@ -61,7 +59,6 @@ export default function HistoryScreen() {
   ) : (
     <EmptyState
       icon="history"
-     
       title="Nothing logged yet"
       message="Everything you log for your pet shows up here, day by day."
       actionLabel="Log something"
@@ -70,7 +67,7 @@ export default function HistoryScreen() {
   );
 
   return (
-    <Screen title="History" scroll={false} contentStyle={styles.screen}>
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
       {pets.map((p) => (
         <PetFeedProbe key={p.id} petId={p.id} onFeed={onFeed} />
       ))}
@@ -79,29 +76,23 @@ export default function HistoryScreen() {
         keyExtractor={(i) => i.key}
         stickySectionHeadersEnabled
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }}
+        contentContainerStyle={[styles.content, padding]}
         ListHeaderComponent={
-          <FilterBar pets={pets} petId={petId} category={category} onPet={setPetId} onCategory={setCategory} />
+          <View style={styles.head}>
+            <ScreenHeader title="History" />
+            <FilterBar pets={pets} petId={petId} category={category} onPet={setPetId} onCategory={setCategory} />
+          </View>
         }
         ListEmptyComponent={empty}
-        ItemSeparatorComponent={() => <View style={styles.gap} />}
-        SectionSeparatorComponent={() => <View style={styles.gap} />}
         renderSectionHeader={({ section }) => (
           <View style={[styles.dayHeader, { backgroundColor: colors.bg }]}>
-            <Text variant="headline" tone="ink2" accessibilityRole="header">
+            <Text variant="footnote" tone="ink2" style={styles.dayText} accessibilityRole="header">
               {section.title}
             </Text>
           </View>
         )}
         renderItem={({ item }) => (
-          <HistoryRow
-            item={item}
-            pet={petById.get(item.petId)}
-            showPet={multiPet}
-            who={whoOf(item)}
-            now={now}
-            onPress={setSelected}
-          />
+          <HistoryRow item={item} pet={petById.get(item.petId)} showPet={multiPet} who={whoOf(item)} onPress={setSelected} />
         )}
         ListFooterComponent={
           all.length > 0 ? (
@@ -124,13 +115,15 @@ export default function HistoryScreen() {
         who={selected ? whoOf(selected) : null}
         onClose={() => setSelected(null)}
       />
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { paddingBottom: 0 },
-  gap: { height: spacing.sm },
-  dayHeader: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  root: { flex: 1 },
+  content: { paddingHorizontal: spacing.xl },
+  head: { gap: spacing.md, paddingBottom: spacing.sm },
+  dayHeader: { paddingTop: spacing.lg, paddingBottom: spacing.xs },
+  dayText: { fontWeight: "600" },
   footer: { paddingTop: spacing.xl, alignItems: "center" },
 });

@@ -1,12 +1,10 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
-import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelectedPet } from "@/components/home/selectedPet";
 import { addPet, createHousehold, reloadHousehold, showToast, useHousehold, useMembers, useSession, type Species } from "@/data";
-import { useReduceMotion } from "@/lib/a11y";
-import { Icon, PillButton, PressableScale, Text, borderWidth, spacing, useTheme } from "@/ui";
+import { Icon, PillButton, PressableScale, Text, spacing, useTheme } from "@/ui";
 import { firstNameOf } from "./firstName";
 import { NameStep } from "./NameStep";
 import { birthDateError, EMPTY_DETAILS, type PetDetails } from "./PetDetailsFields";
@@ -26,7 +24,6 @@ interface Props {
 export function AdoptFlow({ mode, onFinished }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion();
   const { householdId, loadError } = useHousehold();
   const { session } = useSession();
   const members = useMembers();
@@ -103,10 +100,10 @@ export function AdoptFlow({ mode, onFinished }: Props) {
             haptic="select"
             accessibilityRole="button"
             accessibilityLabel="Back"
-            style={[styles.back, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={[styles.back, { backgroundColor: colors.surface }]}
           >
-            <View style={styles.flip}>
-              <Icon name="chevron" size={22} color={colors.ink} />
+            <View>
+              <Icon name="chevron-left" size={22} color={colors.ink} />
             </View>
           </PressableScale>
         ) : (
@@ -123,7 +120,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View key={step} entering={reduceMotion ? undefined : FadeIn.duration(260)}>
+        <View key={step}>
           {step === 0 ? <SpeciesStep species={species} onChange={setSpecies} /> : null}
           {step === 1 && species ? (
             <NameStep species={species} name={name} onChange={setName} onSubmit={next} />
@@ -131,7 +128,7 @@ export function AdoptFlow({ mode, onFinished }: Props) {
           {step === 2 && species ? (
             <RevealStep species={species} name={trimmed} ownerName={ownerName} details={details} onDetails={setDetails} />
           ) : null}
-        </Animated.View>
+        </View>
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
@@ -157,9 +154,8 @@ export function AdoptFlow({ mode, onFinished }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   top: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
-  back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", borderWidth },
+  back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   spacer: { width: 44, height: 44 },
-  flip: { transform: [{ scaleX: -1 }] },
   dots: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.lg },
   footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.sm },
