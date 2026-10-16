@@ -1,6 +1,6 @@
 import { StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from "react-native";
 import { PressableScale } from "./PressableScale";
-import { radius, spacing } from "./tokens";
+import { layout } from "./tokens";
 import { useTheme } from "./theme";
 
 export interface CardProps extends ViewProps {
@@ -28,5 +28,5 @@ export function Card({ onPress, accessibilityLabel, style, children, ...rest }: 
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radius.lg, padding: spacing.xl },
+  card: { borderRadius: layout.cardRadius, padding: layout.cardPad },
 });

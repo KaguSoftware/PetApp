@@ -14,10 +14,14 @@ export function addMonths(iso: string, months: number): string {
   return isoDay(0, new Date(first.getFullYear(), first.getMonth(), Math.min(d, last)));
 }
 
-export function dayLabel(daysFromToday: number): string {
-  if (daysFromToday === 0) return "Today";
-  if (daysFromToday === -1) return "Yesterday";
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromToday);
-  return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+/** Parses yyyy-mm-dd as local noon, which no timezone shift can move to another day. */
+export function dateOf(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d, 12);
+}
+
+/** Local calendar date of a Date as yyyy-mm-dd (what the native date pickers hand back). */
+export function isoOf(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

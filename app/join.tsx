@@ -1,10 +1,10 @@
-import { router, useLocalSearchParams, useNavigation } from "expo-router";
+import { router, Stack, useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, StyleSheet, TextInput } from "react-native";
 import { LoadErrorState } from "@/components/home/LoadErrorState";
 import { redeemInvite, useHousehold, useSession } from "@/data";
 import { consumePendingInvite, normalizeInviteCode, peekPendingInvite } from "@/lib/pendingInvite";
-import { PillButton, Screen, Text, haptic, radius, spacing, useTheme } from "@/ui";
+import { haptic, layout, PillButton, radius, Screen, Text, useTheme } from "@/ui";
 
 type Failure = "not_found" | "expired" | "already_member" | "rate_limited";
 
@@ -110,28 +110,35 @@ export default function JoinScreen() {
 
   if (joined && household.ready && household.loadError && !household.householdId) {
     return (
-      <Screen scroll={false} contentStyle={styles.success}>
-        <LoadErrorState title="You joined, but we couldn't load your family" />
-      </Screen>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Screen headerless scroll={false} contentStyle={styles.success}>
+          <LoadErrorState title="You joined, but we couldn't load your family" />
+        </Screen>
+      </>
     );
   }
 
   if (joined) {
     return (
-      <Screen scroll={false} contentStyle={styles.success}>
-        <Text variant="largeTitle" style={styles.center} accessibilityRole="header">
-          You&apos;re in!
-        </Text>
-        <Text tone="ink2" style={styles.center}>
-          Taking you to your new family…
-        </Text>
-      </Screen>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Screen headerless scroll={false} contentStyle={styles.success}>
+          <Text variant="largeTitle" style={styles.center} accessibilityRole="header">
+            You&apos;re in!
+          </Text>
+          <Text tone="ink2" style={styles.center}>
+            Taking you to your new family…
+          </Text>
+        </Screen>
+      </>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-      <Screen title="Join a family" back>
+    <KeyboardAvoidingView collapsable={false} behavior="padding" style={styles.flex}>
+      <Stack.Screen options={{ title: "Join a family" }} />
+      <Screen contentStyle={styles.form}>
         <Text tone="ink2">Got an invite code from someone? Pop it in below.</Text>
         <TextInput
           value={code}
@@ -181,8 +188,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     minHeight: 80,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: layout.cardPad - 4,
   },
   center: { textAlign: "center" },
-  success: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.lg },
+  form: { gap: layout.item },
+  success: { flex: 1, alignItems: "center", justifyContent: "center", gap: layout.item },
 });

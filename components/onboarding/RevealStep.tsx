@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Species } from "@/data";
-import { Text, haptic, spacing } from "@/ui";
+import { Text, haptic, layout } from "@/ui";
 import { PetDetailsFields, type PetDetails } from "./PetDetailsFields";
 
 interface Props {
@@ -29,6 +29,6 @@ export function RevealStep({ name, details, onDetails }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.xl },
+  wrap: { gap: layout.section },
   center: { textAlign: "center" },
 });

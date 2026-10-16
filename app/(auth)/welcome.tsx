@@ -1,33 +1,23 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, View } from "react-native";
 import { AuthProviderButtons } from "@/components/auth/AuthProviderButtons";
 import { AuthLink, ErrorText, OrDivider } from "@/components/auth/AuthBits";
 import { LegalFootnote } from "@/components/auth/LegalFootnote";
 import { BRAND, BRAND_MARK } from "@/lib/brand";
-import { PillButton, Text, spacing, useTheme } from "@/ui";
+import { layout, PillButton, Screen, Text } from "@/ui";
 
-/** First screen for signed-out users: the brand, then a way in. */
+/** First screen for signed-out users: the brand, then a way in. No header; the Screen adds the status-bar inset. */
 export default function WelcomeScreen() {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.bg }}
-      alwaysBounceVertical={false}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
-    >
+    <Screen headerless contentStyle={styles.content}>
       <View style={styles.hero}>
         <Text variant="largeTitle" accessibilityRole="header">
           {BRAND_MARK}
         </Text>
-        <Text tone="ink2">
-          Little moments of care for your pet, all in one place.
-        </Text>
+        <Text tone="ink2">Little moments of care for your pet, all in one place.</Text>
       </View>
 
       <View style={styles.form}>
@@ -41,12 +31,12 @@ export default function WelcomeScreen() {
         <AuthLink prefix={`New to ${BRAND}?`} label="Create an account" onPress={() => router.push("/(auth)/signup")} />
         <LegalFootnote />
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, justifyContent: "space-between", paddingHorizontal: spacing["2xl"], gap: spacing["2xl"] },
-  hero: { gap: spacing.sm, paddingTop: spacing["4xl"] },
-  form: { gap: spacing.md },
+  content: { flexGrow: 1, justifyContent: "space-between" },
+  hero: { gap: layout.headerGap, paddingTop: layout.section },
+  form: { gap: layout.item },
 });

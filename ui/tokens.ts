@@ -56,6 +56,29 @@ export const darkColors: Colors = {
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, "2xl": 24, "3xl": 32, "4xl": 40, "5xl": 56 } as const;
 
+/**
+ * The padding system. Every screen is built from these and nothing else:
+ * - `gutter`: left/right padding of every screen
+ * - `section`: gap between sections (a titled group, a list, a stack of cards)
+ * - `item`: gap between related items inside a section
+ * - `rowMinHeight` + `rowPadV`: every list row is at least 56 tall with 16 above and below its text
+ * - `cardPad` / `cardRadius`: surface cards
+ * - `headerGap`: native header to first content
+ * - `tabClearance`: bottom room on tab screens so the last row scrolls clear of the floating + button
+ *   (60 button + 16 margin + 16 breathing room). The tab bar itself is inset by the system.
+ */
+export const layout = {
+  gutter: 20,
+  section: 32,
+  item: 12,
+  rowMinHeight: 56,
+  rowPadV: 16,
+  cardPad: 20,
+  cardRadius: 20,
+  headerGap: 8,
+  tabClearance: 92,
+} as const;
+
 export const radius = { sm: 12, md: 16, lg: 20, xl: 28, pill: 999 } as const;
 
 interface TextStyleToken {

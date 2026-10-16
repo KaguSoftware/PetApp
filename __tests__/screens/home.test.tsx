@@ -31,7 +31,8 @@ describe("Home", () => {
   it("(d) shows the pet name, the streak and today's rows", async () => {
     prepare("full");
     await renderScreen(<HomeScreen />);
-    expect(screen.getByText("Rex")).toBeTruthy();
+    // The native large title is the selected pet's name.
+    expect(screen.getByRole("header", { name: "Rex" })).toBeTruthy();
     expect(screen.getByText("3 days")).toBeTruthy();
     expect(screen.getByText("Today")).toBeTruthy();
     expect(screen.getByText("Fed")).toBeTruthy();
@@ -59,12 +60,19 @@ describe("Home", () => {
     expect(screen.queryByText(/^\d+ days?$/)).toBeNull();
   });
 
-  it("the name opens a pet menu: switch pet or add one", async () => {
+  it("the header pet menu switches pets and has Add pet", async () => {
     prepare("full");
     await renderScreen(<HomeScreen />);
-    fireEvent.press(screen.getByLabelText("Rex, switch pet"));
-    expect(screen.getByLabelText("Mia")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("Add pet"));
+    // Native menu: one checked item per pet, then Add pet. No custom name button or sheet.
+    expect(screen.queryByLabelText("Rex, switch pet")).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Rex" }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByRole("menuitem", { name: "Mia" }).props.accessibilityState.checked).toBe(false);
+    fireEvent.press(screen.getByRole("menuitem", { name: "Mia" }));
+    expect(screen.getByRole("header", { name: "Mia" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Mia" }).props.accessibilityState.checked).toBe(true);
+    // The selection is module state shared by the tests below: put Rex back.
+    fireEvent.press(screen.getByRole("menuitem", { name: "Rex" }));
+    fireEvent.press(screen.getByRole("menuitem", { name: "Add pet" }));
     expect(router.push).toHaveBeenCalledWith("/pet/new");
   });
 

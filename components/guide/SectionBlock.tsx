@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import type { GuideSection } from "@/content/guide";
-import { Card, Icon, spacing, Text, useTheme, type IconName } from "@/ui";
+import { Card, Icon, layout, Text, useTheme, type IconName } from "@/ui";
 
 function StepRow({ n, text }: { n: number; text: string }) {
   const { colors } = useTheme();
@@ -50,12 +50,12 @@ export function SectionBlock({ section }: { section: GuideSection }) {
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.md },
-  steps: { gap: spacing.md },
-  step: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
+  section: { gap: layout.item },
+  steps: { gap: layout.item },
+  step: { flexDirection: "row", alignItems: "flex-start", gap: layout.item },
   bubble: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", marginTop: 1 },
   num: { fontSize: 13, lineHeight: 16 },
   stepText: { flex: 1 },
-  callout: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start", padding: spacing.lg },
+  callout: { flexDirection: "row", gap: layout.item, alignItems: "flex-start" },
   calloutText: { flex: 1, gap: 2 },
 });

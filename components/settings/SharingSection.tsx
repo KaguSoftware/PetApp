@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { copyInviteCode, createInvite, leaveHousehold, removeMember, shareInvite, useHousehold, useMembers, type Member } from "@/data";
-import { PillButton, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
+import { layout, PillButton, PressableScale, Text, useTheme } from "@/ui";
 import { Row, Section } from "./parts";
 
 type Invite = { code: string; expiresAt: number };
@@ -144,8 +144,8 @@ export function SharingSection() {
 }
 
 const styles = StyleSheet.create({
-  rowRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  invite: { borderRadius: radius.md, padding: spacing.xl, alignItems: "center", gap: spacing.xs, marginVertical: spacing.md },
+  rowRight: { flexDirection: "row", alignItems: "center", gap: layout.item },
+  invite: { borderRadius: layout.cardRadius - 4, padding: layout.cardPad, alignItems: "center", gap: 4, marginVertical: layout.item },
   code: { letterSpacing: 3, textAlign: "center" },
-  inviteButtons: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
+  inviteButtons: { flexDirection: "row", gap: layout.item, marginTop: layout.item },
 });

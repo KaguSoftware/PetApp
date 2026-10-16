@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Keyboard, View } from "react-native";
 import { addMed, useLogs, useMeds, type Pet } from "@/data";
-import { Chip, Field, formStyles, SavePill, TimeStepper, tsFromMinAgo } from "./parts";
+import { useWhen } from "./CareForm";
+import { Chip, Field, formStyles, PickerField, SavePill } from "./parts";
 import { saveCare } from "./save";
 
 const ADD = "add";
@@ -16,7 +17,7 @@ export function MedsForm({ pet, onDone }: { pet: Pet; onDone: () => void }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [dose, setDose] = useState("");
-  const [minAgo, setMinAgo] = useState(0);
+  const w = useWhen();
 
   const fallback = meds.find((m) => m.id === lastMedId)?.id ?? meds[0]?.id ?? ADD;
   const choice = picked ?? fallback;
@@ -27,7 +28,7 @@ export function MedsForm({ pet, onDone }: { pet: Pet; onDone: () => void }) {
   const save = () => {
     if (!valid) return;
     Keyboard.dismiss();
-    const ts = tsFromMinAgo(minAgo);
+    const ts = w.ts();
     if (chosen && !adding) {
       saveCare(pet, "meds", { medId: chosen.id, ts }, chosen.name);
     } else {
@@ -56,7 +57,7 @@ export function MedsForm({ pet, onDone }: { pet: Pet; onDone: () => void }) {
           <Field label="DOSE (OPTIONAL)" value={dose} onChangeText={setDose} placeholder="e.g. 1 tablet daily" maxLength={120} />
         </>
       ) : null}
-      <TimeStepper minAgo={minAgo} onChange={setMinAgo} />
+      <PickerField label="WHEN" mode="time" value={w.when} onChange={w.set} />
       <SavePill onPress={save} disabled={!valid} />
     </View>
   );

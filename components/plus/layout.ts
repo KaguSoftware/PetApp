@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 
 /** Diameter of the floating + button (and the matching close button in the panel). */
-export const PLUS_SIZE = 58;
+export const PLUS_SIZE = 60;
 /** Gap from the screen's right edge and above the tab bar. */
 export const PLUS_MARGIN = 16;
 

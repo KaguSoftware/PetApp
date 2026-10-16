@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Species } from "@/data";
-import { Chip, Icon, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
+import { Icon, layout, MenuRow, PressableScale, radius, Text, useTheme } from "@/ui";
 import { isMainSpecies, MAIN_SPECIES, OTHER_SPECIES } from "./species";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onChange: (s: Species) => void;
 }
 
-/** Step 1: three big rounded choices (Dog, Cat, Other), each with a thin line icon. */
+/** Step 1: three big rounded choices (Dog, Cat, Other); "Other" adds a native menu for the exact kind. */
 export function SpeciesStep({ species, onChange }: Props) {
   const { colors } = useTheme();
   const [otherOpen, setOtherOpen] = useState(species !== null && !isMainSpecies(species));
@@ -52,29 +52,24 @@ export function SpeciesStep({ species, onChange }: Props) {
             </PressableScale>
           );
         })}
+        {otherOpen ? (
+          <MenuRow<Species> label="Kind of pet" placeholder="Choose" options={OTHER_SPECIES} selected={species} onSelect={onChange} />
+        ) : null}
       </View>
-      {otherOpen ? (
-        <View style={styles.chips}>
-          {OTHER_SPECIES.map((o) => (
-            <Chip key={o.value} label={o.label} selected={species === o.value} onPress={() => onChange(o.value)} />
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing["2xl"] },
+  wrap: { gap: layout.section },
   center: { textAlign: "center" },
-  col: { gap: spacing.md },
+  col: { gap: layout.item },
   choice: {
     minHeight: 72,
     borderRadius: radius.xl,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.lg,
-    paddingHorizontal: spacing["2xl"],
+    gap: layout.item + 4,
+    paddingHorizontal: layout.section - 4,
   },
-  chips: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.sm },
 });

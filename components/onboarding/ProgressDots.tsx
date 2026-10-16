@@ -1,5 +1,5 @@
 import { StyleSheet, View } from "react-native";
-import { spacing, useTheme } from "@/ui";
+import { layout, useTheme } from "@/ui";
 
 export function ProgressDots({ count, index }: { count: number; index: number }) {
   const { colors } = useTheme();
@@ -21,6 +21,6 @@ export function ProgressDots({ count, index }: { count: number; index: number })
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: layout.headerGap },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

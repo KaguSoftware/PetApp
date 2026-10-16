@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { isValidDateString, toDateString } from "@/lib/format";
-import { Chip, TextField, Text, spacing } from "@/ui";
+import { DateField, layout, MenuRow, PillButton, TextField } from "@/ui";
 
 export interface PetDetails {
   birthDate: string;
@@ -20,47 +20,28 @@ export function birthDateError(value: string): string | null {
   return null;
 }
 
-/** Types digits and inserts the dashes: 20210418 -> 2021-04-18. */
-function formatBirthDate(text: string): string {
-  const d = text.replace(/\D/g, "").slice(0, 8);
-  if (d.length <= 4) return d;
-  if (d.length <= 6) return `${d.slice(0, 4)}-${d.slice(4)}`;
-  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
-}
-
 interface Props {
   petName: string;
   value: PetDetails;
   onChange: (d: PetDetails) => void;
 }
 
-/** Collapsed, skippable extras: birthday, breed, gender. */
+type Gender = "male" | "female" | "none";
+
+/** Collapsed, skippable extras: birthday (native date picker), breed, gender (native menu). */
 export function PetDetailsFields({ petName, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const error = birthDateError(value.birthDate);
 
   if (!open) {
     return (
       <View style={styles.center}>
-        <Chip label={`Add more about ${petName} (optional)`} icon="plus" onPress={() => setOpen(true)} />
+        <PillButton label={`Add more about ${petName} (optional)`} icon="plus" variant="secondary" fullWidth={false} onPress={() => setOpen(true)} />
       </View>
     );
   }
   return (
     <View style={styles.wrap}>
-      <TextField
-        label="Birthday"
-        placeholder="YYYY-MM-DD"
-        value={value.birthDate}
-        onChangeText={(t) => onChange({ ...value, birthDate: formatBirthDate(t) })}
-        keyboardType="number-pad"
-        maxLength={10}
-      />
-      {error ? (
-        <Text variant="callout" tone="danger" accessibilityLiveRegion="polite">
-          {error}
-        </Text>
-      ) : null}
+      <DateField label="Birthday" value={value.birthDate} onChange={(birthDate) => onChange({ ...value, birthDate })} optional maximumDate={new Date()} />
       <TextField
         label="Breed"
         placeholder="e.g. Golden Retriever"
@@ -69,22 +50,21 @@ export function PetDetailsFields({ petName, value, onChange }: Props) {
         autoCapitalize="words"
         maxLength={40}
       />
-      <View style={styles.genders}>
-        {(["male", "female"] as const).map((g) => (
-          <Chip
-            key={g}
-            label={g === "male" ? "Boy" : "Girl"}
-            selected={value.gender === g}
-            onPress={() => onChange({ ...value, gender: value.gender === g ? null : g })}
-          />
-        ))}
-      </View>
+      <MenuRow<Gender>
+        label="Gender"
+        selected={value.gender ?? "none"}
+        onSelect={(g) => onChange({ ...value, gender: g === "none" ? null : g })}
+        options={[
+          { value: "male", label: "Boy" },
+          { value: "female", label: "Girl" },
+          { value: "none", label: "Not set" },
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   center: { alignItems: "center" },
-  wrap: { gap: spacing.md },
-  genders: { flexDirection: "row", gap: spacing.sm },
+  wrap: { gap: layout.item },
 });

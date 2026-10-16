@@ -1,9 +1,10 @@
+import { Stack } from "expo-router";
 import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { FeaturedCard } from "@/components/guide/FeaturedCard";
 import { TopicCard } from "@/components/guide/TopicCard";
 import { FEATURED_TOPIC_ID, filterCategories, topicById, type SpeciesFilter } from "@/content/guide";
-import { Chip, Screen, Text, TextField, spacing } from "@/ui";
+import { layout, Screen, Text, useHeaderIcon } from "@/ui";
 
 /** "other" = species-agnostic topics, for rabbits, birds, fish and the rest. */
 type GuideFilter = SpeciesFilter | "other";
@@ -18,6 +19,10 @@ const FILTERS: { id: GuideFilter; label: string }[] = [
 export default function GuideScreen() {
   const [query, setQuery] = useState("");
   const [species, setSpecies] = useState<GuideFilter>("all");
+  const filterIcon = useHeaderIcon(
+    species === "all" ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill",
+    "filter-list",
+  );
 
   const featured = topicById(FEATURED_TOPIC_ID);
   const showFeatured =
@@ -36,47 +41,48 @@ export default function GuideScreen() {
   }, [query, species, showFeatured]);
 
   return (
-    <Screen title="Guide" tabBarPadding>
-      <TextField
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search the guide"
-        accessibilityLabel="Search the guide"
-        returnKeyType="search"
-        autoCorrect={false}
-        clearButtonMode="while-editing"
-      />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {FILTERS.map((f) => (
-          <Chip key={f.id} label={f.label} selected={species === f.id} onPress={() => setSpecies(f.id)} />
+    <>
+      <Stack.Screen options={{ title: "Guide" }} />
+      <Stack.SearchBar placeholder="Search the guide" autoCapitalize="none" onChangeText={(e) => setQuery(e.nativeEvent.text)} />
+      <Stack.Toolbar placement="right">
+        {filterIcon ? (
+          <Stack.Toolbar.Menu icon={filterIcon} title="Pets" accessibilityLabel="Filter guide by pet">
+            <Stack.Toolbar.Menu inline>
+              {FILTERS.map((f) => (
+                <Stack.Toolbar.MenuAction key={f.id} isOn={species === f.id} onPress={() => setSpecies(f.id)}>
+                  {f.label}
+                </Stack.Toolbar.MenuAction>
+              ))}
+            </Stack.Toolbar.Menu>
+          </Stack.Toolbar.Menu>
+        ) : null}
+      </Stack.Toolbar>
+      <Screen tabBarPadding>
+        {showFeatured && featured ? <FeaturedCard topic={featured} /> : null}
+
+        {categories.map((c) => (
+          <View key={c.id} style={styles.section}>
+            <Text variant="footnote" tone="ink2" style={styles.sectionTitle} accessibilityRole="header">
+              {c.title}
+            </Text>
+            {c.topics.map((t) => (
+              <TopicCard key={t.id} topic={t} />
+            ))}
+          </View>
         ))}
-      </ScrollView>
 
-      {showFeatured && featured ? <FeaturedCard topic={featured} /> : null}
-
-      {categories.map((c) => (
-        <View key={c.id} style={styles.section}>
-          <Text variant="footnote" tone="ink2" style={styles.sectionTitle} accessibilityRole="header">
-            {c.title}
+        {categories.length === 0 && !showFeatured ? (
+          <Text tone="ink2" style={styles.empty}>
+            Nothing matches that yet. Try a different word.
           </Text>
-          {c.topics.map((t) => (
-            <TopicCard key={t.id} topic={t} />
-          ))}
-        </View>
-      ))}
-
-      {categories.length === 0 && !showFeatured ? (
-        <Text tone="ink2" style={styles.empty}>
-          Nothing matches that yet. Try a different word.
-        </Text>
-      ) : null}
-    </Screen>
+        ) : null}
+      </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  chips: { gap: spacing.sm, paddingVertical: 4 },
-  section: { gap: spacing.sm, marginTop: spacing.sm },
-  sectionTitle: { fontWeight: "600", paddingHorizontal: spacing.xs },
-  empty: { textAlign: "center", paddingVertical: spacing["3xl"] },
+  section: { gap: layout.item },
+  sectionTitle: { fontWeight: "600" },
+  empty: { textAlign: "center", paddingVertical: layout.section },
 });

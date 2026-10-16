@@ -174,3 +174,19 @@ export function groupByDay(items: HistoryItem[], now: number = Date.now()): Hist
   }
   return sections;
 }
+
+export const CATEGORY_LABEL: Record<CategoryFilter, string> = {
+  all: "All types",
+  care: "Care",
+  weight: "Weight",
+  health: "Health",
+  notes: "Notes",
+};
+
+/** Route params of the native detail sheet for an item: `/history/[kind]/[id]?petId=`. */
+export function itemRoute(item: HistoryItem): { kind: HistorySource["kind"]; id: string; petId: string } {
+  const s = item.source;
+  const id =
+    s.kind === "care" ? s.log.id : s.kind === "weight" ? s.entry.id : s.kind === "note" ? s.note.id : s.record.id;
+  return { kind: s.kind, id, petId: item.petId };
+}

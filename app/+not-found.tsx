@@ -1,11 +1,11 @@
 import { router } from "expo-router";
 import { StyleSheet } from "react-native";
-import { PillButton, Screen, Text, spacing } from "@/ui";
+import { layout, PillButton, Screen, Text } from "@/ui";
 
 /** Unknown route: a friendly dead end with a way back. */
 export default function NotFound() {
   return (
-    <Screen scroll={false} contentStyle={styles.wrap}>
+    <Screen headerless scroll={false} contentStyle={styles.wrap}>
       <Text variant="largeTitle" style={styles.center} accessibilityRole="header">
         Nothing here
       </Text>
@@ -18,6 +18,6 @@ export default function NotFound() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.lg },
+  wrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: layout.item },
   center: { textAlign: "center" },
 });

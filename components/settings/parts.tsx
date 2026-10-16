@@ -1,6 +1,6 @@
 import { Children, Fragment } from "react";
 import { StyleSheet, View } from "react-native";
-import { borderWidth, Card, Icon, PressableScale, Text, spacing, useTheme, type IconName } from "@/ui";
+import { borderWidth, Card, Icon, layout, PressableScale, Text, useTheme, type IconName } from "@/ui";
 
 /** A small grey heading above a surface card; rows inside are split by hairlines. */
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -34,7 +34,7 @@ interface RowProps {
   chevron?: boolean;
 }
 
-/** One 52pt row inside a section; pressable when `onPress` is given. */
+/** One list row (min 56, 16 above and below the text) inside a section; pressable when `onPress` is given. */
 export function Row({ label, hint, left, icon, right, onPress, chevron = false }: RowProps) {
   const { colors } = useTheme();
   const body = (
@@ -70,10 +70,16 @@ export function Row({ label, hint, left, icon, right, onPress, chevron = false }
 }
 
 const styles = StyleSheet.create({
-  section: { gap: spacing.sm },
-  title: { fontWeight: "600", paddingHorizontal: spacing.xs },
-  card: { paddingVertical: spacing.xs, paddingHorizontal: spacing.lg },
+  section: { gap: layout.headerGap },
+  title: { fontWeight: "600", paddingHorizontal: 4 },
+  card: { paddingVertical: 0, paddingHorizontal: layout.cardPad - 4 },
   divider: { height: borderWidth },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 52, paddingVertical: spacing.xs },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: layout.item,
+    minHeight: layout.rowMinHeight,
+    paddingVertical: layout.rowPadV,
+  },
   rowText: { flex: 1 },
 });

@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import type { GuideTopic } from "@/content/guide";
-import { Card, Icon, spacing, Text, useTheme } from "@/ui";
+import { Card, Icon, layout, Text, useTheme } from "@/ui";
 
 export function openTopic(id: string) {
   router.push({ pathname: "/guide/[id]", params: { id } });
@@ -36,6 +36,6 @@ export function TopicCard({ topic, eyebrow }: { topic: GuideTopic; eyebrow?: str
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, minHeight: 44 },
-  text: { flex: 1, gap: 2 },
+  card: { flexDirection: "row", alignItems: "center", gap: layout.item, minHeight: layout.rowMinHeight },
+  text: { flex: 1, gap: 4 },
 });

@@ -1,111 +1,64 @@
-import { router } from "expo-router";
 import { Platform, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon } from "./icons";
-import { PressableScale } from "./PressableScale";
-import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { spacing } from "./tokens";
+import { layout } from "./tokens";
 
 export interface ScreenProps {
-  /** Large display title at the top. */
-  title?: string;
-  /** Right-aligned header slot (round icon buttons). */
-  headerRight?: React.ReactNode;
-  /** Round back button before the title, for pushed screens. */
-  back?: boolean;
   scroll?: boolean;
   /**
-   * Set on screens that live directly in the native tab bar. The system already insets the
-   * content for the tab bar (and, on iOS, the status bar, via automatic scroll-view insets),
-   * so the screen only adds room for the floating + button.
+   * The screen sits directly in the native tab bar: leave room at the bottom for the floating +
+   * button. The tab bar itself is inset by the system.
    */
   tabBarPadding?: boolean;
+  /**
+   * No native header above this screen (auth, onboarding, not-found): the safe-area top inset is
+   * added here so nothing ever sits under the clock.
+   */
+  headerless?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
 
+/** Kept for callers that import it; the value lives in the layout tokens. */
+export const TAB_BAR_CLEARANCE = layout.tabClearance;
+
 /**
- * Room kept free at the bottom of tab screens so the last row can scroll clear of the floating +
- * button (56pt button + 16pt margin + breathing room). The native tab bar itself is NOT included:
- * NativeTabs insets the content (iOS: the first scroll view's automatic content inset; Android: a
- * SafeAreaView on the bottom edge).
+ * Padding for a screen's content, aware of who already insets it:
+ * - native header screens: the header (and, on iOS, the scroll view's automatic content inset)
+ *   already clears the status bar, so the top is just `headerGap`;
+ * - headerless screens add the status-bar inset themselves;
+ * - bottom: tab screens clear the + button; others add the home-indicator inset on Android (iOS's
+ *   automatic content inset already does it).
  */
-export const TAB_BAR_CLEARANCE = 88;
-
-/** Top/bottom padding for a screen's content, aware of who already insets it. */
-export function useScreenPadding(tabBarPadding: boolean): ViewStyle {
+export function useContentPadding({ tabBarPadding = false, headerless = false, scroll = true } = {}): ViewStyle {
   const insets = useSafeAreaInsets();
-  if (!tabBarPadding) {
-    return { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl };
-  }
-  return {
-    // iOS: the system adds the status-bar inset to the scroll view. Android only handles the bottom.
-    paddingTop: (Platform.OS === "ios" ? 0 : insets.top) + spacing.lg,
-    paddingBottom: spacing.xl + TAB_BAR_CLEARANCE,
-  };
+  const top = headerless ? insets.top + layout.section : layout.headerGap;
+  if (tabBarPadding) return { paddingTop: top, paddingBottom: layout.tabClearance };
+  const bottomInset = headerless || !scroll || Platform.OS === "android" ? insets.bottom : 0;
+  return { paddingTop: top, paddingBottom: bottomInset + layout.section };
 }
 
-/** Back button + title row; exported so list screens that own their scroll view can place it inside. */
-export function ScreenHeader({ title, headerRight, back = false }: Pick<ScreenProps, "title" | "headerRight" | "back">) {
+/**
+ * Page body. On a native-header screen this is the FIRST scroll view, so iOS applies the large-title
+ * / tab-bar insets to it automatically (`contentInsetAdjustmentBehavior="automatic"`); the wrapper
+ * is `collapsable={false}` so that scroll view stays discoverable by the native tabs.
+ */
+export function Screen({ scroll = true, tabBarPadding = false, headerless = false, contentStyle, children }: ScreenProps) {
   const { colors } = useTheme();
-  if (!title && !headerRight && !back) return null;
+  const padding = useContentPadding({ tabBarPadding, headerless, scroll });
   return (
-    <View style={styles.header}>
-      {back ? (
-        <PressableScale
-          onPress={() => (router.canGoBack() ? router.back() : router.replace("/home"))}
-          haptic="select"
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={[styles.back, { backgroundColor: colors.surface }]}
-        >
-          <View>
-            <Icon name="chevron-left" size={22} color={colors.ink} />
-          </View>
-        </PressableScale>
-      ) : null}
-      {title ? (
-        <Text variant={back ? "title" : "largeTitle"} accessibilityRole="header" style={styles.title}>
-          {title}
-        </Text>
-      ) : (
-        <View style={styles.title} />
-      )}
-      {headerRight}
-    </View>
-  );
-}
-
-export function Screen({
-  title,
-  headerRight,
-  back = false,
-  scroll = true,
-  tabBarPadding = false,
-  contentStyle,
-  children,
-}: ScreenProps) {
-  const { colors } = useTheme();
-  const padding = useScreenPadding(tabBarPadding);
-  const header = <ScreenHeader title={title} headerRight={headerRight} back={back} />;
-
-  return (
-    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+    <View collapsable={false} style={[styles.root, { backgroundColor: colors.bg }]}>
       {scroll ? (
         <ScrollView
+          contentInsetAdjustmentBehavior={headerless ? "never" : "automatic"}
           contentContainerStyle={[styles.content, padding, contentStyle]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {header}
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.content, styles.root, padding, contentStyle]}>
-          {header}
-          {children}
-        </View>
+        <View style={[styles.root, styles.content, padding, contentStyle]}>{children}</View>
       )}
     </View>
   );
@@ -113,8 +66,5 @@ export function Screen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  title: { flex: 1 },
-  back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  content: { paddingHorizontal: layout.gutter, gap: layout.section },
 });

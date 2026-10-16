@@ -1,6 +1,6 @@
 import { StyleSheet, TextInput, View } from "react-native";
 import type { Species } from "@/data";
-import { Text, borderWidth, spacing, useTheme } from "@/ui";
+import { layout, Text, borderWidth, useTheme } from "@/ui";
 
 interface Props {
   species: Species;
@@ -38,7 +38,7 @@ export function NameStep({ name, onChange, onSubmit }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing["3xl"] },
+  wrap: { gap: layout.section },
   center: { textAlign: "center" },
   input: {
     fontWeight: "700",
@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     minHeight: 64,
     borderBottomWidth: borderWidth,
-    paddingVertical: spacing.xs,
+    paddingVertical: 4,
   },
 });

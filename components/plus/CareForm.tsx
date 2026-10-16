@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Keyboard, View } from "react-native";
 import type { CareType, Pet } from "@/data";
-import { Field, formStyles, positive, SavePill, TimeStepper, tsFromMinAgo } from "./parts";
+import { Field, formStyles, PickerField, positive, SavePill, tsFromPicked } from "./parts";
 import { saveCare, type LogExtra } from "./save";
 
 /** Optional second field per care type. */
@@ -10,15 +10,29 @@ const AMOUNT: Partial<Record<CareType, { label: string; placeholder: string; key
   walk: { label: "MINUTES (OPTIONAL)", placeholder: "e.g. 30", key: "durationMinutes" },
 };
 
+/** The "When" picker, now by default: untouched means "now" and the data layer stamps the time. */
+export function useWhen() {
+  const [when, setWhen] = useState(() => new Date());
+  const [touched, setTouched] = useState(false);
+  return {
+    when,
+    set: (d: Date) => {
+      setWhen(d);
+      setTouched(true);
+    },
+    ts: () => (touched ? tsFromPicked(when) : undefined),
+  };
+}
+
 /** Food, Water, Walk, Litter and Grooming: a time, plus grams or minutes where it applies. Defaults make it one tap to save. */
 export function CareForm({ pet, type, onDone }: { pet: Pet; type: CareType; onDone: () => void }) {
-  const [minAgo, setMinAgo] = useState(0);
+  const w = useWhen();
   const [amount, setAmount] = useState("");
   const field = AMOUNT[type];
 
   const save = () => {
     Keyboard.dismiss();
-    const extra: LogExtra = { ts: tsFromMinAgo(minAgo) };
+    const extra: LogExtra = { ts: w.ts() };
     if (field) extra[field.key] = positive(amount);
     saveCare(pet, type, extra);
     onDone();
@@ -26,7 +40,7 @@ export function CareForm({ pet, type, onDone }: { pet: Pet; type: CareType; onDo
 
   return (
     <View style={formStyles.body}>
-      <TimeStepper minAgo={minAgo} onChange={setMinAgo} />
+      <PickerField label="WHEN" mode="time" value={w.when} onChange={w.set} />
       {field ? (
         <Field
           label={field.label}

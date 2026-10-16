@@ -86,3 +86,36 @@ jest.mock("@/lib/auth", () => {
 jest.mock("expo-router", () => require("./__tests__/screens/_support/routerMock").routerMock);
 jest.mock("@/data", () => require("./__tests__/screens/_support/fakeData").fakeDataModule);
 require("react-native-gesture-handler/jestSetup");
+
+// Native menu / date picker: the menu renders its trigger plus every action as a pressable so tests can pick options.
+jest.mock("@expo/ui/community/menu", () => {
+  const React = require("react");
+  const { Pressable, Text, View } = require("react-native");
+  const flatten = (actions) => actions.flatMap((a) => (a.subactions ? flatten(a.subactions) : [a]));
+  const MenuView = ({ actions, onPressAction, children }) =>
+    React.createElement(
+      View,
+      null,
+      children,
+      flatten(actions).map((a) =>
+        React.createElement(
+          Pressable,
+          {
+            key: a.id ?? a.title,
+            accessibilityRole: "menuitem",
+            accessibilityLabel: a.title,
+            accessibilityState: { checked: a.state === "on" },
+            onPress: () => onPressAction?.({ nativeEvent: { event: a.id ?? a.title } }),
+          },
+          React.createElement(Text, null, a.title),
+        ),
+      ),
+    );
+  return { __esModule: true, default: MenuView, MenuView };
+});
+jest.mock("@expo/ui/community/datetime-picker", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const DateTimePicker = ({ testID, mode }) => React.createElement(View, { testID: testID ?? `datetime-${mode ?? "date"}` });
+  return { __esModule: true, default: DateTimePicker, DateTimePicker };
+});

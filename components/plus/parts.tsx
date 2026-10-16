@@ -1,7 +1,15 @@
-import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
+import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import { Component, useState, type ReactNode } from "react";
+import { Platform, StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { Icon, PressableScale, Text, radius, spacing, useTheme } from "@/ui";
 
 /** Small building blocks for the forms inside the inverted + card. */
+
+/**
+ * Every form ends with its Save pill on the same line as the card's close button, which
+ * sits in the card's bottom-right 60pt corner: the pill stops this far short of the content edge.
+ */
+export const SAVE_INSET = 44;
 
 export function FormHeader({ title, onBack }: { title: string; onBack: () => void }) {
   const { colors } = useTheme();
@@ -23,13 +31,14 @@ export function FormHeader({ title, onBack }: { title: string; onBack: () => voi
   );
 }
 
-/** Full-width pill: inverseInk fill, inverse text. */
+/** 52pt pill: inverseInk fill, inverse text. */
 export function SavePill({ label = "Save", onPress, disabled = false }: { label?: string; onPress: () => void; disabled?: boolean }) {
   const { colors } = useTheme();
   return (
     <PressableScale
       onPress={onPress}
       disabled={disabled}
+      scaleTo={0.96}
       haptic="tap"
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -80,79 +89,107 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
   );
 }
 
-/** Labelled row with a back and a forward round button around a value; a missing handler disables that side. */
-export function Stepper({
-  label,
-  value,
-  onMinus,
-  onPlus,
-  minusLabel,
-  plusLabel,
-}: {
+/** Epoch ms for a picked time of day: a time later than now means yesterday evening, never the future. */
+export function tsFromPicked(picked: Date, now: number = Date.now()): number {
+  const ts = picked.getTime();
+  return ts > now ? ts - 24 * 60 * 60_000 : ts;
+}
+
+function shown(value: Date, mode: "time" | "date"): string {
+  return mode === "time"
+    ? value.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : value.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+
+/** If the native picker view is missing (a runtime without it), the row still shows the value instead of crashing the panel. */
+class PickerBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+export interface PickerFieldProps {
   label: string;
-  value: string;
-  onMinus?: () => void;
-  onPlus?: () => void;
-  minusLabel: string;
-  plusLabel: string;
-}) {
+  value: Date;
+  mode: "time" | "date";
+  onChange: (next: Date) => void;
+  minimumDate?: Date;
+  maximumDate?: Date;
+}
+
+/**
+ * A label and the platform's own date/time picker, on one 52pt row.
+ * iOS: the native compact picker (SwiftUI) sits on the row; tapping it opens Apple's popover.
+ * Android: Material 3 only offers dialogs, so the row shows the value and a tap opens the native dialog.
+ * Both come from `@expo/ui/community/datetime-picker`, forced to the dark look on the black card.
+ */
+export function PickerField({ label, value, mode, onChange, minimumDate, maximumDate }: PickerFieldProps) {
   const { colors } = useTheme();
-  const btn = (handler: (() => void) | undefined, a11y: string, icon: "chevron-left" | "chevron-right") => (
-    <PressableScale
-      onPress={handler ?? (() => undefined)}
-      disabled={!handler}
-      haptic="select"
-      accessibilityRole="button"
-      accessibilityLabel={a11y}
-      accessibilityState={{ disabled: !handler }}
-      style={[styles.round, { backgroundColor: colors.inverseSurface, opacity: handler ? 1 : 0.4 }]}
-    >
-      <Icon name={icon} size={20} color={colors.inverseInk} />
-    </PressableScale>
+  const [dialog, setDialog] = useState(false);
+  const common = {
+    value,
+    mode,
+    minimumDate,
+    maximumDate,
+    accentColor: colors.inverseInk,
+    // The card is the inverse of the app theme, so a light app needs the dark picker.
+    themeVariant: colors.scheme === "light" ? ("dark" as const) : ("light" as const),
+  };
+  const text = (
+    <Text variant="headline" tone="inverse">
+      {shown(value, mode)}
+    </Text>
   );
+
+  if (Platform.OS === "android") {
+    return (
+      <>
+        <PressableScale
+          onPress={() => setDialog(true)}
+          haptic="select"
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ${shown(value, mode)}`}
+          style={[styles.pickRow, { backgroundColor: colors.inverseSurface }]}
+        >
+          <Text variant="caption" tone="inverse2">
+            {label}
+          </Text>
+          {text}
+        </PressableScale>
+        {dialog ? (
+          <DateTimePicker
+            {...common}
+            presentation="dialog"
+            onValueChange={(_, d) => {
+              setDialog(false);
+              onChange(d);
+            }}
+            onDismiss={() => setDialog(false)}
+          />
+        ) : null}
+      </>
+    );
+  }
+
   return (
-    <View style={styles.field}>
-      <Text variant="caption" tone="inverse2" style={styles.label}>
+    <View style={[styles.pickRow, { backgroundColor: colors.inverseSurface }]}>
+      <Text variant="caption" tone="inverse2">
         {label}
       </Text>
-      <View style={styles.stepRow}>
-        {btn(onMinus, minusLabel, "chevron-left")}
-        <Text variant="headline" tone="inverse" style={styles.stepValue} accessibilityLiveRegion="polite">
-          {value}
-        </Text>
-        {btn(onPlus, plusLabel, "chevron-right")}
-      </View>
+      <PickerBoundary fallback={text}>
+        <DateTimePicker
+          {...common}
+          display="compact"
+          style={mode === "time" ? styles.timePicker : styles.datePicker}
+          onValueChange={(_, d) => onChange(d)}
+        />
+      </PickerBoundary>
     </View>
   );
-}
-
-const STEP_MIN = 15;
-const MAX_MIN_AGO = 24 * 60;
-
-function agoText(min: number): string {
-  if (min === 0) return "Now";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m} min`} ago`;
-}
-
-/** "Now" by default; the arrows walk the time back (or forward again) in 15 minute steps. */
-export function TimeStepper({ minAgo, onChange }: { minAgo: number; onChange: (minAgo: number) => void }) {
-  return (
-    <Stepper
-      label="WHEN"
-      value={agoText(minAgo)}
-      minusLabel="15 minutes earlier"
-      plusLabel="15 minutes later"
-      onMinus={minAgo < MAX_MIN_AGO ? () => onChange(Math.min(MAX_MIN_AGO, minAgo + STEP_MIN)) : undefined}
-      onPlus={minAgo > 0 ? () => onChange(Math.max(0, minAgo - STEP_MIN)) : undefined}
-    />
-  );
-}
-
-/** Epoch ms for a "minutes ago" offset; undefined (= now, set by the data layer) for 0. */
-export function tsFromMinAgo(minAgo: number): number | undefined {
-  return minAgo > 0 ? Date.now() - minAgo * 60_000 : undefined;
 }
 
 export function positive(raw: string): number | undefined {
@@ -166,15 +203,16 @@ export const formStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
   headerTitle: { flex: 1 },
-  round: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  save: { height: 54, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch" },
-  field: { gap: spacing.xs + 2 },
+  round: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  save: { height: 52, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", alignSelf: "stretch", marginRight: SAVE_INSET },
+  field: { gap: spacing.sm },
   label: { paddingHorizontal: spacing.sm },
-  input: { minHeight: 50, borderRadius: radius.md, paddingHorizontal: spacing.lg, fontSize: 17 },
+  input: { minHeight: 52, borderRadius: radius.md, paddingHorizontal: spacing.lg, fontSize: 17 },
   multiline: { minHeight: 110, paddingTop: spacing.md, textAlignVertical: "top" },
   chip: { height: 36, paddingHorizontal: spacing.lg, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
-  stepRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  stepValue: { flex: 1, textAlign: "center" },
+  pickRow: { height: 52, borderRadius: radius.md, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  timePicker: { width: 112, height: 36 },
+  datePicker: { width: 150, height: 36 },
 });

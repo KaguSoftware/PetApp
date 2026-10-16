@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { Alert, StyleSheet, View } from "react-native";
 import { deletePet, type Pet } from "@/data";
-import { HIT, PressableScale, spacing, Text } from "@/ui";
+import { layout, PressableScale, Text } from "@/ui";
 
 export function DangerZone({ pet }: { pet: Pet }) {
   const confirm = () =>
@@ -36,6 +36,6 @@ export function DangerZone({ pet }: { pet: Pet }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", marginTop: spacing.lg },
-  btn: { minHeight: HIT, justifyContent: "center", paddingHorizontal: spacing.xl },
+  wrap: { alignItems: "center", marginTop: layout.item },
+  btn: { minHeight: layout.rowMinHeight, justifyContent: "center", paddingHorizontal: layout.gutter },
 });

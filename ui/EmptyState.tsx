@@ -3,7 +3,7 @@ import { Icon, type IconName } from "./icons";
 import { PillButton } from "./PillButton";
 import { Text } from "./Text";
 import { useTheme } from "./theme";
-import { spacing } from "./tokens";
+import { layout, spacing } from "./tokens";
 
 export interface EmptyStateProps {
   icon?: IconName;
@@ -32,6 +32,6 @@ export function EmptyState({ icon, title, message, actionLabel, onAction }: Empt
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing["4xl"], paddingHorizontal: spacing["2xl"] },
+  wrap: { alignItems: "center", gap: spacing.md, paddingVertical: layout.section, paddingHorizontal: layout.gutter },
   center: { textAlign: "center" },
 });

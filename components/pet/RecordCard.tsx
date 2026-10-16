@@ -1,5 +1,6 @@
 import { Alert, StyleSheet, View } from "react-native";
-import { borderWidth, Card, HIT, PressableScale, spacing, Text, useTheme } from "@/ui";
+import Animated from "react-native-reanimated";
+import { borderWidth, Card, layout, PressableScale, Text, useItemMotion, useTheme } from "@/ui";
 import { TextButton } from "./TextButton";
 
 export interface RecordRowData {
@@ -10,7 +11,7 @@ export interface RecordRowData {
   badge?: string | null;
   /** Soft highlight for the next thing coming up. */
   highlight?: boolean;
-  /** Optional tap action (e.g. pause a med). */
+  /** Optional tap action. */
   onPress?: () => void;
   pressLabel?: string;
 }
@@ -31,61 +32,66 @@ function confirmRemove(row: RecordRowData, onRemove: (id: string) => void) {
   ]);
 }
 
-function Row({ row, last, onRemove }: { row: RecordRowData; last: boolean; onRemove: (id: string) => void }) {
+function Row({ row, index, onRemove }: { row: RecordRowData; index: number; onRemove: (id: string) => void }) {
   const { colors } = useTheme();
+  const motion = useItemMotion(index);
   return (
-    <PressableScale
-      onPress={row.onPress}
-      onLongPress={() => confirmRemove(row, onRemove)}
-      delayLongPress={350}
-      haptic={row.onPress ? "select" : undefined}
-      accessibilityRole="button"
-      accessibilityLabel={[row.title, row.subtitle, row.badge].filter(Boolean).join(", ")}
-      accessibilityHint={row.pressLabel ? `${row.pressLabel}. Long press to remove` : "Long press to remove"}
-      accessibilityActions={[{ name: "delete", label: "Remove" }]}
-      onAccessibilityAction={(e) => {
-        if (e.nativeEvent.actionName === "delete") confirmRemove(row, onRemove);
-      }}
-      style={[styles.row, !last && { borderBottomColor: colors.border, borderBottomWidth: borderWidth }]}
-    >
-      <View style={styles.rowText}>
-        <Text variant="body" numberOfLines={2} style={row.highlight ? styles.strong : undefined}>
-          {row.title}
-        </Text>
-        {row.subtitle ? (
-          <Text variant="callout" tone="ink2" numberOfLines={2}>
-            {row.subtitle}
+    <Animated.View {...motion}>
+      <PressableScale
+        onPress={row.onPress}
+        onLongPress={() => confirmRemove(row, onRemove)}
+        delayLongPress={350}
+        haptic={row.onPress ? "select" : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={[row.title, row.subtitle, row.badge].filter(Boolean).join(", ")}
+        accessibilityHint={row.pressLabel ? `${row.pressLabel}. Long press to remove` : "Long press to remove"}
+        accessibilityActions={[{ name: "delete", label: "Remove" }]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === "delete") confirmRemove(row, onRemove);
+        }}
+        style={[styles.row, { borderTopColor: colors.border }]}
+      >
+        <View style={styles.rowText}>
+          <Text variant="body" numberOfLines={2} style={row.highlight ? styles.strong : undefined}>
+            {row.title}
+          </Text>
+          {row.subtitle ? (
+            <Text variant="callout" tone="ink2" numberOfLines={2}>
+              {row.subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {row.badge ? (
+          <Text variant="footnote" tone={row.highlight ? "ink" : "ink2"}>
+            {row.badge}
           </Text>
         ) : null}
-      </View>
-      {row.badge ? (
-        <Text variant="footnote" tone={row.highlight ? "ink" : "ink2"}>
-          {row.badge}
-        </Text>
-      ) : null}
-    </PressableScale>
+      </PressableScale>
+    </Animated.View>
   );
 }
 
 export function RecordCard({ title, rows, emptyText, addLabel, onAdd, onRemove }: RecordCardProps) {
   return (
     <Card style={styles.card}>
-      <Text variant="headline" accessibilityRole="header">
-        {title}
-      </Text>
+      <View style={styles.head}>
+        <Text variant="headline" accessibilityRole="header">
+          {title}
+        </Text>
+      </View>
       {rows.length === 0 ? (
-        <Text tone="ink2" variant="callout">
+        <Text tone="ink2" variant="callout" style={styles.empty}>
           {emptyText}
         </Text>
       ) : (
-        <View>
+        <>
           {rows.map((r, i) => (
-            <Row key={r.id} row={r} last={i === rows.length - 1} onRemove={onRemove} />
+            <Row key={r.id} row={r} index={i} onRemove={onRemove} />
           ))}
           <Text variant="caption" tone="ink3" style={styles.hint}>
             Long press an entry to remove it.
           </Text>
-        </View>
+        </>
       )}
       <TextButton label={addLabel} icon="plus" onPress={onAdd} />
     </Card>
@@ -93,15 +99,18 @@ export function RecordCard({ title, rows, emptyText, addLabel, onAdd, onRemove }
 }
 
 const styles = StyleSheet.create({
-  card: { gap: spacing.sm },
+  card: { paddingVertical: 0 },
+  head: { minHeight: layout.rowMinHeight, justifyContent: "center" },
+  empty: { paddingBottom: layout.item },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    minHeight: HIT,
-    paddingVertical: spacing.sm,
+    gap: layout.item,
+    minHeight: layout.rowMinHeight,
+    paddingVertical: layout.rowPadV,
+    borderTopWidth: borderWidth,
   },
-  rowText: { flex: 1, gap: 1 },
+  rowText: { flex: 1, gap: 2 },
   strong: { fontWeight: "600" },
-  hint: { paddingTop: spacing.xs },
+  hint: { paddingBottom: layout.headerGap },
 });

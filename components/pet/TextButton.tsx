@@ -1,5 +1,5 @@
 import { StyleSheet } from "react-native";
-import { HIT, Icon, PressableScale, spacing, Text, useTheme, type IconName } from "@/ui";
+import { Icon, layout, PressableScale, Text, useTheme, type IconName } from "@/ui";
 
 /** Plain tappable label (optional leading line icon), for actions inside surface cards. */
 export function TextButton({
@@ -25,5 +25,5 @@ export function TextButton({
 }
 
 const styles = StyleSheet.create({
-  btn: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: HIT, alignSelf: "flex-start" },
+  btn: { flexDirection: "row", alignItems: "center", gap: layout.headerGap, minHeight: layout.rowMinHeight, alignSelf: "flex-start" },
 });

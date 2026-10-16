@@ -1,3 +1,4 @@
+import { Stack } from "expo-router";
 import { AccountSection } from "@/components/settings/AccountSection";
 import { PetsSection } from "@/components/settings/PetsSection";
 import { AppearanceSection, UnitsSection } from "@/components/settings/PreferencesSection";
@@ -6,12 +7,15 @@ import { Screen } from "@/ui";
 
 export default function SettingsScreen() {
   return (
-    <Screen title="Settings" back>
-      <PetsSection />
-      <SharingSection />
-      <UnitsSection />
-      <AppearanceSection />
-      <AccountSection />
-    </Screen>
+    <>
+      <Stack.Screen options={{ title: "Settings" }} />
+      <Screen>
+        <PetsSection />
+        <SharingSection />
+        <UnitsSection />
+        <AppearanceSection />
+        <AccountSection />
+      </Screen>
+    </>
   );
 }

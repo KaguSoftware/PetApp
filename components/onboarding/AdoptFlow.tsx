@@ -1,10 +1,10 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelectedPet } from "@/components/home/selectedPet";
 import { addPet, createHousehold, reloadHousehold, showToast, useHousehold, useMembers, useSession, type Species } from "@/data";
-import { Icon, PillButton, PressableScale, Text, spacing, useTheme } from "@/ui";
+import { layout, PillButton, PressableScale, Text, useTheme } from "@/ui";
 import { firstNameOf } from "./firstName";
 import { NameStep } from "./NameStep";
 import { birthDateError, EMPTY_DETAILS, type PetDetails } from "./PetDetailsFields";
@@ -40,7 +40,8 @@ export function AdoptFlow({ mode, onFinished }: Props) {
     firstNameOf(meta?.full_name) ?? firstNameOf(meta?.name) ?? firstNameOf(members.find((m) => m.isMe)?.name) ?? "friend";
   const trimmed = name.trim();
 
-  const canGoBack = step > 0 || (router.canGoBack() && !(mode === "first" && !householdId));
+  // First-run has no native header, so Back lives in the footer; the pushed "add" screen has a native one for step 0.
+  const canGoBack = step > 0 || (mode === "first" && router.canGoBack() && !!householdId);
   const nextDisabled = step === 0 ? species === null : step === 1 ? trimmed.length === 0 : birthDateError(details.birthDate) !== null;
 
   function back() {
@@ -90,29 +91,13 @@ export function AdoptFlow({ mode, onFinished }: Props) {
 
   return (
     <KeyboardAvoidingView
-      behavior="padding"
+      collapsable={false}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.root, { backgroundColor: colors.bg }]}
     >
-      <View style={[styles.top, { paddingTop: insets.top + spacing.md }]}>
-        {canGoBack ? (
-          <PressableScale
-            onPress={back}
-            haptic="select"
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={[styles.back, { backgroundColor: colors.surface }]}
-          >
-            <View>
-              <Icon name="chevron-left" size={22} color={colors.ink} />
-            </View>
-          </PressableScale>
-        ) : (
-          <View style={styles.spacer} />
-        )}
-        <View style={styles.dots}>
-          <ProgressDots count={STEPS} index={step} />
-        </View>
-        <View style={styles.spacer} />
+      {/* First-run is headerless, so clear the status bar; the pushed add screen sits under its native header. */}
+      <View style={[styles.top, { paddingTop: mode === "first" ? insets.top + layout.section : layout.headerGap }]}>
+        <ProgressDots count={STEPS} index={step} />
       </View>
 
       <ScrollView
@@ -131,8 +116,15 @@ export function AdoptFlow({ mode, onFinished }: Props) {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, layout.gutter) + layout.item }]}>
         <PillButton label={label} size="lg" onPress={next} disabled={nextDisabled} loading={busy} />
+        {canGoBack ? (
+          <PressableScale onPress={back} haptic="select" accessibilityRole="button" accessibilityLabel="Back" style={styles.link}>
+            <Text variant="headline" tone="ink2">
+              Back
+            </Text>
+          </PressableScale>
+        ) : null}
         {step === 0 && mode === "first" ? (
           <PressableScale
             onPress={() => router.push("/join")}
@@ -153,11 +145,8 @@ export function AdoptFlow({ mode, onFinished }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  top: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
-  back: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  spacer: { width: 44, height: 44 },
-  dots: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.lg },
-  footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, gap: spacing.sm },
-  link: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg },
+  top: { paddingHorizontal: layout.gutter, paddingBottom: layout.item },
+  content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: layout.gutter, paddingVertical: layout.gutter },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: layout.item, gap: layout.headerGap },
+  link: { alignSelf: "center", minHeight: 44, justifyContent: "center", paddingHorizontal: layout.gutter },
 });

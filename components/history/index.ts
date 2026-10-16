@@ -1,6 +1,4 @@
-export { DetailSheet } from "./DetailSheet";
-export { FilterBar } from "./FilterBar";
 export { HistoryRow } from "./HistoryRow";
 export { PetFeedProbe } from "./PetFeeds";
-export { buildItems, filterItems, groupByDay } from "./model";
-export type { CategoryFilter, HistoryItem, PetFeed } from "./model";
+export { buildItems, CATEGORY_LABEL, filterItems, groupByDay, itemRoute } from "./model";
+export type { CategoryFilter, HistoryItem, HistorySource, PetFeed } from "./model";

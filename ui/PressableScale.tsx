@@ -9,7 +9,7 @@ export interface PressableScaleProps extends Omit<PressableProps, "style"> {
   style?: StyleProp<ViewStyle>;
   /** Scale while pressed. */
   scaleTo?: number;
-  /** Haptic fired on press. Omit for none. */
+  /** Light haptic fired the moment a finger lands (press-in). Omit for none. */
   haptic?: HapticKind;
 }
 
@@ -24,6 +24,7 @@ export function PressableScale({ style, scaleTo = 0.97, haptic: hapticKind, onPr
       {...rest}
       style={[style, animated]}
       onPressIn={(e) => {
+        if (hapticKind && !rest.disabled) haptic(hapticKind);
         if (!reduceMotion) scale.value = withSpring(scaleTo, { damping: 16, stiffness: 420 });
         rest.onPressIn?.(e);
       }}
@@ -31,10 +32,7 @@ export function PressableScale({ style, scaleTo = 0.97, haptic: hapticKind, onPr
         if (!reduceMotion) scale.value = withSpring(1, { damping: 11, stiffness: 320 });
         rest.onPressOut?.(e);
       }}
-      onPress={(e) => {
-        if (hapticKind) haptic(hapticKind);
-        onPress?.(e);
-      }}
+      onPress={onPress}
     >
       {children}
     </AnimatedPressable>

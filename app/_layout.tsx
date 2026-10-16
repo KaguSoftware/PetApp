@@ -9,7 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { InviteLinkHandler } from "@/components/onboarding/InviteLinkHandler";
 import { DataProvider, dismissToast, useSession, useToasts } from "@/data";
-import { ThemeProvider, ToastHost, useTheme } from "@/ui";
+import { formSheetOptions, ThemeProvider, ToastHost, useStackOptions, useTheme } from "@/ui";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -31,6 +31,9 @@ function useNavTheme(): Theme {
 function RootStack() {
   const { session } = useSession();
   const { colors } = useTheme();
+  // Pushed screens get the native header (back button, title); the page sets its own title.
+  const header = useStackOptions(true);
+  const inlineHeader = useStackOptions(false);
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       {/* Gating lives here, once. Routes outside a Protected block are registered
@@ -42,10 +45,14 @@ function RootStack() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="pet/[id]" />
-        <Stack.Screen name="pet/new" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="join" />
+        <Stack.Screen name="pet/[id]/index" options={header} />
+        <Stack.Screen name="pet/new" options={inlineHeader} />
+        <Stack.Screen name="settings" options={header} />
+        <Stack.Screen name="join" options={header} />
+        {/* Native form sheets: forms and details that used to be hand-built bottom sheets. */}
+        <Stack.Screen name="history/[kind]/[id]" options={formSheetOptions} />
+        <Stack.Screen name="pet/[id]/edit" options={formSheetOptions} />
+        <Stack.Screen name="pet/[id]/add/[record]" options={formSheetOptions} />
         <Stack.Screen
           name="log"
           options={{ presentation: "transparentModal", animation: "none", contentStyle: { backgroundColor: "transparent" } }}
@@ -54,10 +61,10 @@ function RootStack() {
       {/* Deliberately unguarded: verify / reset-password / auth-callback cross the
           signed-out -> signed-in boundary mid-screen (verifying a code CREATES the
           session), and legal/[doc] opens from the signed-out consent footnote. */}
-      <Stack.Screen name="verify" />
-      <Stack.Screen name="reset-password" />
+      <Stack.Screen name="verify" options={header} />
+      <Stack.Screen name="reset-password" options={{ ...header, headerBackVisible: false }} />
       <Stack.Screen name="auth-callback" />
-      <Stack.Screen name="legal/[doc]" />
+      <Stack.Screen name="legal/[doc]" options={header} />
     </Stack>
   );
 }

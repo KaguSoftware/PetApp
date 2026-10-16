@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { reloadHousehold } from "@/data";
-import { PillButton, Text, spacing } from "@/ui";
+import { layout, PillButton, Text } from "@/ui";
 
 /** Shown when the household failed to load: never treated as "no household". */
 export function LoadErrorState({ title = "We couldn't reach your family's data" }: { title?: string }) {
@@ -31,6 +31,6 @@ export function LoadErrorState({ title = "We couldn't reach your family's data" 
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: "center", gap: spacing.md, paddingVertical: spacing["3xl"], paddingHorizontal: spacing.xl },
+  wrap: { alignItems: "center", gap: layout.item, paddingVertical: layout.section, paddingHorizontal: layout.gutter },
   center: { textAlign: "center" },
 });

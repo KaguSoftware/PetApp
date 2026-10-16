@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useMemo } from "react";
 import {
   deleteMed,
@@ -9,7 +10,9 @@ import {
 } from "@/data";
 import { daysUntil, formatDate } from "@/lib/format";
 import { RecordCard, type RecordRowData } from "./RecordCard";
-import type { AddKind } from "./AddSheets";
+import type { AddKind } from "./AddForms";
+
+const add = (petId: string, record: AddKind) => router.push({ pathname: "/pet/[id]/add/[record]", params: { id: petId, record } });
 
 const swallow = () => undefined; // the data layer already rolled back and toasted
 
@@ -22,7 +25,7 @@ function dueNote(nextDue: string): string | null {
   return `next ${formatDate(nextDue)}`;
 }
 
-export function VaccinationsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) => void }) {
+export function VaccinationsCard({ petId }: { petId: string }) {
   const items = useVaccinations(petId);
   const rows = useMemo<RecordRowData[]>(() => {
     const sorted = [...items].sort((a, b) => b.date.localeCompare(a.date));
@@ -41,16 +44,16 @@ export function VaccinationsCard({ petId, onAdd }: { petId: string; onAdd: (k: A
   return (
     <RecordCard
       title="Vaccinations"
-rows={rows}
+      rows={rows}
       emptyText="No vaccinations recorded yet."
       addLabel="Add vaccination"
-      onAdd={() => onAdd("vaccination")}
+      onAdd={() => add(petId, "vaccination")}
       onRemove={(id) => deleteVaccination(id).catch(swallow)}
     />
   );
 }
 
-export function VetVisitsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) => void }) {
+export function VetVisitsCard({ petId }: { petId: string }) {
   const items = useVetVisits(petId);
   const rows = useMemo<RecordRowData[]>(
     () =>
@@ -62,16 +65,16 @@ export function VetVisitsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddK
   return (
     <RecordCard
       title="Vet visits"
-rows={rows}
+      rows={rows}
       emptyText="No vet visits yet."
       addLabel="Add vet visit"
-      onAdd={() => onAdd("vet")}
+      onAdd={() => add(petId, "vet")}
       onRemove={(id) => deleteVetVisit(id).catch(swallow)}
     />
   );
 }
 
-export function MedsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) => void }) {
+export function MedsCard({ petId }: { petId: string }) {
   const items = useMeds(petId);
   const rows = useMemo<RecordRowData[]>(
     () =>
@@ -88,10 +91,10 @@ export function MedsCard({ petId, onAdd }: { petId: string; onAdd: (k: AddKind) 
   return (
     <RecordCard
       title="Medications"
-rows={rows}
+      rows={rows}
       emptyText="No medications. Add one to pick it when logging meds."
       addLabel="Add medication"
-      onAdd={() => onAdd("med")}
+      onAdd={() => add(petId, "med")}
       onRemove={(id) => deleteMed(id).catch(swallow)}
     />
   );

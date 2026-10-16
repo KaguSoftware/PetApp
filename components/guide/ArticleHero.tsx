@@ -1,13 +1,11 @@
 import { StyleSheet, View } from "react-native";
 import type { GuideTopic } from "@/content/guide";
-import { spacing, Text } from "@/ui";
+import { layout, Text } from "@/ui";
 
+/** The native header carries the title; this is the summary and read time under it. */
 export function ArticleHero({ topic }: { topic: GuideTopic }) {
   return (
     <View style={styles.wrap}>
-      <Text variant="largeTitle" accessibilityRole="header">
-        {topic.title}
-      </Text>
       <Text tone="ink2">{topic.summary}</Text>
       <Text variant="footnote" tone="ink3">
         {topic.readMinutes} min read
@@ -17,5 +15,5 @@ export function ArticleHero({ topic }: { topic: GuideTopic }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm },
+  wrap: { gap: layout.headerGap },
 });

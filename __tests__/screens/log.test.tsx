@@ -4,6 +4,18 @@ import { CAT, DOG, fns, onlyPets } from "./_support/fakeData";
 import { prepare, renderScreen } from "./_support/render";
 import { router } from "./_support/routerMock";
 
+// The native picker (SwiftUI / Compose) has no JS to render: stand in a button that picks 15 minutes ago.
+jest.mock("@expo/ui/community/datetime-picker", () => {
+  const { Pressable } = require("react-native");
+  const Picker = (p: { mode?: string; value: Date; onValueChange?: (e: unknown, d: Date) => void }) => (
+    <Pressable
+      accessibilityLabel={`${p.mode} picker`}
+      onPress={() => p.onValueChange?.({ nativeEvent: {} }, new Date(Date.now() - 15 * 60_000))}
+    />
+  );
+  return { __esModule: true, default: Picker, DateTimePicker: Picker };
+});
+
 // Noon today, so the "1h ago" fixtures never cross midnight.
 const NOON = new Date().setHours(12, 0, 0, 0);
 
@@ -61,14 +73,33 @@ describe("+ panel", () => {
     expect(fns.deleteLog).toHaveBeenCalledWith(id);
   });
 
-  it("the time stepper back-dates the log and grams are optional", async () => {
+  it("the native time picker back-dates the log and grams are optional", async () => {
     prepare("full", { petId: DOG.id });
     await renderScreen(<LogScreen />);
     fireEvent.press(screen.getByText("Food"));
-    fireEvent.press(screen.getByLabelText("15 minutes earlier"));
+    fireEvent.press(screen.getByLabelText("time picker"));
     fireEvent.changeText(screen.getByLabelText("Grams"), "60");
     fireEvent.press(screen.getByText("Save"));
     expect(fns.logCare).toHaveBeenCalledWith(DOG.id, "fed", expect.objectContaining({ grams: 60, ts: NOON - 15 * 60_000 }));
+  });
+
+  it("an untouched time logs as now (no ts), so the data layer stamps it", async () => {
+    prepare("full", { petId: DOG.id });
+    await renderScreen(<LogScreen />);
+    fireEvent.press(screen.getByText("Food"));
+    fireEvent.press(screen.getByText("Save"));
+    expect((fns.logCare.mock.calls[0][2] as { ts?: number }).ts).toBeUndefined();
+  });
+
+  it("a vet visit takes its date from the native date picker", async () => {
+    prepare("full", { petId: DOG.id, step: "vet" });
+    await renderScreen(<LogScreen />);
+    fireEvent.press(screen.getByLabelText("date picker"));
+    fireEvent.changeText(screen.getByLabelText("REASON"), "Check-up");
+    fireEvent.press(screen.getByText("Save"));
+    expect(fns.addVetVisit).toHaveBeenCalledWith(
+      expect.objectContaining({ petId: DOG.id, reason: "Check-up", date: expect.stringMatching(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) }),
+    );
   });
 
   it("More opens vet visit, vaccination and grooming; Back returns to the first level", async () => {
