@@ -85,7 +85,7 @@ export function ToastHost({ toasts, onDismiss, bottomOffset = 0 }: ToastHostProp
 }
 
 const styles = StyleSheet.create({
-  host: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end", alignItems: "center", paddingHorizontal: spacing.lg, gap: spacing.sm },
+  host: { ...StyleSheet.absoluteFill, justifyContent: "flex-end", alignItems: "center", paddingHorizontal: spacing.lg, gap: spacing.sm },
   toast: {
     flexDirection: "row",
     alignItems: "center",

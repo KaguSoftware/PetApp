@@ -2,12 +2,11 @@
   "expo": {
     "name": "PETING.",
     "slug": "PetApp",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "peting",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -29,7 +28,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -51,8 +49,7 @@
           }
         }
       ],
-      "expo-asset",
-      "@react-native-community/datetimepicker"
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

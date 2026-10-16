@@ -1,17 +1,13 @@
-import Ionicons from "@expo/vector-icons/Ionicons";
-import { Icon, Label, NativeTabs, VectorIcon } from "expo-router/unstable-native-tabs";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { Platform } from "react-native";
 import { useTheme } from "@/ui";
 
 /**
  * The real system tab bar (UITabBarController / Android BottomNavigationView).
- * iOS uses SF Symbols (filled when selected); Android has no SF Symbols, so each
- * tab ships an `androidSrc` rasterised by NativeTabs' own `VectorIcon` helper.
- * Docs: https://docs.expo.dev/router/advanced/native-tabs/ (SDK 54 API:
- * imports from `expo-router/unstable-native-tabs`).
+ * iOS uses SF Symbols (filled when selected); Android uses Material Symbols via `md`.
+ * Docs: https://docs.expo.dev/router/advanced/native-tabs/ (SDK 57 compound API:
+ * `NativeTabs.Trigger.Icon` / `.Label`, imported from `expo-router/unstable-native-tabs`).
  */
-const androidIcon = (name: React.ComponentProps<typeof Ionicons>["name"]) => <VectorIcon family={Ionicons} name={name} />;
-
 export default function TabsLayout() {
   const { colors, scheme } = useTheme();
   return (
@@ -23,16 +19,16 @@ export default function TabsLayout() {
       backgroundColor={Platform.OS === "android" ? colors.bg : undefined}
     >
       <NativeTabs.Trigger name="home">
-        <Icon sf={{ default: "house", selected: "house.fill" }} androidSrc={androidIcon("home-outline")} />
-        <Label>Home</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "house", selected: "house.fill" }} md="home" />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="history">
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} androidSrc={androidIcon("time-outline")} />
-        <Label>History</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "clock", selected: "clock.fill" }} md="schedule" />
+        <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="guide">
-        <Icon sf={{ default: "book", selected: "book.fill" }} androidSrc={androidIcon("book-outline")} />
-        <Label>Guide</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "book", selected: "book.fill" }} md="menu_book" />
+        <NativeTabs.Trigger.Label>Guide</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -1,10 +1,10 @@
 # PETING. — Handoff
 
-Read this first in a fresh session. Also read `AGENTS.md` (Expo v54 docs rule, Postgres SECURITY DEFINER rules)
+Read this first in a fresh session. Also read `AGENTS.md` (Expo v57 docs rule, Postgres SECURITY DEFINER rules)
 and `docs/rebuild/CONTRACT.md` (the `@/data` public API). Repo: `KaguSoftware/PetApp`, working branch `rebuild`.
 
 ## What the app is now
-A BitePal-style pet-logging app plus a static general care guide (Expo SDK 54, RN 0.81, New Architecture,
+A BitePal-style pet-logging app plus a static general care guide (Expo SDK 57, RN 0.86, New Architecture (always on),
 React Compiler, expo-router v6 typed routes, TypeScript strict).
 - **Home = the mascot**: the user's own pet drawn as a cartoon of its species (dog and cat art, generic fallback for
   other species). It has a **mood** (derived client-side by `lib/mood.ts` from the last 24-48h of logs, per species)
@@ -74,7 +74,7 @@ shortcuts, supplies, pet transfers, family password, multiple households, `lib/s
 - `supabase/diagnostics/schema_snapshot.sql` dumps the live schema for auditing.
 
 ## Conventions
-- Read https://docs.expo.dev/versions/v54.0.0/ before touching any Expo API (AGENTS.md).
+- Read https://docs.expo.dev/versions/v57.0.0/ before touching any Expo API (AGENTS.md).
 - Colors/spacing/radii/fonts only from `ui/tokens`; press feedback via `PressableScale` (no bare opacity presses);
   44pt touch targets; haptics via `ui/haptics`. Brand strings in `lib/brand.ts`.
 - No `console.log` (production babel strips all but `console.error`). No dead code, no new deps without a reason.
@@ -82,6 +82,7 @@ shortcuts, supplies, pet transfers, family password, multiple households, `lib/s
 
 ## Run / test
 - `npm start` (Expo Go; tunnel if LAN blocked). `.env` (gitignored): `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+  - SDK 57 Expo Go: per the SDK 57 changelog the App Store build is still awaiting approval; use `eas go` for iOS devices, Expo CLI for Android devices/emulators and iOS simulators. Native runtime changed, so `expo.version` was bumped 1.0.0 -> 1.1.0 (runtimeVersion policy appVersion): do not OTA-update 1.0.0 binaries with SDK 57 JS.
 - `npx jest` (data, lib, and screen tests), `npx tsc --noEmit`, `npm run lint`,
   `npx expo export --platform android` (and `ios`) to confirm bundles, `npx expo-doctor` (18/18 at last run).
 - EAS: `eas.json` has development/preview/production channels; `expo-updates` is configured in `app.json`.

@@ -1,5 +1,7 @@
 const base = {
   preset: "jest-expo",
+  // Worklets/Reanimated: resolve the JS (non-.native) implementations under jest.
+  resolver: "react-native-worklets/jest/resolver",
   moduleNameMapper: { "^@/(.*)$": "<rootDir>/$1" },
 };
 
